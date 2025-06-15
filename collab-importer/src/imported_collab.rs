@@ -6,10 +6,12 @@ use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 use std::fmt;
 
+use collab_database::database_trait::{DatabaseCollabService, DatabaseRowCollabService};
 use futures::StreamExt;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub async fn import_notion_zip_file(
   uid: i64,
@@ -17,6 +19,8 @@ pub async fn import_notion_zip_file(
   workspace_id: &str,
   zip_file: PathBuf,
   output_dir: PathBuf,
+  database_collab_service: Arc<dyn DatabaseCollabService>,
+  database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
 ) -> Result<RepeatedImportedCollabInfo, ImporterError> {
   if !zip_file.exists() {
     return Err(ImporterError::FileNotFound);
@@ -24,7 +28,7 @@ pub async fn import_notion_zip_file(
 
   let unzip_file = unzip_from_path_or_memory(Either::Left(zip_file), output_dir).await?;
   let imported = NotionImporter::new(uid, &unzip_file, workspace_id, host.to_string())?
-    .import()
+    .import(database_collab_service, database_row_collab_service)
     .await?;
 
   let infos = imported

@@ -38,6 +38,29 @@ where
     Ok(())
   }
 
+  fn upsert_doc_with_doc_state(
+    &self,
+    uid: i64,
+    workspace_id: &str,
+    object_id: &str,
+    state_vector: Vec<u8>,
+    doc_state: Vec<u8>,
+  ) -> Result<(), PersistenceError> {
+    let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
+    let start = make_doc_start_key(doc_id);
+    let end = make_doc_end_key(doc_id);
+    self.remove_range(start.as_ref(), end.as_ref())?;
+
+    let doc_state_key = make_doc_state_key(doc_id);
+    let sv_key = make_state_vector_key(doc_id);
+
+    info!("new doc:{:?}, doc state len:{}", object_id, doc_state.len());
+    self.insert(doc_state_key, doc_state)?;
+    self.insert(sv_key, state_vector)?;
+
+    Ok(())
+  }
+
   /// Flushes the document state and state vector to the storage.
   ///
   /// This function writes the state of a document, identified by a unique `object_id`, along with its

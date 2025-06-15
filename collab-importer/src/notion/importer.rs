@@ -15,6 +15,7 @@ use std::ops::Deref;
 use crate::space_view::create_space_view;
 use anyhow::Error;
 use collab::preclude::Collab;
+use collab_database::database_trait::{DatabaseCollabService, DatabaseRowCollabService};
 use collab_entity::CollabType;
 use csv::Reader;
 use fancy_regex::Regex;
@@ -64,7 +65,11 @@ impl NotionImporter {
   }
 
   /// Return a ImportedInfo struct that contains all the views and their children recursively.
-  pub async fn import(mut self) -> Result<ImportedInfo, ImporterError> {
+  pub async fn import(
+    mut self,
+    database_collab_service: Arc<dyn DatabaseCollabService>,
+    database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
+  ) -> Result<ImportedInfo, ImporterError> {
     let views = self.collect_pages().await?;
     if views.is_empty() {
       return Err(ImporterError::CannotImport);
@@ -76,6 +81,8 @@ impl NotionImporter {
       self.host.clone(),
       self.workspace_name.clone(),
       views,
+      database_collab_service,
+      database_row_collab_service,
     )
   }
 
@@ -136,7 +143,6 @@ impl NotionImporter {
   }
 }
 
-#[derive(Debug)]
 pub struct ImportedInfo {
   pub uid: i64,
   pub workspace_id: String,
@@ -145,6 +151,8 @@ pub struct ImportedInfo {
   views: Vec<NotionPage>,
   space_view: ParentChildViews,
   space_collab: Collab,
+  database_collab_service: Arc<dyn DatabaseCollabService>,
+  database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
 }
 
 pub type ImportedCollabInfoStream<'a> = Pin<Box<dyn Stream<Item = ImportedCollabInfo> + 'a>>;
@@ -155,6 +163,8 @@ impl ImportedInfo {
     host: String,
     name: String,
     views: Vec<NotionPage>,
+    database_collab_service: Arc<dyn DatabaseCollabService>,
+    database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
   ) -> Result<Self, ImporterError> {
     let view_id = uuid::Uuid::new_v4().to_string();
     let (space_view, space_collab) = create_space_view(
@@ -173,6 +183,8 @@ impl ImportedInfo {
       views,
       space_view,
       space_collab,
+      database_collab_service,
+      database_row_collab_service,
     })
   }
 
@@ -197,10 +209,20 @@ impl ImportedInfo {
   pub async fn into_collab_stream(self) -> ImportedCollabInfoStream<'static> {
     // Create a stream for each view by resolving the futures into streams
     let has_space = self.has_space_view();
-    let view_streams = self
-      .views
-      .into_iter()
-      .map(|view| async { build_imported_collab_recursively(view).await });
+    let database_collab_service = self.database_collab_service.clone();
+    let database_row_collab_service = self.database_row_collab_service.clone();
+    let view_streams = self.views.into_iter().map(move |view| {
+      let database_collab_service = database_collab_service.clone();
+      let database_row_collab_service = database_row_collab_service.clone();
+      async move {
+        build_imported_collab_recursively(
+          view,
+          database_collab_service,
+          database_row_collab_service,
+        )
+        .await
+      }
+    });
 
     if has_space {
       let combined_stream = stream::iter(view_streams)

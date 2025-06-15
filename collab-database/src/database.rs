@@ -439,17 +439,13 @@ impl Database {
 
   /// Remove the row
   /// The [RowOrder] of each view representing this row will be removed.
-  pub async fn remove_row(&mut self, row_id: &RowId) -> Option<Row> {
+  pub async fn remove_row(&mut self, row_id: &RowId) {
     {
       let mut txn = self.collab.transact_mut();
       self.body.views.update_all_views(&mut txn, |_, update| {
         update.remove_row_order(row_id);
       });
     };
-
-    let row = self.body.block.delete_row(row_id)?;
-    let read_guard = row.read().await;
-    read_guard.get_row()
   }
 
   pub async fn move_row(&mut self, from_row_id: &str, to_row_id: &str) {
@@ -459,7 +455,7 @@ impl Database {
     });
   }
 
-  pub async fn remove_rows(&mut self, row_ids: &[RowId]) -> Vec<Row> {
+  pub async fn remove_rows(&mut self, row_ids: &[RowId]) {
     {
       let mut txn = self.collab.transact_mut();
       self.body.views.update_all_views(&mut txn, |_, mut update| {
@@ -468,16 +464,6 @@ impl Database {
         }
       });
     };
-
-    let mut rows = vec![];
-    for row_id in row_ids {
-      if let Some(database_row) = self.body.block.delete_row(row_id) {
-        if let Some(row) = database_row.read().await.get_row() {
-          rows.push(row);
-        }
-      }
-    }
-    rows
   }
 
   /// Update the row

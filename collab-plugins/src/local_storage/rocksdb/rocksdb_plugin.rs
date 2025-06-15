@@ -136,23 +136,13 @@ impl CollabPlugin for RocksdbDiskPlugin {
       //Acquire a write transaction to ensure consistency
       let result = db.with_write_txn(|w_db_txn| {
         let _ = w_db_txn.push_update(self.uid, self.workspace_id.as_str(), object_id, update)?;
-        #[cfg(not(feature = "verbose_log"))]
+        use yrs::updates::decoder::Decode;
         tracing::trace!(
-          "[Rocksdb Plugin]: Collab {} {} persisting update",
+          "[Rocksdb Plugin]: Collab {} {} persisting update: {:#?}",
           object_id,
-          self.collab_type
+          self.collab_type,
+          yrs::Update::decode_v1(update).unwrap()
         );
-        #[cfg(feature = "verbose_log")]
-        {
-          use yrs::updates::decoder::Decode;
-          let update = yrs::Update::decode_v1(update).unwrap();
-          tracing::trace!(
-            "[Rocksdb Plugin]: Collab {} {} persisting update: {:#?}",
-            object_id,
-            self.collab_type,
-            update
-          );
-        }
         Ok(())
       });
 

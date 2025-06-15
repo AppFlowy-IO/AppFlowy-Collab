@@ -114,15 +114,15 @@ pub trait DatabaseRowCollabService: Send + Sync + 'static {
 
 #[async_trait]
 pub trait DatabaseCollabReader: Send + Sync + 'static {
-  async fn client_id(&self) -> ClientID;
+  async fn reader_client_id(&self) -> ClientID;
 
-  async fn get_collab(
+  async fn reader_get_collab(
     &self,
     object_id: &str,
     collab_type: CollabType,
   ) -> Result<EncodedCollab, DatabaseError>;
 
-  async fn batch_get_collabs(
+  async fn reader_batch_get_collabs(
     &self,
     object_ids: Vec<String>,
     collab_type: CollabType,
@@ -130,6 +130,15 @@ pub trait DatabaseCollabReader: Send + Sync + 'static {
 
   fn reader_persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
     None
+  }
+
+  fn bind_collab(
+    &self,
+    _object_id: &str,
+    _collab: &mut Collab,
+    _collab_type: CollabType,
+  ) -> Result<(), DatabaseError> {
+    Ok(())
   }
 }
 
@@ -139,7 +148,7 @@ where
   T: DatabaseCollabReader + Send + Sync + 'static,
 {
   async fn client_id(&self) -> ClientID {
-    self.client_id().await
+    self.reader_client_id().await
   }
 
   async fn build_database(
@@ -149,24 +158,27 @@ where
     data: Option<DatabaseDataVariant>,
     context: DatabaseContext,
   ) -> Result<Database, DatabaseError> {
-    let client_id = self.client_id().await;
+    let client_id = self.reader_client_id().await;
     let collab_service = context.database_collab_service.clone();
     let collab_type = CollabType::Database;
     let (body, collab) = match data {
       None => {
-        let data = self.get_collab(object_id, collab_type).await?;
-        let collab = build_collab(client_id, object_id, collab_type, data).await?;
+        let data = self.reader_get_collab(object_id, collab_type).await?;
+        let mut collab = build_collab(client_id, object_id, collab_type, data).await?;
+        self.bind_collab(object_id, &mut collab, collab_type)?;
         DatabaseBody::open(collab, context)?
       },
       Some(data) => match data {
         DatabaseDataVariant::Params(params) => {
           let database_id = params.database_id.clone();
-          let (body, collab) =
+          let (body, mut collab) =
             default_database_collab(&database_id, client_id, Some(params), context.clone()).await?;
+          self.bind_collab(object_id, &mut collab, collab_type)?;
           (body, collab)
         },
         DatabaseDataVariant::EncodedCollab(data) => {
-          let collab = build_collab(client_id, object_id, collab_type, data).await?;
+          let mut collab = build_collab(client_id, object_id, collab_type, data).await?;
+          self.bind_collab(object_id, &mut collab, collab_type)?;
           DatabaseBody::open(collab, context)?
         },
       },
@@ -185,17 +197,20 @@ where
     encoded_collab: Option<EncodedCollab>,
   ) -> Result<Collab, DatabaseError> {
     let collab_type = CollabType::WorkspaceDatabase;
-    let client_id = self.client_id().await;
+    let client_id = self.reader_client_id().await;
     match encoded_collab {
       Some(encoded_collab) => {
-        let collab = build_collab(client_id, object_id, collab_type, encoded_collab).await?;
+        let mut collab = build_collab(client_id, object_id, collab_type, encoded_collab).await?;
+        self.bind_collab(object_id, &mut collab, collab_type)?;
         Ok(collab)
       },
       None => {
         let data = self
-          .get_collab(object_id, CollabType::WorkspaceDatabase)
+          .reader_get_collab(object_id, CollabType::WorkspaceDatabase)
           .await?;
-        build_collab(client_id, object_id, collab_type, data).await
+        let mut collab = build_collab(client_id, object_id, collab_type, data).await?;
+        self.bind_collab(object_id, &mut collab, collab_type)?;
+        Ok(collab)
       },
     }
   }
@@ -205,7 +220,7 @@ where
     object_ids: Vec<String>,
     collab_type: CollabType,
   ) -> Result<EncodeCollabByOid, DatabaseError> {
-    self.batch_get_collabs(object_ids, collab_type).await
+    self.reader_batch_get_collabs(object_ids, collab_type).await
   }
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
@@ -219,7 +234,7 @@ where
   T: DatabaseCollabReader + Send + Sync + 'static,
 {
   async fn client_id(&self) -> ClientID {
-    self.client_id().await
+    self.reader_client_id().await
   }
 
   async fn create_arc_database_row(
@@ -228,11 +243,17 @@ where
     data: DatabaseRowDataVariant,
     sender: Option<RowChangeSender>,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    let client_id = self.client_id().await;
+    let client_id = self.reader_client_id().await;
     let collab_type = CollabType::DatabaseRow;
     let data = data.into_encode_collab(client_id);
 
-    let collab = build_collab(client_id, object_id, collab_type, data).await?;
+    if let Some(persistence) = self.reader_persistence() {
+      persistence.upsert_collab(object_id, data.clone())?;
+    }
+
+    let mut collab = build_collab(client_id, object_id, collab_type, data).await?;
+    self.bind_collab(object_id, &mut collab, collab_type)?;
+
     let database_row = DatabaseRow::open(RowId::from(object_id), collab, sender)?;
     Ok(Arc::new(RwLock::new(database_row)))
   }
@@ -243,14 +264,15 @@ where
     data: Option<DatabaseRowDataVariant>,
     sender: Option<RowChangeSender>,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    let client_id = self.client_id().await;
+    let client_id = self.reader_client_id().await;
     let collab_type = CollabType::DatabaseRow;
     let data = match data {
-      None => self.get_collab(object_id, collab_type).await?,
+      None => self.reader_get_collab(object_id, collab_type).await?,
       Some(data) => data.into_encode_collab(client_id),
     };
+    let mut collab = build_collab(client_id, object_id, collab_type, data).await?;
+    self.bind_collab(object_id, &mut collab, collab_type)?;
 
-    let collab = build_collab(client_id, object_id, collab_type, data).await?;
     let database_row = DatabaseRow::open(RowId::from(object_id), collab, sender)?;
     Ok(Arc::new(RwLock::new(database_row)))
   }
@@ -307,11 +329,11 @@ pub struct NoPersistenceDatabaseCollabService {
 
 #[async_trait]
 impl DatabaseCollabReader for NoPersistenceDatabaseCollabService {
-  async fn client_id(&self) -> ClientID {
+  async fn reader_client_id(&self) -> ClientID {
     self.client_id
   }
 
-  async fn get_collab(
+  async fn reader_get_collab(
     &self,
     object_id: &str,
     _collab_type: CollabType,
@@ -322,7 +344,7 @@ impl DatabaseCollabReader for NoPersistenceDatabaseCollabService {
     )))
   }
 
-  async fn batch_get_collabs(
+  async fn reader_batch_get_collabs(
     &self,
     object_ids: Vec<String>,
     collab_type: CollabType,
@@ -357,6 +379,11 @@ impl DatabaseCollabReader for NoPersistenceDatabaseCollabService {
 
 pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
   fn load_collab(&self, collab: &mut Collab);
+  fn upsert_collab(
+    &self,
+    object_id: &str,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), DatabaseError>;
 
   fn get_encoded_collab(&self, object_id: &str, collab_type: CollabType) -> Option<EncodedCollab>;
 

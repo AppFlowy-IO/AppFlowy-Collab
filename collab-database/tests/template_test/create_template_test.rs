@@ -1,15 +1,18 @@
+use crate::helper::make_rocks_db;
+use crate::user_test::helper::TestUserDatabaseServiceImpl;
 use collab::core::collab::default_client_id;
 use collab_database::database::{Database, gen_database_id, gen_database_view_id};
-use collab_database::database_trait::NoPersistenceDatabaseCollabService;
 use collab_database::entity::FieldType;
 use collab_database::rows::Row;
 use collab_database::template::builder::DatabaseTemplateBuilder;
 use collab_database::template::entity::CELL_DATA;
 use futures::StreamExt;
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn create_template_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let database_id = gen_database_id();
   let expected_field_type = [
     FieldType::RichText,
@@ -121,9 +124,13 @@ async fn create_template_test() {
     assert_eq!(row.cells.len(), expected_cell_len[index]);
   }
   assert_eq!(template.fields.len(), 6);
-  let service = Arc::new(NoPersistenceDatabaseCollabService {
-    client_id: default_client_id(),
-  });
+  let db = make_rocks_db();
+  let service = Arc::new(TestUserDatabaseServiceImpl::new(
+    1,
+    workspace_id,
+    db,
+    default_client_id(),
+  ));
   let database = Database::create_with_template(template, service.clone(), service)
     .await
     .unwrap();
