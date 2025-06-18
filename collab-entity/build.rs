@@ -12,7 +12,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
   });
 
-  let proto_files = vec!["proto/common.proto", "proto/encoding.proto"];
+  let proto_files = vec![
+    "proto/common.proto",
+    "proto/encoding.proto",
+    "proto/params.proto",
+  ];
   for proto_file in &proto_files {
     println!("cargo:rerun-if-changed={}", proto_file);
   }
