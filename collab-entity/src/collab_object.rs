@@ -139,27 +139,27 @@ impl CollabType {
       CollabType::Unknown => Ok(()),
     }
   }
-  pub fn from_proto(proto: &proto::collab::CollabType) -> Self {
+  pub fn from_proto(proto: &proto::CollabType) -> Self {
     match proto {
-      proto::collab::CollabType::Unknown => CollabType::Unknown,
-      proto::collab::CollabType::Document => CollabType::Document,
-      proto::collab::CollabType::Database => CollabType::Database,
-      proto::collab::CollabType::WorkspaceDatabase => CollabType::WorkspaceDatabase,
-      proto::collab::CollabType::Folder => CollabType::Folder,
-      proto::collab::CollabType::DatabaseRow => CollabType::DatabaseRow,
-      proto::collab::CollabType::UserAwareness => CollabType::UserAwareness,
+      proto::CollabType::Unknown => CollabType::Unknown,
+      proto::CollabType::Document => CollabType::Document,
+      proto::CollabType::Database => CollabType::Database,
+      proto::CollabType::WorkspaceDatabase => CollabType::WorkspaceDatabase,
+      proto::CollabType::Folder => CollabType::Folder,
+      proto::CollabType::DatabaseRow => CollabType::DatabaseRow,
+      proto::CollabType::UserAwareness => CollabType::UserAwareness,
     }
   }
 
-  pub fn to_proto(&self) -> proto::collab::CollabType {
+  pub fn to_proto(&self) -> proto::CollabType {
     match self {
-      CollabType::Unknown => proto::collab::CollabType::Unknown,
-      CollabType::Document => proto::collab::CollabType::Document,
-      CollabType::Database => proto::collab::CollabType::Database,
-      CollabType::WorkspaceDatabase => proto::collab::CollabType::WorkspaceDatabase,
-      CollabType::Folder => proto::collab::CollabType::Folder,
-      CollabType::DatabaseRow => proto::collab::CollabType::DatabaseRow,
-      CollabType::UserAwareness => proto::collab::CollabType::UserAwareness,
+      CollabType::Unknown => proto::CollabType::Unknown,
+      CollabType::Document => proto::CollabType::Document,
+      CollabType::Database => proto::CollabType::Database,
+      CollabType::WorkspaceDatabase => proto::CollabType::WorkspaceDatabase,
+      CollabType::Folder => proto::CollabType::Folder,
+      CollabType::DatabaseRow => proto::CollabType::DatabaseRow,
+      CollabType::UserAwareness => proto::CollabType::UserAwareness,
     }
   }
 }

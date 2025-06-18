@@ -1,2 +1,2 @@
-#[rustfmt::skip]
-pub mod collab;
+mod collab;
+pub use collab::*;
