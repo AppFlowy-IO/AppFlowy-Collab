@@ -1,4 +1,6 @@
 use std::ops::Deref;
+use std::time::Duration;
+use tokio::sync::TryLockError;
 use tracing::debug;
 
 #[derive(Debug)]
@@ -28,6 +30,44 @@ impl<T: ?Sized> RwLock<T> {
   pub async fn write_with_reason(&self, reason: &str) -> tokio::sync::RwLockWriteGuard<'_, T> {
     debug!("Acquiring write lock for reason: {}", reason);
     self.inner.write().await
+  }
+
+  pub async fn try_read_for_duration(
+    &self,
+    duration: Duration,
+  ) -> Result<tokio::sync::RwLockReadGuard<'_, T>, TryLockError> {
+    let start = tokio::time::Instant::now();
+
+    loop {
+      match self.inner.try_read() {
+        Ok(guard) => return Ok(guard),
+        Err(err) => {
+          if start.elapsed() >= duration {
+            return Err(err);
+          }
+          tokio::time::sleep(Duration::from_millis(10)).await;
+        },
+      }
+    }
+  }
+
+  pub async fn try_write_for_duration(
+    &self,
+    duration: Duration,
+  ) -> Result<tokio::sync::RwLockWriteGuard<'_, T>, TryLockError> {
+    let start = tokio::time::Instant::now();
+
+    loop {
+      match self.inner.try_write() {
+        Ok(guard) => return Ok(guard),
+        Err(err) => {
+          if start.elapsed() >= duration {
+            return Err(err);
+          }
+          tokio::time::sleep(Duration::from_millis(10)).await;
+        },
+      }
+    }
   }
 }
 
