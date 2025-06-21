@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 use tokio::sync::TryLockError;
 use tracing::debug;
@@ -27,9 +27,13 @@ impl<T: ?Sized> RwLock<T> {
     self.inner.write().await
   }
 
-  pub async fn write_with_reason(&self, reason: &str) -> tokio::sync::RwLockWriteGuard<'_, T> {
+  pub async fn write_with_reason(&self, reason: &str) -> RwLockWriteGuardWrapper<'_, T> {
     debug!("Acquiring write lock for reason: {}", reason);
-    self.inner.write().await
+    let guard = self.inner.write().await;
+    RwLockWriteGuardWrapper {
+      inner: guard,
+      reason: reason.to_string(),
+    }
   }
 
   pub async fn try_read_for_duration(
@@ -77,6 +81,32 @@ impl<T: ?Sized> Deref for RwLock<T> {
   #[inline]
   fn deref(&self) -> &Self::Target {
     &self.inner
+  }
+}
+
+pub struct RwLockWriteGuardWrapper<'a, T: ?Sized> {
+  inner: tokio::sync::RwLockWriteGuard<'a, T>,
+  reason: String,
+}
+impl<'a, T: ?Sized> Deref for RwLockWriteGuardWrapper<'a, T> {
+  type Target = tokio::sync::RwLockWriteGuard<'a, T>;
+
+  #[inline]
+  fn deref(&self) -> &Self::Target {
+    &self.inner
+  }
+}
+
+impl<T: ?Sized> DerefMut for RwLockWriteGuardWrapper<'_, T> {
+  #[inline]
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.inner
+  }
+}
+
+impl<T: ?Sized> Drop for RwLockWriteGuardWrapper<'_, T> {
+  fn drop(&mut self) {
+    debug!("Releasing write lock for reason: {}", self.reason);
   }
 }
 
