@@ -175,12 +175,10 @@ impl Block {
   }
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
-  #[instrument(level = "debug", skip_all)]
   pub async fn get_or_init_database_row(
     &self,
     row_id: &RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    trace!("init row instance: {}", row_id);
     let row = self
       .collab_service
       .build_arc_database_row(row_id, None, self.row_change_tx.clone())
