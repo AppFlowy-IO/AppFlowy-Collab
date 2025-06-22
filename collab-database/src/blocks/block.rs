@@ -178,7 +178,7 @@ impl Block {
   }
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
-  pub fn init_database_row(&self, row_id: &RowId, ret: InitRowChan) {
+  pub fn init_database_row(&self, row_id: &RowId, ret: Option<InitRowChan>) {
     let row_id = row_id.clone();
     let row_change_tx = self.row_change_tx.clone();
     let collab_service = self.collab_service.clone();
@@ -186,7 +186,10 @@ impl Block {
       let row = collab_service
         .build_arc_database_row(&row_id, None, row_change_tx)
         .await;
-      let _ = ret.send(row);
+
+      if let Some(ret) = ret {
+        let _ = ret.send(row);
+      }
     });
   }
 
@@ -195,7 +198,7 @@ impl Block {
     row_id: &RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    self.init_database_row(row_id, tx);
+    self.init_database_row(row_id, Some(tx));
     rx.await
       .map_err(|e| DatabaseError::Internal(anyhow::anyhow!(e)))?
   }

@@ -535,7 +535,7 @@ impl Database {
   }
 
   #[instrument(level = "debug", skip_all)]
-  pub fn init_database_row(&self, row_id: &RowId, ret: InitRowChan) {
+  pub fn init_database_row(&self, row_id: &RowId, ret: Option<InitRowChan>) {
     self.body.block.init_database_row(row_id, ret)
   }
 
