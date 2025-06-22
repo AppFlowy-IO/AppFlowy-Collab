@@ -21,6 +21,9 @@ pub enum BlockEvent {
   DidFetchRow(Vec<RowDetail>),
 }
 
+pub type InitRowChan =
+  tokio::sync::oneshot::Sender<Result<Arc<RwLock<DatabaseRow>>, DatabaseError>>;
+
 /// Each [Block] contains a list of [DatabaseRow]s. Each [DatabaseRow] represents a row in the database.
 /// Currently, we only use one [Block] to manage all the rows in the database. In the future, we
 /// might want to split the rows into multiple [Block]s to improve performance.
@@ -175,16 +178,26 @@ impl Block {
   }
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
+  pub fn init_database_row(&self, row_id: &RowId, ret: InitRowChan) {
+    let row_id = row_id.clone();
+    let row_change_tx = self.row_change_tx.clone();
+    let collab_service = self.collab_service.clone();
+    tokio::task::spawn(async move {
+      let row = collab_service
+        .build_arc_database_row(&row_id, None, row_change_tx)
+        .await;
+      let _ = ret.send(row);
+    });
+  }
+
   pub async fn get_or_init_database_row(
     &self,
     row_id: &RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    let row = self
-      .collab_service
-      .build_arc_database_row(row_id, None, self.row_change_tx.clone())
-      .await?;
-
-    Ok(row)
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    self.init_database_row(row_id, tx);
+    rx.await
+      .map_err(|e| DatabaseError::Internal(anyhow::anyhow!(e)))?
   }
 
   pub async fn init_database_rows(

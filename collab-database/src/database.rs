@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
-use crate::blocks::{Block, BlockEvent};
+use crate::blocks::{Block, BlockEvent, InitRowChan};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
 use crate::fields::{
@@ -279,7 +279,12 @@ impl Database {
       let tasks: Vec<_> = chunk
         .iter()
         .map(|chunk_row| async move {
-          let database_row = self.get_or_init_database_row(&chunk_row.id).await?;
+          let database_row = self
+            .body
+            .block
+            .get_or_init_database_row(&chunk_row.id)
+            .await
+            .ok()?;
           let read_guard = database_row.read().await;
           let row_collab = &read_guard.collab;
           let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
@@ -530,8 +535,8 @@ impl Database {
   }
 
   #[instrument(level = "debug", skip_all)]
-  pub async fn get_or_init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_or_init_database_row(row_id).await.ok()
+  pub fn init_database_row(&self, row_id: &RowId, ret: InitRowChan) {
+    self.body.block.init_database_row(row_id, ret)
   }
 
   pub fn init_database_rows<'a, T: Into<RowId> + Send + 'a>(
@@ -591,7 +596,6 @@ impl Database {
       .get_or_init_database_row(row_id)
       .await
       .ok()?;
-
     let read_guard = database_row.read().await;
     read_guard.get_row_detail()
   }
