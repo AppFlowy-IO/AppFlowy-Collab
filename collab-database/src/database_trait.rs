@@ -79,12 +79,6 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     encoded_collab: Option<EncodedCollab>,
   ) -> Result<Collab, DatabaseError>;
 
-  async fn get_collabs(
-    &self,
-    object_ids: Vec<String>,
-    collab_type: CollabType,
-  ) -> Result<EncodeCollabByOid, DatabaseError>;
-
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
 }
 
@@ -205,14 +199,6 @@ where
     }
   }
 
-  async fn get_collabs(
-    &self,
-    object_ids: Vec<String>,
-    collab_type: CollabType,
-  ) -> Result<EncodeCollabByOid, DatabaseError> {
-    self.reader_batch_get_collabs(object_ids, collab_type).await
-  }
-
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
     self.reader_persistence()
   }
@@ -307,7 +293,7 @@ where
     // Fetch collabs for the uncached row IDs only
     if !uncached_row_ids.is_empty() {
       let encoded_collab_by_id = self
-        .get_collabs(uncached_row_ids, CollabType::DatabaseRow)
+        .reader_batch_get_collabs(uncached_row_ids, CollabType::DatabaseRow)
         .await?;
 
       // Prepare concurrent tasks to initialize database rows
