@@ -27,6 +27,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use tracing::error;
+use uuid::Uuid;
 use yrs::{Any, Out};
 
 pub struct EncodedDatabase {
@@ -43,7 +44,7 @@ impl EncodedDatabase {
 }
 
 pub struct EncodedCollabInfo {
-  pub object_id: String,
+  pub object_id: Uuid,
   pub collab_type: CollabType,
   pub encoded_collab: EncodedCollab,
 }
