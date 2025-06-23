@@ -140,11 +140,15 @@ impl Block {
   /// An empty [Row] is a row with no cells.
   ///
   #[instrument(level = "debug", skip_all)]
-  pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
+  pub async fn get_rows_from_row_orders(
+    &self,
+    row_orders: &[RowOrder],
+    auto_fetch: bool,
+  ) -> Vec<Row> {
     let mut rows = Vec::new();
 
     let row_ids: Vec<RowId> = row_orders.iter().map(|order| order.id.clone()).collect();
-    if let Ok(database_rows) = self.init_database_rows(row_ids).await {
+    if let Ok(database_rows) = self.init_database_rows(row_ids, auto_fetch).await {
       for database_row in database_rows {
         let read_guard = database_row.read().await;
         let row_id = read_guard.row_id.clone();
@@ -206,12 +210,13 @@ impl Block {
   pub async fn init_database_rows(
     &self,
     row_ids: Vec<RowId>,
+    auto_fetch: bool,
   ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
     // Retain only rows that are not in the cache
     let uncached_row_ids: Vec<String> = row_ids.iter().map(|id| id.to_string()).collect();
     let uncached_rows = self
       .collab_service
-      .batch_build_arc_database_row(&uncached_row_ids, self.row_change_tx.clone())
+      .batch_build_arc_database_row(&uncached_row_ids, self.row_change_tx.clone(), auto_fetch)
       .await?;
 
     // Initialize final database rows by combining cached and newly fetched rows

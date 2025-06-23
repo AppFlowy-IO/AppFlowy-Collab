@@ -544,6 +544,7 @@ impl Database {
     row_ids: Vec<T>,
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
+    auto_fetch: bool,
   ) -> impl Stream<Item = Result<Arc<RwLock<DatabaseRow>>, DatabaseError>> + 'a {
     let row_ids_chunk_stream = stream::iter(
       row_ids
@@ -566,8 +567,7 @@ impl Database {
             }
           }
 
-          trace!("Initializing chunked database rows: {}", chunk.len());
-          self.body.block.init_database_rows(chunk).await
+          self.body.block.init_database_rows(chunk, auto_fetch).await
         }
       })
       .filter_map(|result| async {
@@ -611,10 +611,11 @@ impl Database {
     view_id: &str,
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
+    auto_fetch: bool,
   ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_orders = self.get_row_orders_for_view(view_id);
     self
-      .get_rows_from_row_orders(row_orders, chunk_size, cancel_token)
+      .get_rows_from_row_orders(row_orders, chunk_size, cancel_token, auto_fetch)
       .await
   }
 
@@ -640,9 +641,10 @@ impl Database {
     row_orders: Vec<RowOrder>,
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
+    auto_fetch: bool,
   ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_ids = row_orders.iter().map(|order| order.id.clone()).collect();
-    let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token);
+    let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token, auto_fetch);
     let database_id = self.get_database_id();
     rows_stream.then(move |result| {
       let database_id = database_id.clone();
@@ -659,9 +661,17 @@ impl Database {
   }
 
   /// Return a list of [RowCell] for the given view and field.
-  pub async fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
+  pub async fn get_cells_for_field(
+    &self,
+    view_id: &str,
+    field_id: &str,
+    auto_fetch: bool,
+  ) -> Vec<RowCell> {
     let txn = self.collab.transact();
-    self.body.get_cells_for_field(&txn, view_id, field_id).await
+    self
+      .body
+      .get_cells_for_field(&txn, view_id, field_id, auto_fetch)
+      .await
   }
 
   /// Return the [RowCell] with the given row id and field id.
@@ -1351,14 +1361,14 @@ impl Database {
     self.body.fields.get_all_fields(&txn)
   }
 
-  pub async fn get_database_data(&self) -> DatabaseData {
+  pub async fn get_database_data(&self, chunk_size: usize, auto_fetch: bool) -> DatabaseData {
     let txn = self.collab.transact();
 
     let database_id = self.body.get_database_id(&txn);
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let views = self.get_all_views();
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
-    let rows_stream = self.get_all_rows(20, None).await;
+    let rows_stream = self.get_all_rows(chunk_size, None, auto_fetch).await;
     let rows: Vec<Row> = rows_stream
       .filter_map(|result| async move { result.ok() })
       .collect()
@@ -1378,7 +1388,7 @@ impl Database {
   }
 
   pub async fn to_json_value(&self) -> JsonValue {
-    let database_data = self.get_database_data().await;
+    let database_data = self.get_database_data(20, false).await;
     serde_json::to_value(&database_data).unwrap()
   }
 
@@ -1386,6 +1396,7 @@ impl Database {
     &self,
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
+    auto_fetch: bool,
   ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_orders = {
       let txn = self.collab.transact();
@@ -1394,12 +1405,12 @@ impl Database {
     };
 
     self
-      .get_rows_from_row_orders(row_orders, chunk_size, cancel_token)
+      .get_rows_from_row_orders(row_orders, chunk_size, cancel_token, auto_fetch)
       .await
   }
 
-  pub async fn collect_all_rows(&self) -> Vec<Result<Row, DatabaseError>> {
-    let rows_stream = self.get_all_rows(20, None).await;
+  pub async fn collect_all_rows(&self, auto_fetch: bool) -> Vec<Result<Row, DatabaseError>> {
+    let rows_stream = self.get_all_rows(20, None, auto_fetch).await;
     rows_stream.collect::<Vec<_>>().await
   }
 
@@ -1907,9 +1918,13 @@ impl DatabaseBody {
     txn: &T,
     view_id: &str,
     field_id: &str,
+    auto_fetch: bool,
   ) -> Vec<RowCell> {
     let row_orders = self.views.get_row_orders(txn, view_id);
-    let rows = self.block.get_rows_from_row_orders(&row_orders).await;
+    let rows = self
+      .block
+      .get_rows_from_row_orders(&row_orders, auto_fetch)
+      .await;
     rows
       .into_iter()
       .map(|row| RowCell::new(row.id, row.cells.get(field_id).cloned()))

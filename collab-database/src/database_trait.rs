@@ -110,6 +110,7 @@ pub trait DatabaseRowCollabService: Send + Sync + 'static {
     &self,
     row_ids: &[String],
     sender: Option<RowChangeSender>,
+    auto_fetch: bool,
   ) -> Result<HashMap<RowId, Arc<RwLock<DatabaseRow>>>, DatabaseError>;
 }
 
@@ -283,6 +284,7 @@ where
     &self,
     row_ids: &[String],
     sender: Option<RowChangeSender>,
+    _auto_fetch: bool,
   ) -> Result<HashMap<RowId, Arc<RwLock<DatabaseRow>>>, DatabaseError> {
     let mut result = HashMap::new();
     let mut uncached_row_ids = Vec::new();
