@@ -591,7 +591,7 @@ impl NotionPage {
           .into_collabs()
           .into_iter()
           .map(|collab_info| ImportedCollab {
-            object_id: collab_info.object_id,
+            object_id: collab_info.object_id.to_string(),
             collab_type: collab_info.collab_type,
             encoded_collab: collab_info.encoded_collab,
           })

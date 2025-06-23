@@ -263,7 +263,7 @@ impl Database {
   }
 
   pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, DatabaseError> {
-    let database_id = self.collab.object_id().to_string();
+    let database_id = Uuid::parse_str(self.collab.object_id())?;
     let encoded_database_collab = EncodedCollabInfo {
       object_id: database_id,
       collab_type: CollabType::Database,
@@ -287,9 +287,10 @@ impl Database {
             .ok()?;
           let read_guard = database_row.read().await;
           let row_collab = &read_guard.collab;
+          let object_id = Uuid::parse_str(row_collab.object_id()).ok()?;
           let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
           Some(EncodedCollabInfo {
-            object_id: row_collab.object_id().to_string(),
+            object_id,
             collab_type: CollabType::DatabaseRow,
             encoded_collab,
           })
