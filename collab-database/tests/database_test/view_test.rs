@@ -24,7 +24,7 @@ async fn create_initial_database_test() {
   let database_test = create_database(1, &database_id);
 
   let all_rows: Vec<Row> = database_test
-    .get_all_rows(20, None)
+    .get_all_rows(20, None, false)
     .await
     .filter_map(|result| async move { result.ok() })
     .collect()
@@ -237,7 +237,7 @@ async fn duplicate_database_view_test() {
 async fn database_data_serde_test() {
   let database_id = uuid::Uuid::new_v4();
   let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let database_data = database_test.get_database_data().await;
+  let database_data = database_test.get_database_data(20, false).await;
 
   let json = database_data.to_json().unwrap();
   let database_data2 = DatabaseData::from_json(&json).unwrap();

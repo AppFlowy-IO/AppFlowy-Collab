@@ -148,7 +148,7 @@ async fn create_template_test() {
 
   // Assert num of rows
   let rows: Vec<Row> = database
-    .get_all_rows(10, None)
+    .get_all_rows(10, None, false)
     .await
     .filter_map(|result| async move { result.ok() })
     .collect()

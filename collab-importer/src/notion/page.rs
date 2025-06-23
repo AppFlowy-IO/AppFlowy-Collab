@@ -532,7 +532,9 @@ impl NotionPage {
 
         if let Some(field) = database.get_primary_field() {
           let view_id = database.get_first_database_view_id().unwrap();
-          let row_cells = database.get_cells_for_field(&view_id, &field.id).await;
+          let row_cells = database
+            .get_cells_for_field(&view_id, &field.id, false)
+            .await;
           for row_cell in row_cells {
             for row_document in row_documents.iter_mut() {
               if let Some(text) = row_cell.text() {
