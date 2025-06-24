@@ -273,6 +273,7 @@ impl Database {
     // Fetch row orders
     let row_orders = self.get_all_row_orders().await;
     let mut encoded_row_collabs = Vec::new();
+    let mut encoded_row_document_collabs = Vec::new();
     // Process row orders in chunks
     for chunk in row_orders.chunks(20) {
       // Create async tasks for each row in the chunk
@@ -288,18 +289,40 @@ impl Database {
           let read_guard = database_row.read().await;
           let row_collab = &read_guard.collab;
           let object_id = Uuid::parse_str(row_collab.object_id()).ok()?;
+
+          let mut encode_row_document_collab = None;
+          // get row document
+          if let Some(persistence) = self.collab_service.persistence() {
+            let row_document_id = meta_id_from_row_id(&object_id, RowMetaKey::DocumentId);
+            if let Ok(row_document_uuid) = Uuid::parse_str(&row_document_id) {
+              if let Some(document_encode_collab) =
+                persistence.get_encoded_collab(&row_document_id, CollabType::Document)
+              {
+                encode_row_document_collab = Some(EncodedCollabInfo {
+                  object_id: row_document_uuid,
+                  collab_type: CollabType::Document,
+                  encoded_collab: document_encode_collab,
+                });
+              }
+            }
+          }
+
           let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
-          Some(EncodedCollabInfo {
+          let encode_row_collab = EncodedCollabInfo {
             object_id,
             collab_type: CollabType::DatabaseRow,
             encoded_collab,
-          })
+          };
+          Some((encode_row_collab, encode_row_document_collab))
         })
         .collect();
 
       let chunk_results = join_all(tasks).await;
-      for collab_info in chunk_results.into_iter().flatten() {
-        encoded_row_collabs.push(collab_info);
+      for (encode_row_collab, encode_row_document_collab) in chunk_results.into_iter().flatten() {
+        encoded_row_collabs.push(encode_row_collab);
+        if let Some(encode_row_document_collab) = encode_row_document_collab {
+          encoded_row_document_collabs.push(encode_row_document_collab);
+        }
       }
 
       // Yield to the runtime after processing each chunk
@@ -309,6 +332,7 @@ impl Database {
     Ok(EncodedDatabase {
       encoded_database_collab,
       encoded_row_collabs,
+      encoded_row_document_collabs,
     })
   }
 
