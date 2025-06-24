@@ -33,6 +33,7 @@ use yrs::{Any, Out};
 pub struct EncodedDatabase {
   pub encoded_database_collab: EncodedCollabInfo,
   pub encoded_row_collabs: Vec<EncodedCollabInfo>,
+  pub encoded_row_document_collabs: Vec<EncodedCollabInfo>,
 }
 
 impl EncodedDatabase {
