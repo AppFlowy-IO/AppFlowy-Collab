@@ -4,6 +4,7 @@ use crate::{SectionsByUid, View, Workspace};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FolderData {
+  pub uid: i64,
   pub workspace: Workspace,
   pub current_view: String,
   pub views: Vec<View>,
@@ -18,8 +19,9 @@ pub struct FolderData {
 }
 
 impl FolderData {
-  pub fn new(workspace: Workspace) -> Self {
+  pub fn new(uid: i64, workspace: Workspace) -> Self {
     Self {
+      uid,
       workspace,
       current_view: "".to_string(),
       views: vec![],

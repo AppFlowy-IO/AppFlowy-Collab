@@ -749,19 +749,19 @@ async fn import_level_test() {
 
   let uid = 1;
   let collab = Collab::new(uid, &info.workspace_id, "1", default_client_id());
-  let mut folder = Folder::create(1, collab, None, default_folder_data(&info.workspace_id));
+  let mut folder = Folder::create(collab, None, default_folder_data(uid, &info.workspace_id));
 
   let view_hierarchy = info.build_nested_views().await;
   assert_eq!(view_hierarchy.flatten_views().len(), 14);
-  folder.insert_nested_views(view_hierarchy.into_inner());
+  folder.insert_nested_views(view_hierarchy.into_inner(), uid);
 
-  let first_level_views = folder.get_views_belong_to(&info.workspace_id);
+  let first_level_views = folder.get_views_belong_to(&info.workspace_id, uid);
   assert_eq!(first_level_views.len(), 1);
   assert_eq!(first_level_views[0].children.len(), 3);
   println!("first_level_views: {:?}", first_level_views);
 
-  let second_level_views = folder.get_views_belong_to(&first_level_views[0].id);
-  verify_first_level_views(&second_level_views, &mut folder);
+  let second_level_views = folder.get_views_belong_to(&first_level_views[0].id, uid);
+  verify_first_level_views(&second_level_views, &mut folder, uid);
 
   // Print out the views for debugging or manual inspection
   /*
@@ -819,9 +819,9 @@ async fn import_empty_space() {
 }
 
 // Helper function to verify second and third level views based on the first level view name
-fn verify_first_level_views(first_level_views: &[Arc<View>], folder: &mut Folder) {
+fn verify_first_level_views(first_level_views: &[Arc<View>], folder: &mut Folder, uid: i64) {
   for view in first_level_views {
-    let second_level_views = folder.get_views_belong_to(&view.id);
+    let second_level_views = folder.get_views_belong_to(&view.id, uid);
     match view.name.as_str() {
       "Root2" => {
         assert_eq!(second_level_views.len(), 1);
@@ -834,7 +834,7 @@ fn verify_first_level_views(first_level_views: &[Arc<View>], folder: &mut Folder
       },
       "Root" => {
         assert_eq!(second_level_views.len(), 3);
-        verify_root_second_level_views(&second_level_views, folder);
+        verify_root_second_level_views(&second_level_views, folder, uid);
       },
       _ => panic!("Unexpected view name: {}", view.name),
     }
@@ -842,9 +842,9 @@ fn verify_first_level_views(first_level_views: &[Arc<View>], folder: &mut Folder
 }
 
 // Helper function to verify third level views based on the second level view name under "Root"
-fn verify_root_second_level_views(second_level_views: &[Arc<View>], folder: &mut Folder) {
+fn verify_root_second_level_views(second_level_views: &[Arc<View>], folder: &mut Folder, uid: i64) {
   for view in second_level_views {
-    let third_level_views = folder.get_views_belong_to(&view.id);
+    let third_level_views = folder.get_views_belong_to(&view.id, uid);
     match view.name.as_str() {
       "root-2" => {
         assert_eq!(third_level_views.len(), 1);

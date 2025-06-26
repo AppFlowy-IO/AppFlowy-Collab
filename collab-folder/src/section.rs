@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 pub struct SectionMap {
-  uid: UserId,
   container: MapRef,
   #[allow(dead_code)]
   change_tx: Option<SectionChangeSender>,
@@ -26,7 +25,6 @@ impl SectionMap {
   /// create them in the provided `MapRefWrapper` if they do not exist.
   pub fn create(
     txn: &mut TransactionMut,
-    uid: &UserId,
     root: MapRef,
     change_tx: Option<SectionChangeSender>,
   ) -> Self {
@@ -35,17 +33,21 @@ impl SectionMap {
     }
 
     Self {
-      uid: uid.clone(),
       container: root,
       change_tx,
       subscription: None,
     }
   }
 
-  pub fn section_op<T: ReadTxn>(&self, txn: &T, section: Section) -> Option<SectionOperation> {
+  pub fn section_op<T: ReadTxn>(
+    &self,
+    txn: &T,
+    section: Section,
+    uid: i64,
+  ) -> Option<SectionOperation> {
     let container = self.get_section(txn, section.as_ref())?;
     Some(SectionOperation {
-      uid: &self.uid,
+      uid: UserId::from(uid),
       container,
       section,
       change_tx: self.change_tx.clone(),
@@ -114,20 +116,20 @@ pub enum TrashSectionChange {
 
 pub type SectionsByUid = HashMap<UserId, Vec<SectionItem>>;
 
-pub struct SectionOperation<'a> {
-  uid: &'a UserId,
+pub struct SectionOperation {
+  uid: UserId,
   container: MapRef,
   section: Section,
   change_tx: Option<SectionChangeSender>,
 }
 
-impl SectionOperation<'_> {
+impl SectionOperation {
   fn container(&self) -> &MapRef {
     &self.container
   }
 
   fn uid(&self) -> &UserId {
-    self.uid
+    &self.uid
   }
 
   pub fn get_sections<T: ReadTxn>(&self, txn: &T) -> SectionsByUid {
