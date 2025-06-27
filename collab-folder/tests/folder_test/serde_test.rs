@@ -42,7 +42,7 @@ fn folder_json_serde() {
 #[test]
 fn view_json_serde() {
   let uid = UserId::from(1);
-  let folder_test = create_folder(uid, "fake_workspace_id");
+  let folder_test = create_folder(uid.clone(), "fake_workspace_id");
   let workspace_id = folder_test.get_workspace_id().unwrap();
 
   let mut folder = folder_test.folder;
@@ -53,10 +53,19 @@ fn view_json_serde() {
   {
     let mut txn = folder.collab.transact_mut();
 
-    folder.body.views.insert(&mut txn, view_1, None);
-    folder.body.views.insert(&mut txn, view_2, None);
+    folder
+      .body
+      .views
+      .insert(&mut txn, view_1, None, uid.as_i64());
+    folder
+      .body
+      .views
+      .insert(&mut txn, view_2, None, uid.as_i64());
 
-    let views = folder.body.views.get_views_belong_to(&txn, &workspace_id);
+    let views = folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
     assert_eq!(views.len(), 2);
   }
 
@@ -115,7 +124,7 @@ fn view_json_serde() {
 #[test]
 fn child_view_json_serde() {
   let uid = UserId::from(1);
-  let folder_test = create_folder(uid, "fake_workspace_id");
+  let folder_test = create_folder(uid.clone(), "fake_workspace_id");
   let workspace_id = folder_test.get_workspace_id().unwrap();
 
   let mut folder = folder_test.folder;
@@ -129,10 +138,22 @@ fn child_view_json_serde() {
   {
     let mut txn = folder.collab.transact_mut();
 
-    folder.body.views.insert(&mut txn, view_1, None);
-    folder.body.views.insert(&mut txn, view_2, None);
-    folder.body.views.insert(&mut txn, view_2_1, None);
-    folder.body.views.insert(&mut txn, view_2_2, None);
+    folder
+      .body
+      .views
+      .insert(&mut txn, view_1, None, uid.as_i64());
+    folder
+      .body
+      .views
+      .insert(&mut txn, view_2, None, uid.as_i64());
+    folder
+      .body
+      .views
+      .insert(&mut txn, view_2_1, None, uid.as_i64());
+    folder
+      .body
+      .views
+      .insert(&mut txn, view_2_2, None, uid.as_i64());
   }
   // folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_include!(actual: folder.to_json_value(), expected: json!({
@@ -215,27 +236,29 @@ async fn deserialize_folder_data() {
   let folder_data: FolderData = serde_json::from_str(json).unwrap();
   let options = CollabOptions::new("1".to_string(), default_client_id());
   let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
-  let folder = Arc::new(Folder::create(1, collab, None, folder_data));
+  let uid = UserId::from(folder_data.uid);
+  let folder = Arc::new(Folder::create(collab, None, folder_data));
 
   let mut handles = vec![];
   for _ in 0..40 {
     let folder = folder.clone();
+    let clone_uid = uid.clone();
     let handle = tokio::spawn(async move {
       let start = Instant::now();
       let _trash_ids = folder
-        .get_all_trash_sections()
+        .get_all_trash_sections(clone_uid.as_i64())
         .into_iter()
         .map(|trash| trash.id)
         .collect::<Vec<String>>();
 
       // get the private view ids
       let _private_view_ids = folder
-        .get_all_private_sections()
+        .get_all_private_sections(clone_uid.as_i64())
         .into_iter()
         .map(|view| view.id)
         .collect::<Vec<String>>();
 
-      get_view_ids_should_be_filtered(&folder);
+      get_view_ids_should_be_filtered(&folder, clone_uid.as_i64());
       let elapsed = start.elapsed();
       Ok::<Duration, anyhow::Error>(elapsed)
     });
@@ -249,21 +272,21 @@ async fn deserialize_folder_data() {
   }
 }
 
-fn get_view_ids_should_be_filtered(folder: &Folder) -> Vec<String> {
-  let trash_ids = get_all_trash_ids(folder);
-  let other_private_view_ids = get_other_private_view_ids(folder);
+fn get_view_ids_should_be_filtered(folder: &Folder, uid: i64) -> Vec<String> {
+  let trash_ids = get_all_trash_ids(folder, uid);
+  let other_private_view_ids = get_other_private_view_ids(folder, uid);
   [trash_ids, other_private_view_ids].concat()
 }
 
-fn get_other_private_view_ids(folder: &Folder) -> Vec<String> {
+fn get_other_private_view_ids(folder: &Folder, uid: i64) -> Vec<String> {
   let my_private_view_ids = folder
-    .get_my_private_sections()
+    .get_my_private_sections(uid)
     .into_iter()
     .map(|view| view.id)
     .collect::<Vec<String>>();
 
   let all_private_view_ids = folder
-    .get_all_private_sections()
+    .get_all_private_sections(uid)
     .into_iter()
     .map(|view| view.id)
     .collect::<Vec<String>>();
@@ -274,31 +297,36 @@ fn get_other_private_view_ids(folder: &Folder) -> Vec<String> {
     .collect()
 }
 
-fn get_all_trash_ids(folder: &Folder) -> Vec<String> {
+fn get_all_trash_ids(folder: &Folder, uid: i64) -> Vec<String> {
   let trash_ids = folder
-    .get_all_trash_sections()
+    .get_all_trash_sections(uid)
     .into_iter()
     .map(|trash| trash.id)
     .collect::<Vec<String>>();
   let mut all_trash_ids = trash_ids.clone();
   let txn = folder.collab.transact();
   for trash_id in trash_ids {
-    all_trash_ids.extend(get_all_child_view_ids(folder, &txn, &trash_id));
+    all_trash_ids.extend(get_all_child_view_ids(folder, &txn, &trash_id, uid));
   }
   all_trash_ids
 }
 
-fn get_all_child_view_ids<T: ReadTxn>(folder: &Folder, txn: &T, view_id: &str) -> Vec<String> {
+fn get_all_child_view_ids<T: ReadTxn>(
+  folder: &Folder,
+  txn: &T,
+  view_id: &str,
+  uid: i64,
+) -> Vec<String> {
   let child_view_ids = folder
     .body
     .views
-    .get_views_belong_to(txn, view_id)
+    .get_views_belong_to(txn, view_id, uid)
     .into_iter()
     .map(|view| view.id.clone())
     .collect::<Vec<String>>();
   let mut all_child_view_ids = child_view_ids.clone();
   for child_view_id in child_view_ids {
-    all_child_view_ids.extend(get_all_child_view_ids(folder, txn, &child_view_id));
+    all_child_view_ids.extend(get_all_child_view_ids(folder, txn, &child_view_id, uid));
   }
   all_child_view_ids
 }

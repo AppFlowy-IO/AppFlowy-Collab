@@ -20,20 +20,47 @@ fn create_child_views_test() {
   let mut txn = folder.collab.transact_mut();
 
   let time = timestamp();
-  folder.body.views.insert(&mut txn, v_1.clone(), None);
-  folder.body.views.insert(&mut txn, v_1_1, None);
-  folder.body.views.insert(&mut txn, v_1_2.clone(), None);
-  folder.body.views.insert(&mut txn, v_1_2_1, None);
-  folder.body.views.insert(&mut txn, v_1_2_2, None);
-  folder.body.views.insert(&mut txn, v_1_3, None);
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1.clone(), None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1_1, None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1_2.clone(), None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1_2_1, None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1_2_2, None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1_3, None, uid.as_i64());
 
-  let v_1_child_views = folder.body.views.get_views_belong_to(&txn, &v_1.id);
+  let v_1_child_views = folder
+    .body
+    .views
+    .get_views_belong_to(&txn, &v_1.id, uid.as_i64());
   assert_eq!(v_1_child_views.len(), 3);
 
-  let v_1_2_child_views = folder.body.views.get_views_belong_to(&txn, &v_1_2.id);
+  let v_1_2_child_views = folder
+    .body
+    .views
+    .get_views_belong_to(&txn, &v_1_2.id, uid.as_i64());
   assert_eq!(v_1_2_child_views.len(), 2);
 
-  let folder_data = folder.body.get_folder_data(&txn, &workspace_id).unwrap();
+  let folder_data = folder
+    .body
+    .get_folder_data(&txn, &workspace_id, uid.as_i64())
+    .unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
   assert_json_include!(
     actual: value,
@@ -162,12 +189,27 @@ fn move_child_views_test() {
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
 
-  folder.body.views.insert(&mut txn, v_1.clone(), None);
-  folder.body.views.insert(&mut txn, v_1_1, None);
-  folder.body.views.insert(&mut txn, v_1_2, None);
-  folder.body.views.insert(&mut txn, v_1_3, None);
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1.clone(), None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1_1, None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1_2, None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, v_1_3, None, uid.as_i64());
 
-  let v_1_child_views = folder.body.views.get_views_belong_to(&txn, &v_1.id);
+  let v_1_child_views = folder
+    .body
+    .views
+    .get_views_belong_to(&txn, &v_1.id, uid.as_i64());
   assert_eq!(v_1_child_views[0].id, "1_1");
   assert_eq!(v_1_child_views[1].id, "1_2");
   assert_eq!(v_1_child_views[2].id, "1_3");
@@ -175,7 +217,11 @@ fn move_child_views_test() {
   folder.body.views.move_child(&mut txn, &v_1.id, 2, 0);
   folder.body.views.move_child(&mut txn, &v_1.id, 0, 1);
 
-  let v_1_child_views = folder.body.views.get_view(&txn, &v_1.id).unwrap();
+  let v_1_child_views = folder
+    .body
+    .views
+    .get_view(&txn, &v_1.id, uid.as_i64())
+    .unwrap();
   assert_eq!(v_1_child_views.children[0].id, "1_1");
   assert_eq!(v_1_child_views.children[1].id, "1_3");
   assert_eq!(v_1_child_views.children[2].id, "1_2");
@@ -192,12 +238,24 @@ fn delete_view_test() {
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
 
-  folder.body.views.insert(&mut txn, view_1, None);
-  folder.body.views.insert(&mut txn, view_2, None);
-  folder.body.views.insert(&mut txn, view_3, None);
+  folder
+    .body
+    .views
+    .insert(&mut txn, view_1, None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, view_2, None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, view_3, None, uid.as_i64());
 
   folder.body.views.remove_child(&mut txn, "w1", 1);
-  let w_1_child_views = folder.body.views.get_views_belong_to(&txn, "w1");
+  let w_1_child_views = folder
+    .body
+    .views
+    .get_views_belong_to(&txn, "w1", uid.as_i64());
   assert_eq!(w_1_child_views[0].id, "1_1");
   assert_eq!(w_1_child_views[1].id, "1_3");
 }
@@ -213,18 +271,33 @@ fn delete_child_view_test() {
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
 
-  folder.body.views.insert(&mut txn, view_1, None);
-  folder.body.views.insert(&mut txn, view_1_1, None);
-  folder.body.views.insert(&mut txn, view_2, None);
+  folder
+    .body
+    .views
+    .insert(&mut txn, view_1, None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, view_1_1, None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, view_2, None, uid.as_i64());
 
-  let views = folder.body.views.get_views_belong_to(&txn, "v1");
+  let views = folder
+    .body
+    .views
+    .get_views_belong_to(&txn, "v1", uid.as_i64());
   assert_eq!(views.len(), 1);
 
   folder
     .body
     .views
     .delete_views(&mut txn, vec!["v1_1".to_string()]);
-  let views = folder.body.views.get_views_belong_to(&txn, "v1");
+  let views = folder
+    .body
+    .views
+    .get_views_belong_to(&txn, "v1", uid.as_i64());
   assert!(views.is_empty());
 }
 
@@ -241,17 +314,32 @@ fn create_orphan_child_views_test() {
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
 
-  folder.body.views.insert(&mut txn, view_1.clone(), None);
-  folder.body.views.insert(&mut txn, view_2.clone(), None);
+  folder
+    .body
+    .views
+    .insert(&mut txn, view_1.clone(), None, uid.as_i64());
+  folder
+    .body
+    .views
+    .insert(&mut txn, view_2.clone(), None, uid.as_i64());
 
-  let child_views = folder.body.views.get_views_belong_to(&txn, &workspace_id);
+  let child_views = folder
+    .body
+    .views
+    .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
   assert_eq!(child_views.len(), 1);
 
-  let orphan_views = folder.body.views.get_orphan_views_with_txn(&txn);
+  let orphan_views = folder
+    .body
+    .views
+    .get_orphan_views_with_txn(&txn, uid.as_i64());
   assert_eq!(orphan_views.len(), 1);
 
   // The folder data should contains the orphan view
-  let folder_data = folder.body.get_folder_data(&txn, &workspace_id).unwrap();
+  let folder_data = folder
+    .body
+    .get_folder_data(&txn, &workspace_id, uid.as_i64())
+    .unwrap();
   assert_json_include!(
     actual: json!(folder_data),
     expected: json!({

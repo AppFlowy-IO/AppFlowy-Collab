@@ -29,7 +29,6 @@ impl Folder {
       .ok_or_else(|| FolderError::NoRequiredData("workspace id".to_string()))?;
 
     let mut other = Folder::from_collab_doc_state(
-      self.uid().clone(),
       CollabOrigin::Empty,
       encoded_collab.into(),
       &workspace_id,

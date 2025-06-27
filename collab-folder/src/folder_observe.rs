@@ -9,7 +9,7 @@ use serde_json::json;
 use tokio::sync::broadcast;
 
 use crate::section::SectionMap;
-use crate::{ParentChildRelations, UserId, View, ViewIndexContent, view_from_map_ref};
+use crate::{ParentChildRelations, View, ViewIndexContent, view_from_map_ref};
 
 #[derive(Debug, Clone)]
 pub enum ViewChange {
@@ -54,13 +54,13 @@ pub(crate) fn subscribe_folder_change(root: &mut MapRef) -> Subscription {
 }
 
 pub(crate) fn subscribe_view_change(
-  _uid: &UserId,
-  root: &mut MapRef,
+  root: &MapRef,
   deletion_cache: Arc<DashMap<String, Arc<View>>>,
   change_tx: ViewChangeSender,
   view_relations: Arc<ParentChildRelations>,
   section_map: Arc<SectionMap>,
   index_sender: IndexContentSender,
+  uid: i64,
 ) -> Subscription {
   root.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
@@ -73,7 +73,8 @@ pub(crate) fn subscribe_view_change(
             match c {
               EntryChange::Inserted(v) => {
                 if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &view_relations, &section_map)
+                  if let Some(view) =
+                    view_from_map_ref(map_ref, txn, &view_relations, &section_map, uid)
                   {
                     deletion_cache.insert(view.id.clone(), Arc::new(view.clone()));
 
@@ -86,7 +87,7 @@ pub(crate) fn subscribe_view_change(
               },
               EntryChange::Updated(_, _) => {
                 if let Some(view) =
-                  view_from_map_ref(event.target(), txn, &view_relations, &section_map)
+                  view_from_map_ref(event.target(), txn, &view_relations, &section_map, uid)
                 {
                   // Update deletion cache with the updated view
                   deletion_cache.insert(view.id.clone(), Arc::new(view.clone()));

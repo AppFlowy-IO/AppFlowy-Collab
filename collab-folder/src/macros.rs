@@ -107,44 +107,44 @@ macro_rules! impl_array_update {
 macro_rules! impl_section_op {
   ($section_type:expr, $set_fn:ident, $add_fn:ident, $delete_fn:ident, $get_my_fn:ident, $get_all_fn:ident, $remove_all_fn:ident, $move_fn:ident) => {
     // Add view IDs as either favorites or recents
-    pub fn $add_fn(&mut self, ids: Vec<String>) {
+    pub fn $add_fn(&mut self, ids: Vec<String>, uid: i64) {
       let mut txn = self.collab.transact_mut();
       for id in ids {
         self
           .body
           .views
-          .update_view(&mut txn, &id, |update| update.$set_fn(true).done());
+          .update_view(&mut txn, &id, |update| update.$set_fn(true).done(), uid);
       }
     }
 
-    pub fn $delete_fn(&mut self, ids: Vec<String>) {
+    pub fn $delete_fn(&mut self, ids: Vec<String>, uid: i64) {
       let mut txn = self.collab.transact_mut();
       for id in ids {
         self
           .body
           .views
-          .update_view(&mut txn, &id, |update| update.$set_fn(false).done());
+          .update_view(&mut txn, &id, |update| update.$set_fn(false).done(), uid);
       }
     }
 
     // Get all section items for the current user
-    pub fn $get_my_fn(&self) -> Vec<SectionItem> {
+    pub fn $get_my_fn(&self, uid: i64) -> Vec<SectionItem> {
       let txn = self.collab.transact();
       self
         .body
         .section
-        .section_op(&txn, $section_type)
+        .section_op(&txn, $section_type, uid)
         .map(|op| op.get_all_section_item(&txn))
         .unwrap_or_default()
     }
 
     // Get all sections
-    pub fn $get_all_fn(&self) -> Vec<SectionItem> {
+    pub fn $get_all_fn(&self, uid: i64) -> Vec<SectionItem> {
       let txn = self.collab.transact();
       self
         .body
         .section
-        .section_op(&txn, $section_type)
+        .section_op(&txn, $section_type, uid)
         .map(|op| op.get_sections(&txn))
         .unwrap_or_default()
         .into_iter()
@@ -153,18 +153,18 @@ macro_rules! impl_section_op {
     }
 
     // Clear all items in a section
-    pub fn $remove_all_fn(&mut self) {
+    pub fn $remove_all_fn(&mut self, uid: i64) {
       let mut txn = self.collab.transact_mut();
-      if let Some(op) = self.body.section.section_op(&txn, $section_type) {
+      if let Some(op) = self.body.section.section_op(&txn, $section_type, uid) {
         op.clear(&mut txn)
       }
     }
 
     // Move the position of a single section item to after another section item. If
     // prev_id is None, the item will be moved to the beginning of the section.
-    pub fn $move_fn(&mut self, id: &str, prev_id: Option<&str>) {
+    pub fn $move_fn(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
       let mut txn = self.collab.transact_mut();
-      if let Some(op) = self.body.section.section_op(&txn, $section_type) {
+      if let Some(op) = self.body.section.section_op(&txn, $section_type, uid) {
         op.move_section_item_with_txn(&mut txn, id, prev_id);
       }
     }

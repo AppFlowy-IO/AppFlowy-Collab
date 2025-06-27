@@ -1,13 +1,10 @@
 use anyhow::bail;
-use collab::preclude::{
-  Any, Array, ArrayRef, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue,
-};
+use collab::preclude::{Any, Array, ArrayRef, Map, MapExt, MapRef, ReadTxn, YrsValue};
 use serde::{Deserialize, Serialize};
 
 use crate::folder::FAVORITES_V1;
-use crate::{Folder, FolderBody, ParentChildRelations, SectionItem, View, Workspace};
+use crate::{Folder, ParentChildRelations, SectionItem, Workspace};
 
-const WORKSPACES: &str = "workspaces";
 const WORKSPACE_ID: &str = "id";
 const WORKSPACE_NAME: &str = "name";
 const WORKSPACE_CREATED_AT: &str = "created_at";
@@ -88,32 +85,6 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
     last_edited_by: None,
     created_by: None,
   })
-}
-
-impl FolderBody {
-  pub fn migrate_workspace_to_view(&self, txn: &mut TransactionMut) {
-    let mut workspace = {
-      let workspace_array: ArrayRef = match self.root.get_with_txn(txn, WORKSPACES) {
-        Some(array) => array,
-        None => return,
-      };
-      workspace_array
-        .iter(txn)
-        .flat_map(|map_ref| {
-          to_workspace_with_txn(
-            txn,
-            &map_ref.cast().unwrap(),
-            &self.views.parent_children_relation,
-          )
-        })
-        .collect::<Vec<_>>()
-    };
-    if !workspace.is_empty() {
-      let workspace = workspace.pop().unwrap();
-      self.root.remove(txn, WORKSPACES);
-      self.views.insert(txn, View::from(workspace), None);
-    }
-  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

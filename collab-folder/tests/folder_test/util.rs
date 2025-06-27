@@ -1,7 +1,4 @@
-use std::fs::{File, create_dir_all};
-use std::io::copy;
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
@@ -12,13 +9,10 @@ use collab_entity::CollabType;
 use collab_folder::*;
 use collab_plugins::CollabKVDB;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
-use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
-use nanoid::nanoid;
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
-use zip::read::ZipArchive;
 
 pub struct FolderTest {
   pub folder: Folder,
@@ -39,7 +33,7 @@ pub struct FolderTest {
 pub fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
   let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string(), uid.as_i64());
   workspace.created_at = 0;
-  let folder_data = FolderData::new(workspace);
+  let folder_data = FolderData::new(uid.as_i64(), workspace);
   create_folder_with_data(uid, workspace_id, folder_data)
 }
 
@@ -74,54 +68,10 @@ pub fn create_folder_with_data(
     view_change_tx: view_tx,
     section_change_tx: section_tx,
   };
-  let folder = Folder::create(uid, collab, Some(context), folder_data);
+  let folder = Folder::create(collab, Some(context), folder_data);
   FolderTest {
     db,
     folder,
-    cleaner,
-    view_rx,
-    section_rx: Some(section_rx),
-  }
-}
-
-pub fn open_folder_with_db(
-  uid: UserId,
-  workspace_id: &str,
-  object_id: &str,
-  db_path: PathBuf,
-) -> FolderTest {
-  let db = Arc::new(CollabKVDB::open(db_path.clone()).unwrap());
-  let disk_plugin = Box::new(RocksdbDiskPlugin::new(
-    uid.as_i64(),
-    workspace_id.to_string(),
-    object_id.to_string(),
-    CollabType::Folder,
-    Arc::downgrade(&db),
-  ));
-  let data_source = KVDBCollabPersistenceImpl {
-    db: Arc::downgrade(&db),
-    uid: uid.as_i64(),
-    workspace_id: workspace_id.to_string(),
-  };
-  let cleaner: Cleaner = Cleaner::new(db_path);
-  let options = CollabOptions::new(object_id.to_string(), default_client_id())
-    .with_data_source(data_source.into());
-  let client = CollabClient::new(1, "1");
-  let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
-  collab.add_plugin(disk_plugin);
-
-  collab.initialize();
-
-  let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
-  let (section_tx, section_rx) = tokio::sync::broadcast::channel(100);
-  let context = FolderNotify {
-    view_change_tx: view_tx,
-    section_change_tx: section_tx,
-  };
-  let folder = Folder::open(uid, collab, Some(context)).unwrap();
-  FolderTest {
-    folder,
-    db,
     cleaner,
     view_rx,
     section_rx: Some(section_rx),
@@ -203,42 +153,4 @@ pub fn setup_log() {
       .finish();
     subscriber.try_init().unwrap();
   });
-}
-
-pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
-  // Open the zip file
-  let zip_file_path = format!("./tests/folder_test/history_folder/{}.zip", folder_name);
-  let reader = File::open(zip_file_path)?;
-  let output_folder_path = format!(
-    "./tests/folder_test/history_folder/unit_test_{}",
-    nanoid!(6)
-  );
-
-  // Create a ZipArchive from the file
-  let mut archive = ZipArchive::new(reader)?;
-
-  // Iterate through each file in the zip
-  for i in 0..archive.len() {
-    let mut file = archive.by_index(i)?;
-    let outpath = Path::new(&output_folder_path).join(file.mangled_name());
-
-    if file.name().ends_with('/') {
-      // Create directory
-      create_dir_all(&outpath)?;
-    } else {
-      // Write file
-      if let Some(p) = outpath.parent() {
-        if !p.exists() {
-          create_dir_all(p)?;
-        }
-      }
-      let mut outfile = File::create(&outpath)?;
-      copy(&mut file, &mut outfile)?;
-    }
-  }
-  let path = format!("{}/{}", output_folder_path, folder_name);
-  Ok((
-    Cleaner::new(PathBuf::from(output_folder_path)),
-    PathBuf::from(path),
-  ))
 }

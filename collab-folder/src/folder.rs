@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use collab::core::collab::{CollabOptions, DataSource};
+use collab::core::collab::{CollabOptions, DataSource, IndexContentSender};
 pub use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::*;
@@ -92,13 +92,8 @@ pub struct Folder {
 }
 
 impl Folder {
-  pub fn open<T: Into<UserId>>(
-    uid: T,
-    mut collab: Collab,
-    notifier: Option<FolderNotify>,
-  ) -> Result<Self, FolderError> {
-    let uid = uid.into();
-    let body = FolderBody::open(&mut collab, uid, notifier)?;
+  pub fn open(mut collab: Collab, notifier: Option<FolderNotify>) -> Result<Self, FolderError> {
+    let body = FolderBody::open(&mut collab, notifier)?;
     let folder = Folder { collab, body };
     if folder.get_workspace_id().is_none() {
       // When the folder is opened, the workspace id must be present.
@@ -108,18 +103,12 @@ impl Folder {
     }
   }
 
-  pub fn create<T: Into<UserId>>(
-    uid: T,
-    mut collab: Collab,
-    notifier: Option<FolderNotify>,
-    data: FolderData,
-  ) -> Self {
-    let body = FolderBody::open_with(uid.into(), &mut collab, notifier, Some(data));
+  pub fn create(mut collab: Collab, notifier: Option<FolderNotify>, data: FolderData) -> Self {
+    let body = FolderBody::open_with(&mut collab, notifier, Some(data));
     Folder { collab, body }
   }
 
-  pub fn from_collab_doc_state<T: Into<UserId>>(
-    uid: T,
+  pub fn from_collab_doc_state(
     origin: CollabOrigin,
     collab_doc_state: DataSource,
     workspace_id: &str,
@@ -128,7 +117,7 @@ impl Folder {
     let options =
       CollabOptions::new(workspace_id.to_string(), client_id).with_data_source(collab_doc_state);
     let collab = Collab::new_with_options(origin, options)?;
-    Self::open(uid, collab, None)
+    Self::open(collab, None)
   }
 
   pub fn close(&self) {
@@ -140,10 +129,6 @@ impl Folder {
       .validate_require_data(&self.collab)
       .map_err(|err| FolderError::NoRequiredData(err.to_string()))?;
     Ok(())
-  }
-
-  pub fn uid(&self) -> &UserId {
-    &self.body.uid
   }
 
   /// Returns the doc state and the state vector.
@@ -169,9 +154,19 @@ impl Folder {
   ///
   /// * `None`: If the operation is unsuccessful (though it should typically not be the case as `Some`
   ///   is returned explicitly), it returns `None`.
-  pub fn get_folder_data(&self, workspace_id: &str) -> Option<FolderData> {
+  pub fn get_folder_data(&self, workspace_id: &str, uid: i64) -> Option<FolderData> {
     let txn = self.collab.transact();
-    self.body.get_folder_data(&txn, workspace_id)
+    self.body.get_folder_data(&txn, workspace_id, uid)
+  }
+
+  pub async fn subscribe_view_change(&self, uid: i64) -> Result<(), FolderError> {
+    let txn = self.collab.transact();
+    let index_json_sender = self.collab.index_json_sender.clone();
+    self
+      .body
+      .subscribe_view_change(uid, index_json_sender, txn)
+      .await;
+    Ok(())
   }
 
   /// Fetches the current workspace.
@@ -179,9 +174,9 @@ impl Folder {
   /// This function fetches the ID of the current workspace from the meta object,
   /// and uses this ID to fetch the actual workspace object.
   ///
-  pub fn get_workspace_info(&self, workspace_id: &str) -> Option<Workspace> {
+  pub fn get_workspace_info(&self, workspace_id: &str, uid: i64) -> Option<Workspace> {
     let txn = self.collab.transact();
-    self.body.get_workspace_info(&txn, workspace_id)
+    self.body.get_workspace_info(&txn, workspace_id, uid)
   }
 
   pub fn get_workspace_id(&self) -> Option<String> {
@@ -189,24 +184,24 @@ impl Folder {
     self.body.get_workspace_id(&txn)
   }
 
-  pub fn get_all_views(&self) -> Vec<Arc<View>> {
+  pub fn get_all_views(&self, uid: i64) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
-    self.body.views.get_all_views(&txn)
+    self.body.views.get_all_views(&txn, uid)
   }
 
-  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T]) -> Vec<Arc<View>> {
+  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T], uid: i64) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
-    self.body.views.get_views(&txn, view_ids)
+    self.body.views.get_views(&txn, view_ids, uid)
   }
 
-  pub fn get_views_belong_to(&self, parent_id: &str) -> Vec<Arc<View>> {
+  pub fn get_views_belong_to(&self, parent_id: &str, uid: i64) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
-    self.body.views.get_views_belong_to(&txn, parent_id)
+    self.body.views.get_views_belong_to(&txn, parent_id, uid)
   }
 
-  pub fn move_view(&mut self, view_id: &str, from: u32, to: u32) -> Option<Arc<View>> {
+  pub fn move_view(&mut self, view_id: &str, from: u32, to: u32, uid: i64) -> Option<Arc<View>> {
     let mut txn = self.collab.transact_mut();
-    self.body.move_view(&mut txn, view_id, from, to)
+    self.body.move_view(&mut txn, view_id, from, to, uid)
   }
 
   /// Moves a nested view to a new location in the hierarchy.
@@ -231,29 +226,30 @@ impl Folder {
     view_id: &str,
     new_parent_id: &str,
     prev_view_id: Option<String>,
+    uid: i64,
   ) -> Option<Arc<View>> {
     let mut txn = self.collab.transact_mut();
     self
       .body
-      .move_nested_view(&mut txn, view_id, new_parent_id, prev_view_id)
+      .move_nested_view(&mut txn, view_id, new_parent_id, prev_view_id, uid)
   }
 
-  pub fn set_current_view(&mut self, view_id: String) {
+  pub fn set_current_view(&mut self, view_id: String, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    self.body.set_current_view(&mut txn, view_id);
+    self.body.set_current_view(&mut txn, view_id, uid);
   }
 
-  pub fn get_current_view(&self) -> Option<String> {
+  pub fn get_current_view(&self, uid: i64) -> Option<String> {
     let txn = self.collab.transact();
-    self.body.get_current_view(&txn)
+    self.body.get_current_view(&txn, uid)
   }
 
-  pub fn update_view<F>(&mut self, view_id: &str, f: F) -> Option<Arc<View>>
+  pub fn update_view<F>(&mut self, view_id: &str, f: F, uid: i64) -> Option<Arc<View>>
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
     let mut txn = self.collab.transact_mut();
-    self.body.views.update_view(&mut txn, view_id, f)
+    self.body.views.update_view(&mut txn, view_id, f, uid)
   }
 
   pub fn delete_views<T: AsRef<str>>(&mut self, views: Vec<T>) {
@@ -310,10 +306,10 @@ impl Folder {
     move_private_view_id
   );
 
-  pub fn get_my_trash_info(&self) -> Vec<TrashInfo> {
+  pub fn get_my_trash_info(&self, uid: i64) -> Vec<TrashInfo> {
     let txn = self.collab.transact();
     self
-      .get_my_trash_sections()
+      .get_my_trash_sections(uid)
       .into_iter()
       .flat_map(|section| {
         self
@@ -346,37 +342,37 @@ impl Folder {
   /// A view can represent different types of [`Collab`] objects, such as a document or a database.
   /// When a view is inserted, its id is the[`Collab`] object id.
   ///
-  pub fn insert_view(&mut self, view: View, index: Option<u32>) {
+  pub fn insert_view(&mut self, view: View, index: Option<u32>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    self.body.views.insert(&mut txn, view, index);
+    self.body.views.insert(&mut txn, view, index, uid);
   }
 
   /// Insert a list of views at the end of its parent view
-  pub fn insert_views(&mut self, views: Vec<View>) {
+  pub fn insert_views(&mut self, views: Vec<View>, uid: i64) {
     let mut txn = self.collab.transact_mut();
     for view in views {
-      self.body.views.insert(&mut txn, view, None);
+      self.body.views.insert(&mut txn, view, None, uid);
     }
   }
 
   /// Insert parent-children views into the folder.
   /// when only insert one view, user [Self::insert_view] instead.
-  pub fn insert_nested_views(&mut self, views: Vec<ParentChildViews>) {
+  pub fn insert_nested_views(&mut self, views: Vec<ParentChildViews>, uid: i64) {
     let views = FlattedViews::flatten_views(views);
     let mut txn = self.collab.transact_mut();
     for view in views {
-      self.body.views.insert(&mut txn, view, None);
+      self.body.views.insert(&mut txn, view, None, uid);
     }
   }
 
-  pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
+  pub fn get_view(&self, view_id: &str, uid: i64) -> Option<Arc<View>> {
     let txn = self.collab.transact();
-    self.body.views.get_view(&txn, view_id)
+    self.body.views.get_view(&txn, view_id, uid)
   }
 
-  pub fn is_view_in_section(&self, section: Section, view_id: &str) -> bool {
+  pub fn is_view_in_section(&self, section: Section, view_id: &str, uid: i64) -> bool {
     let txn = self.collab.transact();
-    if let Some(op) = self.body.section.section_op(&txn, section) {
+    if let Some(op) = self.body.section.section_op(&txn, section, uid) {
       op.contains_with_txn(&txn, view_id)
     } else {
       false
@@ -410,12 +406,16 @@ impl Folder {
   /// # Returns
   ///
   /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
-  pub fn get_view_recursively(&self, view_id: &str) -> Vec<View> {
+  pub fn get_view_recursively(&self, view_id: &str, uid: i64) -> Vec<View> {
     let txn = self.collab.transact();
     let mut views = vec![];
-    self
-      .body
-      .get_view_recursively_with_txn(&txn, view_id, &mut HashSet::default(), &mut views);
+    self.body.get_view_recursively_with_txn(
+      &txn,
+      view_id,
+      &mut HashSet::default(),
+      &mut views,
+      uid,
+    );
     views
   }
 }
@@ -467,16 +467,16 @@ pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
 
 fn get_views_from_root<T: ReadTxn>(
   root: &MapRef,
-  _uid: &UserId,
   view_relations: &Arc<ParentChildRelations>,
   section_map: &Arc<SectionMap>,
   txn: &T,
+  uid: i64,
 ) -> HashMap<String, Arc<View>> {
   root
     .iter(txn)
     .flat_map(|(key, value)| {
       if let YrsValue::YMap(map) = value {
-        view_from_map_ref(&map, txn, view_relations, section_map)
+        view_from_map_ref(&map, txn, view_relations, section_map, uid)
           .map(|view| (key.to_string(), Arc::new(view)))
       } else {
         None
@@ -486,7 +486,6 @@ fn get_views_from_root<T: ReadTxn>(
 }
 
 pub struct FolderBody {
-  pub(crate) uid: UserId,
   pub root: MapRef,
   pub views: Arc<ViewsMap>,
   pub section: Arc<SectionMap>,
@@ -498,22 +497,16 @@ pub struct FolderBody {
 }
 
 impl FolderBody {
-  pub fn open(
-    collab: &mut Collab,
-    uid: UserId,
-    notifier: Option<FolderNotify>,
-  ) -> Result<Self, FolderError> {
+  pub fn open(collab: &mut Collab, notifier: Option<FolderNotify>) -> Result<Self, FolderError> {
     CollabType::Folder.validate_require_data(collab)?;
-    Ok(Self::open_with(uid, collab, notifier, None))
+    Ok(Self::open_with(collab, notifier, None))
   }
 
   pub fn open_with(
-    uid: UserId,
     collab: &mut Collab,
     notifier: Option<FolderNotify>,
     folder_data: Option<FolderData>,
   ) -> Self {
-    let index_json_sender = collab.index_json_sender.clone();
     let mut txn = collab.context.transact_mut();
     // create the folder
     let mut folder = collab.data.get_or_init_map(&mut txn, FOLDER);
@@ -529,53 +522,56 @@ impl FolderBody {
 
     let section = Arc::new(SectionMap::create(
       &mut txn,
-      &uid,
       section,
       notifier
         .as_ref()
         .map(|notifier| notifier.section_change_tx.clone()),
     ));
-    let all_views = get_views_from_root(&views, &uid, &parent_child_relations, &section, &txn);
     let views = Arc::new(ViewsMap::new(
-      &uid,
       views,
       notifier
         .as_ref()
         .map(|notifier| notifier.view_change_tx.clone()),
       parent_child_relations,
       section.clone(),
-      index_json_sender,
-      all_views,
     ));
 
     if let Some(folder_data) = folder_data {
       let workspace_id = folder_data.workspace.id.clone();
-      views.insert(&mut txn, folder_data.workspace.into(), None);
+      views.insert(
+        &mut txn,
+        folder_data.workspace.into(),
+        None,
+        folder_data.uid,
+      );
 
       for view in folder_data.views {
-        views.insert(&mut txn, view, None);
+        views.insert(&mut txn, view, None, folder_data.uid);
       }
 
       meta.insert(&mut txn, FOLDER_WORKSPACE_ID, workspace_id);
       // For compatibility with older collab library which doesn't use CURRENT_VIEW_FOR_USER.
       meta.insert(&mut txn, CURRENT_VIEW, folder_data.current_view.clone());
       let current_view_for_user = meta.get_or_init_map(&mut txn, CURRENT_VIEW_FOR_USER);
-      current_view_for_user.insert(&mut txn, uid.as_ref(), folder_data.current_view.clone());
+      current_view_for_user.insert(
+        &mut txn,
+        folder_data.uid.to_string(),
+        folder_data.current_view.clone(),
+      );
 
-      if let Some(fav_section) = section.section_op(&txn, Section::Favorite) {
+      if let Some(fav_section) = section.section_op(&txn, Section::Favorite, folder_data.uid) {
         for (uid, sections) in folder_data.favorites {
           fav_section.add_sections_for_user_with_txn(&mut txn, &uid, sections);
         }
       }
 
-      if let Some(trash_section) = section.section_op(&txn, Section::Trash) {
+      if let Some(trash_section) = section.section_op(&txn, Section::Trash, folder_data.uid) {
         for (uid, sections) in folder_data.trash {
           trash_section.add_sections_for_user_with_txn(&mut txn, &uid, sections);
         }
       }
     }
     Self {
-      uid,
       root: folder,
       views,
       section,
@@ -583,6 +579,25 @@ impl FolderBody {
       subscription,
       notifier,
     }
+  }
+
+  pub async fn subscribe_view_change<T: ReadTxn>(
+    &self,
+    uid: i64,
+    index_json_sender: IndexContentSender,
+    txn: T,
+  ) {
+    let all_views = get_views_from_root(
+      &self.root,
+      &self.views.parent_children_relation,
+      &self.section,
+      &txn,
+      uid,
+    );
+    self
+      .views
+      .subscribe_view_change(uid, all_views, index_json_sender)
+      .await;
   }
 
   pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
@@ -613,33 +628,46 @@ impl FolderBody {
     view_id: &str,
     visited: &mut HashSet<String>,
     accumulated_views: &mut Vec<View>,
+    uid: i64,
   ) {
     if !visited.insert(view_id.to_string()) {
       return;
     }
-    match self.views.get_view_with_txn(txn, view_id) {
+    match self.views.get_view_with_txn(txn, view_id, uid) {
       None => (),
       Some(parent_view) => {
         accumulated_views.push(parent_view.as_ref().clone());
         parent_view.children.items.iter().for_each(|child| {
-          self.get_view_recursively_with_txn(txn, &child.id, visited, accumulated_views)
+          self.get_view_recursively_with_txn(txn, &child.id, visited, accumulated_views, uid)
         })
       },
     }
   }
 
-  pub fn get_workspace_info<T: ReadTxn>(&self, txn: &T, workspace_id: &str) -> Option<Workspace> {
+  pub fn get_workspace_info<T: ReadTxn>(
+    &self,
+    txn: &T,
+    workspace_id: &str,
+    uid: i64,
+  ) -> Option<Workspace> {
     let folder_workspace_id: String = self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)?;
     if folder_workspace_id != workspace_id {
       error!("Workspace id not match when get current workspace");
       return None;
     }
 
-    let view = self.views.get_view_with_txn(txn, &folder_workspace_id)?;
+    let view = self
+      .views
+      .get_view_with_txn(txn, &folder_workspace_id, uid)?;
     Some(Workspace::from(view.as_ref()))
   }
 
-  pub fn get_folder_data<T: ReadTxn>(&self, txn: &T, workspace_id: &str) -> Option<FolderData> {
+  pub fn get_folder_data<T: ReadTxn>(
+    &self,
+    txn: &T,
+    workspace_id: &str,
+    uid: i64,
+  ) -> Option<FolderData> {
     let folder_workspace_id = self.get_workspace_id_with_txn(txn)?;
     if folder_workspace_id != workspace_id {
       error!(
@@ -648,22 +676,28 @@ impl FolderBody {
       );
       return None;
     }
-    let workspace = Workspace::from(self.views.get_view_with_txn(txn, workspace_id)?.as_ref());
-    let current_view = self.get_current_view(txn).unwrap_or_default();
+    let workspace = Workspace::from(
+      self
+        .views
+        .get_view_with_txn(txn, workspace_id, uid)?
+        .as_ref(),
+    );
+    let current_view = self.get_current_view(txn, uid).unwrap_or_default();
     let mut views = vec![];
     let orphan_views = self
       .views
-      .get_orphan_views_with_txn(txn)
+      .get_orphan_views_with_txn(txn, uid)
       .iter()
       .map(|view| view.as_ref().clone())
       .collect::<Vec<View>>();
-    for view in self.views.get_views_belong_to(txn, workspace_id) {
+    for view in self.views.get_views_belong_to(txn, workspace_id, uid) {
       let mut all_views_in_workspace = vec![];
       self.get_view_recursively_with_txn(
         txn,
         &view.id,
         &mut HashSet::default(),
         &mut all_views_in_workspace,
+        uid,
       );
       views.extend(all_views_in_workspace);
     }
@@ -671,28 +705,29 @@ impl FolderBody {
 
     let favorites = self
       .section
-      .section_op(txn, Section::Favorite)
+      .section_op(txn, Section::Favorite, uid)
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
     let recent = self
       .section
-      .section_op(txn, Section::Recent)
+      .section_op(txn, Section::Recent, uid)
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
 
     let trash = self
       .section
-      .section_op(txn, Section::Trash)
+      .section_op(txn, Section::Trash, uid)
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
 
     let private = self
       .section
-      .section_op(txn, Section::Private)
+      .section_op(txn, Section::Private, uid)
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
 
     Some(FolderData {
+      uid,
       workspace,
       current_view,
       views,
@@ -713,8 +748,9 @@ impl FolderBody {
     view_id: &str,
     from: u32,
     to: u32,
+    uid: i64,
   ) -> Option<Arc<View>> {
-    let view = self.views.get_view_with_txn(txn, view_id)?;
+    let view = self.views.get_view_with_txn(txn, view_id, uid)?;
     self.views.move_child(txn, &view.parent_view_id, from, to);
     Some(view)
   }
@@ -725,13 +761,14 @@ impl FolderBody {
     view_id: &str,
     new_parent_id: &str,
     prev_view_id: Option<String>,
+    uid: i64,
   ) -> Option<Arc<View>> {
     tracing::debug!("Move nested view: {}", view_id);
-    let view = self.views.get_view_with_txn(txn, view_id)?;
+    let view = self.views.get_view_with_txn(txn, view_id, uid)?;
     let current_workspace_id = self.get_workspace_id_with_txn(txn)?;
     let parent_id = view.parent_view_id.as_str();
 
-    let new_parent_view = self.views.get_view_with_txn(txn, new_parent_id);
+    let new_parent_view = self.views.get_view_with_txn(txn, new_parent_id, uid);
 
     // If the new parent is not a view, it must be a workspace.
     // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
@@ -752,38 +789,36 @@ impl FolderBody {
     // Update the view's parent ID.
     self
       .views
-      .update_view_with_txn(&self.uid, txn, view_id, |update| {
+      .update_view_with_txn(UserId::from(uid), txn, view_id, |update| {
         update.set_bid(new_parent_id).done()
       });
     Some(view)
   }
 
-  pub fn get_child_of_first_public_view<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+  pub fn get_child_of_first_public_view<T: ReadTxn>(&self, txn: &T, uid: i64) -> Option<String> {
     self
       .get_workspace_id(txn)
-      .and_then(|workspace_id| self.views.get_view(txn, &workspace_id))
+      .and_then(|workspace_id| self.views.get_view(txn, &workspace_id, uid))
       .and_then(|root_view| {
-        let first_public_space_view_id_with_child =
-          root_view
-            .children
-            .iter()
-            .find(|space_id| match self.views.get_view(txn, space_id) {
-              Some(space_view) => {
-                let is_public_space = space_view
-                  .space_info()
-                  .map(|info| info.space_permission == SpacePermission::PublicToAll)
-                  .unwrap_or(false);
-                let has_children = !space_view.children.is_empty();
-                is_public_space && has_children
-              },
-              None => false,
-            });
+        let first_public_space_view_id_with_child = root_view.children.iter().find(|space_id| {
+          match self.views.get_view(txn, space_id, uid) {
+            Some(space_view) => {
+              let is_public_space = space_view
+                .space_info()
+                .map(|info| info.space_permission == SpacePermission::PublicToAll)
+                .unwrap_or(false);
+              let has_children = !space_view.children.is_empty();
+              is_public_space && has_children
+            },
+            None => false,
+          }
+        });
         first_public_space_view_id_with_child.map(|v| v.id.clone())
       })
       .and_then(|first_public_space_view_id_with_child| {
         self
           .views
-          .get_view(txn, &first_public_space_view_id_with_child)
+          .get_view(txn, &first_public_space_view_id_with_child, uid)
       })
       .and_then(|first_public_space_view_with_child| {
         first_public_space_view_with_child
@@ -794,7 +829,7 @@ impl FolderBody {
       })
   }
 
-  pub fn get_current_view<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+  pub fn get_current_view<T: ReadTxn>(&self, txn: &T, uid: i64) -> Option<String> {
     // Fallback to CURRENT_VIEW if CURRENT_VIEW_FOR_USER is not present. This could happen for
     // workspace folder created by older version of the app before CURRENT_VIEW_FOR_USER is introduced.
     // If user cannot be found in CURRENT_VIEW_FOR_USER, use the first child of the first public space
@@ -806,20 +841,20 @@ impl FolderBody {
     match current_view_for_user_map {
       Some(current_view_for_user) => {
         let view_for_user: Option<String> =
-          current_view_for_user.get_with_txn(txn, self.uid.as_ref());
-        view_for_user.or(self.get_child_of_first_public_view(txn))
+          current_view_for_user.get_with_txn(txn, uid.to_string().as_ref());
+        view_for_user.or(self.get_child_of_first_public_view(txn, uid))
       },
       None => self.meta.get_with_txn(txn, CURRENT_VIEW),
     }
   }
 
-  pub fn set_current_view(&self, txn: &mut TransactionMut, view: String) {
+  pub fn set_current_view(&self, txn: &mut TransactionMut, view: String, uid: i64) {
     let current_view_for_user = self.meta.get_or_init_map(txn, CURRENT_VIEW_FOR_USER);
-    current_view_for_user.try_update(txn, self.uid.0.clone(), view);
+    current_view_for_user.try_update(txn, uid.to_string(), view);
   }
 }
 
-pub fn default_folder_data(workspace_id: &str) -> FolderData {
+pub fn default_folder_data(uid: i64, workspace_id: &str) -> FolderData {
   let workspace = Workspace {
     id: workspace_id.to_string(),
     name: "".to_string(),
@@ -830,6 +865,7 @@ pub fn default_folder_data(workspace_id: &str) -> FolderData {
     last_edited_by: None,
   };
   FolderData {
+    uid,
     workspace,
     current_view: "".to_string(),
     views: vec![],
@@ -903,6 +939,7 @@ mod tests {
       last_edited_by: Some(uid),
     };
     let folder_data = FolderData {
+      uid,
       workspace,
       current_view: view_2.id.clone(),
       views: vec![space_view, view_1, view_2],
@@ -911,18 +948,15 @@ mod tests {
       trash: Default::default(),
       private: Default::default(),
     };
-    let mut folder = Folder::create(uid, collab, None, folder_data);
+    let mut folder = Folder::create(collab, None, folder_data);
 
-    folder.set_current_view(view_2_id.clone());
-    assert_eq!(folder.get_current_view(), Some(view_2_id.to_string()));
+    folder.set_current_view(view_2_id.clone(), uid);
+    assert_eq!(folder.get_current_view(uid), Some(view_2_id.to_string()));
     // First visit from user 2, should return the first child of the first public space with children.
-    folder.body.uid = UserId::from(2);
-    assert_eq!(folder.get_current_view(), Some(view_1_id.to_string()));
-    folder.set_current_view(view_1_id.to_string());
-    folder.body.uid = UserId::from(1);
-    assert_eq!(folder.get_current_view(), Some(view_2_id.to_string()));
-    folder.body.uid = UserId::from(2);
-    assert_eq!(folder.get_current_view(), Some(view_1_id.to_string()));
+    assert_eq!(folder.get_current_view(2), Some(view_1_id.to_string()));
+    folder.set_current_view(view_1_id.to_string(), 2);
+    assert_eq!(folder.get_current_view(1), Some(view_2_id.to_string()));
+    assert_eq!(folder.get_current_view(2), Some(view_1_id.to_string()));
   }
 
   #[test]
@@ -979,6 +1013,7 @@ mod tests {
       .cloned()
       .collect();
     let folder_data = FolderData {
+      uid,
       workspace,
       current_view: Default::default(),
       views: all_views,
@@ -993,24 +1028,24 @@ mod tests {
       trash: Default::default(),
       private: Default::default(),
     };
-    let mut folder = Folder::create(uid, collab, None, folder_data);
-    let favorite_sections = folder.get_all_favorites_sections();
+    let mut folder = Folder::create(collab, None, folder_data);
+    let favorite_sections = folder.get_all_favorites_sections(uid);
     let expected_favorites = vec![
       SectionItem::new("view_0".to_string()),
       SectionItem::new("view_1".to_string()),
       SectionItem::new("view_2".to_string()),
     ];
     assert_eq!(favorite_sections, expected_favorites);
-    folder.move_favorite_view_id("view_0", Some("view_1"));
-    let favorite_sections = folder.get_all_favorites_sections();
+    folder.move_favorite_view_id("view_0", Some("view_1"), uid);
+    let favorite_sections = folder.get_all_favorites_sections(uid);
     let expected_favorites = vec![
       SectionItem::new("view_1".to_string()),
       SectionItem::new("view_0".to_string()),
       SectionItem::new("view_2".to_string()),
     ];
     assert_eq!(favorite_sections, expected_favorites);
-    folder.move_favorite_view_id("view_2", None);
-    let favorite_sections = folder.get_all_favorites_sections();
+    folder.move_favorite_view_id("view_2", None, uid);
+    let favorite_sections = folder.get_all_favorites_sections(uid);
     let expected_favorites = vec![
       SectionItem::new("view_2".to_string()),
       SectionItem::new("view_1".to_string()),
