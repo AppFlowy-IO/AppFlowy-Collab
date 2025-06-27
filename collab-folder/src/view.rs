@@ -652,6 +652,14 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     self
   }
 
+  pub fn set_favorite_if_not_none(self, is_favorite: Option<bool>) -> Self {
+    if let Some(is_favorite) = is_favorite {
+      self.set_favorite(is_favorite)
+    } else {
+      self
+    }
+  }
+
   /// Add or remove the view_id from the recent section.
   ///
   /// If the view is in the recent section, it's timestamp will be updated.
