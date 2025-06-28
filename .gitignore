@@ -15,9 +15,6 @@ collab-plugins/.env
 collab-plugins/.env.test
 **/unit_test**
 
-# Protobuf generated code
-collab-entity/src/proto/*.rs
-!collab-entity/src/proto/mod.rs
 **/temp/**
 
 **/.DS_Store
