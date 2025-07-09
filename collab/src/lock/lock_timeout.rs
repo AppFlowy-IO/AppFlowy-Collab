@@ -153,7 +153,7 @@ mod test {
   #[test]
   fn trait_casting() {
     type CollabRef = Arc<RwLock<dyn BorrowMut<Collab> + Send + Sync + 'static>>;
-    let collab = Arc::new(RwLock::new(Collab::new(0, "test", "device", vec![], false)));
+    let collab = Arc::new(RwLock::new(Collab::new(0, "test", "device", 1)));
     let _collab_ref: CollabRef = collab as CollabRef;
   }
 }

@@ -11,8 +11,8 @@ crate-type = ["cdylib", "rlib"]
 yrs.workspace = true
 collab-entity = { workspace = true }
 
-futures-util = { version = "0.3", features = ["sink"] }
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
+futures = { version = "0.3" }
 tracing.workspace = true
 anyhow.workspace = true
 
@@ -43,7 +43,6 @@ rand = { version = "0.8" }
 tempfile = "3.8.0"
 assert-json-diff = "2.0.2"
 tokio-util = { version = "0.7", features = ["codec"] }
-futures = "0.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
@@ -51,7 +50,6 @@ collab = { workspace = true }
 indexed_db_futures = { version = "0.4" }
 js-sys = "0.3"
 async-stream = "0.3"
-futures = "0.3"
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["console", "Window"] }
 wasm-bindgen-futures = "0.4"
