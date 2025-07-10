@@ -31,7 +31,7 @@ tracing = "0.1.22"
 chrono = { version = "0.4.38", default-features = false, features = ["clock"] }
 async-trait = "0.1"
 arc-swap = { version = "1.7" }
-uuid = { version = "1.17.0", features = ["v4", "v5", "v7"] }
+uuid = { version = "1.17.0", features = ["v4", "v5", "v7", "serde"] }
 futures-lite = { version = "2.6.0", features = ["futures-io"] }
 
 [patch.crates-io]
