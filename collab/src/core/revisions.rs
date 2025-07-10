@@ -85,8 +85,8 @@ impl Revisions {
     txn: &T,
     revision_id: &RevisionId,
   ) -> Result<Revision, CollabError> {
-    let mut i = self.iter(txn);
-    while let Some(revision) = i.next() {
+    let i = self.iter(txn);
+    for revision in i {
       let revision = revision?;
       if &revision.id == revision_id {
         return Ok(revision);
@@ -163,7 +163,7 @@ pub struct RevisionsIter<'a, T: ReadTxn> {
   iter: ArrayIter<&'a T, T>,
 }
 
-impl<'a, T: ReadTxn> Iterator for RevisionsIter<'a, T> {
+impl<T: ReadTxn> Iterator for RevisionsIter<'_, T> {
   type Item = Result<Revision, CollabError>;
 
   fn next(&mut self) -> Option<Self::Item> {
