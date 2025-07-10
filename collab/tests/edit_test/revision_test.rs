@@ -87,7 +87,7 @@ async fn remove_revision_should_eventually_remove_revision_data() {
   assert!(!contains(&state.doc_state, "value1")); // revision is present, but its data is not
 
   collab.insert("key", "value3");
-  let r3 = collab.create_named_revision("revision3").unwrap();
+  let _r3 = collab.create_named_revision("revision3").unwrap();
 
   // r3 was created after r1 was removed, so it should not contain r1 data
   // removing r2 should remove the traces of r1 as well
