@@ -97,6 +97,33 @@ async fn remove_revision_should_eventually_remove_revision_data() {
   assert!(!contains(&state.doc_state, "value2")); // r2 was removed, so its data is gone
 }
 
+#[tokio::test]
+async fn cleaning_all_revisions_doesnt_leave_garbage() {
+  let mut collab = Collab::new(1, "1", "1", default_client_id());
+  collab.insert("key", "value1");
+  let r1 = collab.create_named_revision("revision1").unwrap();
+  collab.insert("key", "value2");
+  let r2 = collab.create_named_revision("revision2").unwrap();
+  collab.insert("key", "value3");
+
+  let state = collab.encode_collab_v2();
+  // initially we should be able to find all revisions and values in the payload
+  assert!(contains(&state.doc_state, "revision1"));
+  assert!(contains(&state.doc_state, "value1"));
+  assert!(contains(&state.doc_state, "revision2"));
+  assert!(contains(&state.doc_state, "value2"));
+
+  collab.remove_revision(&r1).unwrap();
+  collab.remove_revision(&r2).unwrap();
+
+  // removing all revisions should not leave any garbage
+  let state = collab.encode_collab_v2();
+  assert!(!contains(&state.doc_state, "revision1"));
+  assert!(!contains(&state.doc_state, "value1"));
+  assert!(!contains(&state.doc_state, "revision2"));
+  assert!(!contains(&state.doc_state, "value2"));
+}
+
 fn contains<P: AsRef<[u8]>>(container: &[u8], key: P) -> bool {
   let key = key.as_ref();
   container.windows(key.len()).any(|window| window == key)
