@@ -12,3 +12,6 @@ mod conversions;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod importer;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod remapper;
