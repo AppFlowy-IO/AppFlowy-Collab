@@ -79,11 +79,12 @@ impl DatabaseCollabRemapper {
   async fn database_data_to_collab_bytes(
     &self,
     database_data: DatabaseData,
-    database_id: &str,
+    _database_id: &str,
     user_id: &str,
   ) -> Result<Vec<u8>, DatabaseError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
 
+    let remapped_database_id = database_data.database_id.clone();
     let create_params = self.create_database_params_from_remapped_data(database_data);
 
     let context = DatabaseContext::new(
@@ -91,8 +92,13 @@ impl DatabaseCollabRemapper {
       Arc::new(NoPersistenceDatabaseCollabService::new(client_id)),
     );
 
-    let (_database_body, collab) =
-      default_database_collab(database_id, client_id, Some(create_params), context).await?;
+    let (_database_body, collab) = default_database_collab(
+      &remapped_database_id,
+      client_id,
+      Some(create_params),
+      context,
+    )
+    .await?;
 
     let encoded_collab = crate::util::encoded_collab(&collab, &CollabType::Database)?;
 
