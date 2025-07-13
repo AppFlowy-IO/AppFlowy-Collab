@@ -1,4 +1,5 @@
 pub mod database;
+pub mod database_remapper;
 pub mod fields;
 pub mod meta;
 pub mod rows;

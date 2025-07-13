@@ -68,14 +68,12 @@ fn test_remap_collab_with_mentioned_page_ids() {
               if let Some(mention_str) = mention.as_str() {
                 if let Ok(mention_obj) = serde_json::from_str::<serde_json::Value>(mention_str) {
                   if let Some(page_id) = mention_obj.get("page_id").and_then(|v| v.as_str()) {
-                    println!("Found mention with page_id: {}", page_id);
                     if page_id == "child_id_1"
                       || page_id == "child_id_2"
                       || page_id == "child_id_3"
                       || page_id == "child_id_4"
                     {
                       found_remapped_mentions += 1;
-                      println!("Found remapped mention page_id: {}", page_id);
                     }
                   }
                 }
