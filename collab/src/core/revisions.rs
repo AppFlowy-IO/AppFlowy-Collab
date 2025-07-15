@@ -172,16 +172,14 @@ impl Revisions {
 
     // find the oldest revision to determine the cutoff point for garbage collection
     let mut oldest: Option<Revision> = None;
-    for revision in self.iter(txn) {
-      if let Ok(revision) = revision {
-        match &oldest {
-          None => oldest = Some(revision),
-          Some(oldest_revision) => {
-            if revision.created_at() < oldest_revision.created_at() {
-              oldest = Some(revision);
-            }
-          },
-        }
+    for revision in self.iter(txn).flatten() {
+      match &oldest {
+        None => oldest = Some(revision),
+        Some(oldest_revision) => {
+          if revision.created_at() < oldest_revision.created_at() {
+            oldest = Some(revision);
+          }
+        },
       }
     }
 
