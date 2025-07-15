@@ -351,6 +351,12 @@ impl Collab {
     Ok(revisions)
   }
 
+  pub fn gc(&mut self) -> Result<(), CollabError> {
+    let mut txn = self.context.transact_mut();
+    self.revisions.gc(&mut txn)?;
+    Ok(())
+  }
+
   pub fn revision(&self, revision_id: &RevisionId) -> Result<Revision, CollabError> {
     let txn = self.context.transact();
     self.revisions.get(&txn, revision_id)
