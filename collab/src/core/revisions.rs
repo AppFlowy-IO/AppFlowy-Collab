@@ -51,6 +51,11 @@ impl Revision {
   }
 }
 
+/// It's a collaborative collection used to store document history revisions.
+/// These revisions can be used to restore the document state at a specific version.
+///
+/// Revisions are not compatible with garbage collection, so they must be created with
+/// garbage collection disabled.
 pub struct Revisions {
   revisions: ArrayRef,
 }
@@ -60,16 +65,14 @@ impl Revisions {
     Self { revisions }
   }
 
+  /// Creates a new revision with the given name, if provided.
+  /// Returns the unique identifier of the created revision.
   pub fn create_revision(
     &self,
     txn: &mut TransactionMut,
     name: Option<String>,
   ) -> Result<RevisionId, CollabError> {
-    if !txn.doc().skip_gc() {
-      return Err(CollabError::Internal(anyhow!(
-        "revisions cannot be created when garbage collection is enabled"
-      )));
-    }
+    ensure_gc_disabled(txn)?;
 
     let snapshot = txn.snapshot();
     let revision = Revision::new(name, &snapshot);
@@ -80,6 +83,8 @@ impl Revisions {
     Ok(revision.id)
   }
 
+  /// Returns a revision by its unique identifier.
+  /// If the revision is not found, it returns an [CollabError::NoRequiredData] error.
   pub fn get<T: ReadTxn>(
     &self,
     txn: &T,
@@ -98,6 +103,11 @@ impl Revisions {
     )))
   }
 
+  /// Removes all revisions matching the specified predicate.
+  ///
+  /// This method will also garbage collect the data stored inside the collab, that is no longer
+  /// accessible but was required by the removed revisions for the sake of restoring past document
+  /// state.
   pub fn remove_where<F>(
     &self,
     txn: &mut TransactionMut,
@@ -106,11 +116,7 @@ impl Revisions {
   where
     F: Fn(&Revision) -> bool,
   {
-    if !txn.doc().skip_gc() {
-      return Err(CollabError::Internal(anyhow!(
-        "revisions cannot be drained when garbage collection is enabled"
-      )));
-    }
+    ensure_gc_disabled(txn)?;
 
     let mut oldest: Option<Revision> = None;
     let mut revisions_to_remove = Vec::new();
@@ -153,10 +159,53 @@ impl Revisions {
     Ok(result)
   }
 
+  /// Iterates over all active revisions in the collection.
   pub fn iter<'a, T: ReadTxn>(&self, txn: &'a T) -> RevisionsIter<'a, T> {
     let iter = self.revisions.iter(txn);
     RevisionsIter { iter }
   }
+
+  /// Performs garbage collection on the document, removing all data that is no longer
+  /// accessible but might have been required by revisions in the past.
+  pub fn gc(&self, txn: &mut TransactionMut) -> Result<(), CollabError> {
+    ensure_gc_disabled(txn)?;
+
+    // find the oldest revision to determine the cutoff point for garbage collection
+    let mut oldest: Option<Revision> = None;
+    for revision in self.iter(txn) {
+      if let Ok(revision) = revision {
+        match &oldest {
+          None => oldest = Some(revision),
+          Some(oldest_revision) => {
+            if revision.created_at() < oldest_revision.created_at() {
+              oldest = Some(revision);
+            }
+          },
+        }
+      }
+    }
+
+    let snapshot = match oldest {
+      Some(oldest_revision) => Some(oldest_revision.snapshot()?),
+      None => None,
+    };
+
+    txn.gc(snapshot.as_ref().map(|s| &s.delete_set));
+
+    Ok(())
+  }
+}
+
+/// Make sure that garbage collection on the document is disabled.
+/// This is necessary because revisions are not compatible with garbage collection.
+/// Garbage collection can still be performed manually with the respect to data required by revisions.
+fn ensure_gc_disabled(txn: &TransactionMut) -> Result<(), CollabError> {
+  if !txn.doc().skip_gc() {
+    return Err(CollabError::Internal(anyhow!(
+      "revisions cannot be created when garbage collection is enabled"
+    )));
+  }
+  Ok(())
 }
 
 pub struct RevisionsIter<'a, T: ReadTxn> {

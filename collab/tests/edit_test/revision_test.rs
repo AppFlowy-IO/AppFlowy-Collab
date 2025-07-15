@@ -3,6 +3,8 @@ use collab::core::origin::CollabOrigin;
 use collab::entity::EncoderVersion;
 use collab::preclude::Collab;
 use serde_json::json;
+use yrs::Update;
+use yrs::updates::decoder::Decode;
 
 #[tokio::test]
 async fn create_restore_revision() {
@@ -122,6 +124,51 @@ async fn cleaning_all_revisions_doesnt_leave_garbage() {
   assert!(!contains(&state.doc_state, "value1"));
   assert!(!contains(&state.doc_state, "revision2"));
   assert!(!contains(&state.doc_state, "value2"));
+}
+
+#[tokio::test]
+async fn remote_updates_can_be_cleaned_up() {
+  let mut c1 = Collab::new(1, "1", "1", default_client_id());
+  c1.insert("key", "value1");
+  let r1 = c1.create_named_revision("revision1").unwrap();
+  c1.insert("key", "value2");
+  let r2 = c1.create_named_revision("revision2").unwrap();
+  c1.insert("key", "value3");
+
+  let mut c2 = Collab::new(1, "1", "2", default_client_id());
+  let state = c1.encode_collab_v2();
+  c2.apply_update(Update::decode_v2(&state.doc_state).unwrap())
+    .unwrap();
+
+  // we should be able to find all revisions and values in the payload
+  let state = c2.encode_collab_v2();
+  assert!(contains(&state.doc_state, "revision1"));
+  assert!(contains(&state.doc_state, "value1"));
+  assert!(contains(&state.doc_state, "revision2"));
+  assert!(contains(&state.doc_state, "value2"));
+
+  // remove revision locally and apply the update to the remote state
+  c1.remove_revision(&r1).unwrap();
+  let state = c1.encode_collab_v2();
+  c2.apply_update(Update::decode_v2(&state.doc_state).unwrap())
+    .unwrap();
+
+  // locally we removed r1, so it's data is not present
+  assert!(!contains(&state.doc_state, "value1"));
+  assert!(contains(&state.doc_state, "value2"));
+
+  // removing revisions locally doesn't remove them from the remote state after applying updates
+  let state = c2.encode_collab_v2();
+  assert!(contains(&state.doc_state, "value1"));
+  assert!(contains(&state.doc_state, "value2"));
+
+  // perform manual garbage collection
+  c2.gc().unwrap();
+
+  // after garbage collection, the data of r1 should be removed from the remote state
+  let state = c2.encode_collab_v2();
+  assert!(!contains(&state.doc_state, "value1"));
+  assert!(contains(&state.doc_state, "value2"));
 }
 
 fn contains<P: AsRef<[u8]>>(container: &[u8], key: P) -> bool {
