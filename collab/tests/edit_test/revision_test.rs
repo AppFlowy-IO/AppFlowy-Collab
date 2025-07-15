@@ -132,7 +132,7 @@ async fn remote_updates_can_be_cleaned_up() {
   c1.insert("key", "value1");
   let r1 = c1.create_named_revision("revision1").unwrap();
   c1.insert("key", "value2");
-  let r2 = c1.create_named_revision("revision2").unwrap();
+  let _r2 = c1.create_named_revision("revision2").unwrap();
   c1.insert("key", "value3");
 
   let mut c2 = Collab::new(1, "1", "2", default_client_id());
