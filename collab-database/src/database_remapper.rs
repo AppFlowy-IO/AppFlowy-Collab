@@ -1,6 +1,6 @@
 use collab::core::collab::{CollabOptions, DataSource};
 use collab::core::origin::CollabOrigin;
-use collab::entity::EncodedCollab;
+
 use collab::preclude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
