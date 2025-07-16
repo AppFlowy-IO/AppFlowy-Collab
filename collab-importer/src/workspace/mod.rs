@@ -1,3 +1,4 @@
+pub mod document_collab_remapper;
 pub mod entities;
 pub mod folder_collab_remapper;
 pub mod id_mapper;
