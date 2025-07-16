@@ -3,7 +3,7 @@ use collab_importer::workspace::relation_map_parser::RelationMapParser;
 #[tokio::test]
 async fn test_parse_with_valid_relation_map() {
   let parser = RelationMapParser {};
-  let test_file_path = "tests/asset/relation_map/2025_Jul_16_relation_map.json";
+  let test_file_path = "tests/asset/2025-07-16_22-15-54/relation_map.json";
 
   let result = parser.parse_relation_map(test_file_path).await;
   let relation_map = result.unwrap();

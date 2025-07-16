@@ -25,7 +25,7 @@ fn verify_view(
 #[tokio::test]
 async fn test_folder_collab_remapper() {
   let parser = RelationMapParser {};
-  let test_file_path = "tests/asset/relation_map/2025_Jul_16_relation_map.json";
+  let test_file_path = "tests/asset/2025-07-16_22-15-54/relation_map.json";
 
   let relation_map = parser.parse_relation_map(test_file_path).await.unwrap();
   let id_mapper = IdMapper::new(&relation_map);
@@ -108,7 +108,7 @@ async fn test_folder_collab_remapper() {
 #[tokio::test]
 async fn test_folder_hierarchy_structure() {
   let parser = RelationMapParser {};
-  let test_file_path = "tests/asset/relation_map/2025_Jul_16_relation_map.json";
+  let test_file_path = "tests/asset/2025-07-16_22-15-54/relation_map.json";
 
   let relation_map = parser.parse_relation_map(test_file_path).await.unwrap();
   let id_mapper = IdMapper::new(&relation_map);

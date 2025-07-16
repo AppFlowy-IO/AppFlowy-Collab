@@ -1,0 +1,442 @@
+{
+  "page_id": "GNLxCKWtoL",
+  "blocks": {
+    "HCb8W2AxZ1": {
+      "id": "HCb8W2AxZ1",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "D-8HDJfohF",
+      "external_id": "oexXouCfj9",
+      "external_type": "text",
+      "data": {}
+    },
+    "3bOsoSRqz3": {
+      "id": "3bOsoSRqz3",
+      "ty": "todo_list",
+      "parent": "GNLxCKWtoL",
+      "children": "K-0lWKnIIA",
+      "external_id": "VejxAI_jjd",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    },
+    "eidFhn5q81": {
+      "id": "eidFhn5q81",
+      "ty": "numbered_list",
+      "parent": "GNLxCKWtoL",
+      "children": "iFsbGw_M3k",
+      "external_id": "4CHwT_QIZx",
+      "external_type": "text",
+      "data": {}
+    },
+    "4K_f_N_YmC": {
+      "id": "4K_f_N_YmC",
+      "ty": "image",
+      "parent": "GNLxCKWtoL",
+      "children": "2gaZDHYsCE",
+      "external_id": null,
+      "external_type": null,
+      "data": {
+        "width": 369.44921875,
+        "url": "https://github.com/AppFlowy-IO/AppFlowy/blob/main/doc/readme/mobile_guide_1.png?raw=true",
+        "align": "left"
+      }
+    },
+    "MkjZ2TCz0M": {
+      "id": "MkjZ2TCz0M",
+      "ty": "bulleted_list",
+      "parent": "GNLxCKWtoL",
+      "children": "LIJ0RGwQn2",
+      "external_id": "VXoacUMKAT",
+      "external_type": "text",
+      "data": {}
+    },
+    "0cA-pXpwg6": {
+      "id": "0cA-pXpwg6",
+      "ty": "bulleted_list",
+      "parent": "GNLxCKWtoL",
+      "children": "sL0HpzXQtS",
+      "external_id": "Ch9ITIUh5H",
+      "external_type": "text",
+      "data": {}
+    },
+    "ohzjqcGA6x": {
+      "id": "ohzjqcGA6x",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "SkXSPu15xv",
+      "external_id": "r9CaWZhyLA",
+      "external_type": "text",
+      "data": {}
+    },
+    "DzODXnnm_S": {
+      "id": "DzODXnnm_S",
+      "ty": "heading",
+      "parent": "GNLxCKWtoL",
+      "children": "txxmso1d5g",
+      "external_id": "-_W1weYlW1",
+      "external_type": "text",
+      "data": {
+        "level": 3
+      }
+    },
+    "okj7RoDStT": {
+      "id": "okj7RoDStT",
+      "ty": "heading",
+      "parent": "GNLxCKWtoL",
+      "children": "jzOsHhLHQ5",
+      "external_id": "EQAh8l6P_U",
+      "external_type": "text",
+      "data": {
+        "level": 3
+      }
+    },
+    "fLoJaXQ4QL": {
+      "id": "fLoJaXQ4QL",
+      "ty": "todo_list",
+      "parent": "GNLxCKWtoL",
+      "children": "BzwEW_M-V_",
+      "external_id": "mpJg18aNKZ",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    },
+    "fyEz_LTlUi": {
+      "id": "fyEz_LTlUi",
+      "ty": "image",
+      "parent": "GNLxCKWtoL",
+      "children": "ubQgNu3Cx8",
+      "external_id": null,
+      "external_type": null,
+      "data": {
+        "align": "left",
+        "url": "https://github.com/AppFlowy-IO/AppFlowy/blob/main/doc/readme/mobile_guide_4.png?raw=true",
+        "width": 342
+      }
+    },
+    "vJHdxrw1XC": {
+      "id": "vJHdxrw1XC",
+      "ty": "quote",
+      "parent": "GNLxCKWtoL",
+      "children": "LPXMKajM1g",
+      "external_id": "N6i5ZcNbFZ",
+      "external_type": "text",
+      "data": {}
+    },
+    "GNLxCKWtoL": {
+      "id": "GNLxCKWtoL",
+      "ty": "page",
+      "parent": "",
+      "children": "C6zgV9mxvh",
+      "external_id": null,
+      "external_type": null,
+      "data": {}
+    },
+    "APghVYiXSp": {
+      "id": "APghVYiXSp",
+      "ty": "heading",
+      "parent": "GNLxCKWtoL",
+      "children": "Njq3f9I6NQ",
+      "external_id": "8QEW_BQTJ3",
+      "external_type": "text",
+      "data": {
+        "level": 3
+      }
+    },
+    "Qn6OHSOcOU": {
+      "id": "Qn6OHSOcOU",
+      "ty": "multi_image",
+      "parent": "GNLxCKWtoL",
+      "children": "Ldmq1xlEnZ",
+      "external_id": null,
+      "external_type": null,
+      "data": {
+        "images": [
+          {
+            "type": 1,
+            "url": "https://github.com/AppFlowy-IO/AppFlowy/blob/main/doc/readme/mobile_guide_2.png?raw=true"
+          },
+          {
+            "type": 1,
+            "url": "https://github.com/AppFlowy-IO/AppFlowy/blob/main/doc/readme/mobile_guide_3.png?raw=true"
+          }
+        ],
+        "layout": 0
+      }
+    },
+    "v6WXLdAWE2": {
+      "id": "v6WXLdAWE2",
+      "ty": "heading",
+      "parent": "GNLxCKWtoL",
+      "children": "rw59rYEddQ",
+      "external_id": "BUVc9jD9L3",
+      "external_type": "text",
+      "data": {
+        "level": 3
+      }
+    },
+    "kzSK2tz2gf": {
+      "id": "kzSK2tz2gf",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "rAZdUqG3s1",
+      "external_id": "tweHq2udEu",
+      "external_type": "text",
+      "data": {}
+    },
+    "nAL4oJMUu-": {
+      "id": "nAL4oJMUu-",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "bR7O47pWeu",
+      "external_id": "uvZlfUnsDT",
+      "external_type": "text",
+      "data": {}
+    },
+    "uDR9BTsG5A": {
+      "id": "uDR9BTsG5A",
+      "ty": "bulleted_list",
+      "parent": "GNLxCKWtoL",
+      "children": "gXaXiAdn1O",
+      "external_id": "hXZHuY2PWE",
+      "external_type": "text",
+      "data": {}
+    },
+    "Z6uD2LFwo7": {
+      "id": "Z6uD2LFwo7",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "VURTbTU6--",
+      "external_id": "a6dRPObCu8",
+      "external_type": "text",
+      "data": {}
+    },
+    "xSjMogRarM": {
+      "id": "xSjMogRarM",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "RwtDYwY2Dc",
+      "external_id": "PO620KOfD3",
+      "external_type": "text",
+      "data": {}
+    },
+    "p4Q8Qmf0B0": {
+      "id": "p4Q8Qmf0B0",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "fl2FidPFUF",
+      "external_id": "iY_cFAlloL",
+      "external_type": "text",
+      "data": {}
+    },
+    "9iE9XviS66": {
+      "id": "9iE9XviS66",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "yMqrDo1IfS",
+      "external_id": "Cat6xI4Oqi",
+      "external_type": "text",
+      "data": {}
+    },
+    "NHGptbpnHQ": {
+      "id": "NHGptbpnHQ",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "JYFQz6rgjT",
+      "external_id": "OK8qFmFxs5",
+      "external_type": "text",
+      "data": {}
+    },
+    "VZ8Bz42AE7": {
+      "id": "VZ8Bz42AE7",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "a9uTU0Mr2M",
+      "external_id": "zVc3x3f0Ue",
+      "external_type": "text",
+      "data": {}
+    },
+    "4JOH27VRUF": {
+      "id": "4JOH27VRUF",
+      "ty": "image",
+      "parent": "GNLxCKWtoL",
+      "children": "Wg0rtiZucJ",
+      "external_id": null,
+      "external_type": null,
+      "data": {
+        "width": 342,
+        "align": "left",
+        "url": "https://github.com/AppFlowy-IO/AppFlowy/blob/main/doc/readme/mobile_guide_5.png?raw=true"
+      }
+    },
+    "O0LV7S4FAV": {
+      "id": "O0LV7S4FAV",
+      "ty": "divider",
+      "parent": "GNLxCKWtoL",
+      "children": "yZpZOJPJ6c",
+      "external_id": null,
+      "external_type": null,
+      "data": {}
+    },
+    "p7S5FTERWP": {
+      "id": "p7S5FTERWP",
+      "ty": "callout",
+      "parent": "GNLxCKWtoL",
+      "children": "klwWhg_7ZJ",
+      "external_id": "rLZN12FgDS",
+      "external_type": "text",
+      "data": {
+        "icon": "📌"
+      }
+    },
+    "t49x1cJSUG": {
+      "id": "t49x1cJSUG",
+      "ty": "bulleted_list",
+      "parent": "GNLxCKWtoL",
+      "children": "9GqkqY7Ta3",
+      "external_id": "rPO73sCoTo",
+      "external_type": "text",
+      "data": {}
+    },
+    "s9YYyTRvb7": {
+      "id": "s9YYyTRvb7",
+      "ty": "paragraph",
+      "parent": "GNLxCKWtoL",
+      "children": "IUj1W_kEiQ",
+      "external_id": "o2yEL36DIw",
+      "external_type": "text",
+      "data": {}
+    },
+    "CEnqe2b0xn": {
+      "id": "CEnqe2b0xn",
+      "ty": "toggle_list",
+      "parent": "GNLxCKWtoL",
+      "children": "ipjaHKqn3y",
+      "external_id": "HQoP8n5SyR",
+      "external_type": "text",
+      "data": {
+        "collapsed": true
+      }
+    },
+    "XS53mNBu9o": {
+      "id": "XS53mNBu9o",
+      "ty": "bulleted_list",
+      "parent": "GNLxCKWtoL",
+      "children": "bhWkzXyf2F",
+      "external_id": "DA6DjITfOE",
+      "external_type": "text",
+      "data": {}
+    },
+    "U3g1PpQXkj": {
+      "id": "U3g1PpQXkj",
+      "ty": "paragraph",
+      "parent": "CEnqe2b0xn",
+      "children": "GPptmSh63g",
+      "external_id": "_JFCRhgCGF",
+      "external_type": "text",
+      "data": {}
+    }
+  },
+  "meta": {
+    "children_map": {
+      "fl2FidPFUF": [],
+      "9GqkqY7Ta3": [],
+      "txxmso1d5g": [],
+      "sL0HpzXQtS": [],
+      "ipjaHKqn3y": [
+        "U3g1PpQXkj"
+      ],
+      "bR7O47pWeu": [],
+      "JYFQz6rgjT": [],
+      "D-8HDJfohF": [],
+      "LPXMKajM1g": [],
+      "ubQgNu3Cx8": [],
+      "2gaZDHYsCE": [],
+      "klwWhg_7ZJ": [],
+      "IUj1W_kEiQ": [],
+      "Njq3f9I6NQ": [],
+      "rAZdUqG3s1": [],
+      "yMqrDo1IfS": [],
+      "C6zgV9mxvh": [
+        "APghVYiXSp",
+        "3bOsoSRqz3",
+        "fLoJaXQ4QL",
+        "t49x1cJSUG",
+        "eidFhn5q81",
+        "CEnqe2b0xn",
+        "HCb8W2AxZ1",
+        "v6WXLdAWE2",
+        "kzSK2tz2gf",
+        "Z6uD2LFwo7",
+        "vJHdxrw1XC",
+        "4K_f_N_YmC",
+        "O0LV7S4FAV",
+        "okj7RoDStT",
+        "p7S5FTERWP",
+        "NHGptbpnHQ",
+        "Qn6OHSOcOU",
+        "9iE9XviS66",
+        "VZ8Bz42AE7",
+        "nAL4oJMUu-",
+        "fyEz_LTlUi",
+        "p4Q8Qmf0B0",
+        "DzODXnnm_S",
+        "xSjMogRarM",
+        "4JOH27VRUF",
+        "ohzjqcGA6x",
+        "s9YYyTRvb7",
+        "0cA-pXpwg6",
+        "uDR9BTsG5A",
+        "MkjZ2TCz0M",
+        "XS53mNBu9o"
+      ],
+      "Wg0rtiZucJ": [],
+      "BzwEW_M-V_": [],
+      "bhWkzXyf2F": [],
+      "gXaXiAdn1O": [],
+      "K-0lWKnIIA": [],
+      "a9uTU0Mr2M": [],
+      "rw59rYEddQ": [],
+      "jzOsHhLHQ5": [],
+      "LIJ0RGwQn2": [],
+      "Ldmq1xlEnZ": [],
+      "SkXSPu15xv": [],
+      "yZpZOJPJ6c": [],
+      "RwtDYwY2Dc": [],
+      "GPptmSh63g": [],
+      "iFsbGw_M3k": [],
+      "VURTbTU6--": []
+    },
+    "text_map": {
+      "Cat6xI4Oqi": "[]",
+      "VXoacUMKAT": "[{\"insert\":\"Duplicate \"}]",
+      "rLZN12FgDS": "[{\"insert\":\"Visualize your content in different ways—Kanban, Grid, and Calendar views\"}]",
+      "r9CaWZhyLA": "[]",
+      "8QEW_BQTJ3": "[{\"insert\":\"Adding content\"}]",
+      "DA6DjITfOE": "[{\"insert\":\"Delete\"}]",
+      "PO620KOfD3": "[{\"insert\":\"Swipe left on a page to show the actions: add a subpage and more actions\"}]",
+      "o2yEL36DIw": "[{\"insert\":\"More actions include:\"}]",
+      "_JFCRhgCGF": "[{\"insert\":\"Expand or collapse\"}]",
+      "4CHwT_QIZx": "[{\"insert\":\"1.\",\"attributes\":{\"code\":true}},{\"insert\":\" for numbered list\"}]",
+      "hXZHuY2PWE": "[{\"insert\":\"Rename\"}]",
+      "Ch9ITIUh5H": "[{\"insert\":\"Add to Favorites \"}]",
+      "VejxAI_jjd": "[{\"insert\":\"Click \"},{\"insert\":\"+\",\"attributes\":{\"code\":true}},{\"insert\":\" \",\"attributes\":{\"code\":false}},{\"insert\":\"in the toolbar to add a block\"}]",
+      "a6dRPObCu8": "[{\"insert\":\"More styling can be found in \"},{\"insert\":\"Aa\",\"attributes\":{\"code\":true}}]",
+      "tweHq2udEu": "[{\"insert\":\"Select text to \"},{\"insert\":\"style\",\"attributes\":{\"bg_color\":\"0xff6455a2\"}},{\"insert\":\" using the \"},{\"insert\":\"toolbar\",\"attributes\":{\"bold\":true,\"underline\":true,\"italic\":true}},{\"insert\":\" menu\"}]",
+      "zVc3x3f0Ue": "[]",
+      "N6i5ZcNbFZ": "[{\"insert\":\"AppFlowy allows you to style your content in a beautiful and simple way\"}]",
+      "oexXouCfj9": "[]",
+      "EQAh8l6P_U": "[{\"insert\":\"Database views\"}]",
+      "HQoP8n5SyR": "[{\"insert\":\">\",\"attributes\":{\"code\":true}},{\"insert\":\" for toggle list\"}]",
+      "mpJg18aNKZ": "[{\"insert\":\"Type \"},{\"insert\":\"-[]\",\"attributes\":{\"code\":true}},{\"insert\":\" to insert a to-do list\"}]",
+      "OK8qFmFxs5": "[{\"insert\":\"Click on a database record (row/card) to open the Card view\"}]",
+      "-_W1weYlW1": "[{\"insert\":\"Manage pages\"}]",
+      "BUVc9jD9L3": "[{\"insert\":\"Styling\"}]",
+      "iY_cFAlloL": "[]",
+      "uvZlfUnsDT": "[{\"insert\":\"In a Grid view, tap on a property name to edit the property.\",\"attributes\":{\"bold\":false}}]",
+      "rPO73sCoTo": "[{\"insert\":\"-\",\"attributes\":{\"code\":true}},{\"insert\":\" or \"},{\"insert\":\"*\",\"attributes\":{\"code\":true}},{\"insert\":\" for bulleted list\"}]"
+    }
+  }
+}

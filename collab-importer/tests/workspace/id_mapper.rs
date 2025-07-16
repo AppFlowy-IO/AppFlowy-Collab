@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 #[tokio::test]
 async fn test_id_mapper() {
-  let path = "tests/asset/relation_map/2025_Jul_16_relation_map.json";
+  let path = "tests/asset/2025-07-16_22-15-54/relation_map.json";
   let parser = RelationMapParser {};
   let relation_map = parser.parse_relation_map(path).await.unwrap();
   let id_mapper = IdMapper::new(&relation_map);

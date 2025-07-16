@@ -1,0 +1,423 @@
+{
+  "page_id": "CBqKdVwKt5",
+  "blocks": {
+    "-sWhRzKUul": {
+      "id": "-sWhRzKUul",
+      "ty": "numbered_list",
+      "parent": "CBqKdVwKt5",
+      "children": "BIKXQX2wFb",
+      "external_id": "tsx6bDOXU_",
+      "external_type": "text",
+      "data": {}
+    },
+    "jMdirbaAt0": {
+      "id": "jMdirbaAt0",
+      "ty": "heading",
+      "parent": "CBqKdVwKt5",
+      "children": "9AekR803kK",
+      "external_id": "fyO-Q7i3hX",
+      "external_type": "text",
+      "data": {
+        "level": 2
+      }
+    },
+    "nba_MYvwLP": {
+      "id": "nba_MYvwLP",
+      "ty": "heading",
+      "parent": "CBqKdVwKt5",
+      "children": "VIbrLAYdW-",
+      "external_id": "WzhYI9cOQ3",
+      "external_type": "text",
+      "data": {
+        "level": 3
+      }
+    },
+    "TYorQM1cTV": {
+      "id": "TYorQM1cTV",
+      "ty": "heading",
+      "parent": "CBqKdVwKt5",
+      "children": "IKvT0w9ZUA",
+      "external_id": "3P8JbtF0Th",
+      "external_type": "text",
+      "data": {
+        "level": 1
+      }
+    },
+    "eWEC8iwMyr": {
+      "id": "eWEC8iwMyr",
+      "ty": "callout",
+      "parent": "CBqKdVwKt5",
+      "children": "AokOzy_HWA",
+      "external_id": "JOO652BQPM",
+      "external_type": "text",
+      "data": {
+        "icon": "📌",
+        "bgColor": "0x0"
+      }
+    },
+    "fe0CLTGlY4": {
+      "id": "fe0CLTGlY4",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "UWzu05GCXL",
+      "external_id": "PSe1EBAv7u",
+      "external_type": "text",
+      "data": {}
+    },
+    "8JS6CIWY8U": {
+      "id": "8JS6CIWY8U",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "In4vArMYbk",
+      "external_id": "o6CR3W4DNh",
+      "external_type": "text",
+      "data": {}
+    },
+    "qVrUSbGfhY": {
+      "id": "qVrUSbGfhY",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "OKBTiAe_fE",
+      "external_id": "sknrj1QmDu",
+      "external_type": "text",
+      "data": {}
+    },
+    "FYVuDeOaGg": {
+      "id": "FYVuDeOaGg",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "GOGB_K7B7k",
+      "external_id": "dWk6-9Pj7f",
+      "external_type": "text",
+      "data": {}
+    },
+    "e9KBxWVSRD": {
+      "id": "e9KBxWVSRD",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "C1uWz20wCA",
+      "external_id": "w7_hlxpo4C",
+      "external_type": "text",
+      "data": {}
+    },
+    "jUcQ1tJevm": {
+      "id": "jUcQ1tJevm",
+      "ty": "todo_list",
+      "parent": "CBqKdVwKt5",
+      "children": "eGv8ylEiLu",
+      "external_id": "tbEIk3l1bg",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    },
+    "zyVtuZzpiq": {
+      "id": "zyVtuZzpiq",
+      "ty": "numbered_list",
+      "parent": "CBqKdVwKt5",
+      "children": "FiIxTquezS",
+      "external_id": "NssjeDmBr1",
+      "external_type": "text",
+      "data": {}
+    },
+    "JspIy-0OWa": {
+      "id": "JspIy-0OWa",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "OL9x1SSL1a",
+      "external_id": "t8e_O5qQnb",
+      "external_type": "text",
+      "data": {}
+    },
+    "Rhu_K6rPJV": {
+      "id": "Rhu_K6rPJV",
+      "ty": "quote",
+      "parent": "CBqKdVwKt5",
+      "children": "N0JBhfWsvN",
+      "external_id": "b2nRDKbDJx",
+      "external_type": "text",
+      "data": {}
+    },
+    "KuIUZFJw-7": {
+      "id": "KuIUZFJw-7",
+      "ty": "heading",
+      "parent": "CBqKdVwKt5",
+      "children": "A2905OenOT",
+      "external_id": "9AE2KbWrwY",
+      "external_type": "text",
+      "data": {
+        "level": 3
+      }
+    },
+    "iTB9VedYO-": {
+      "id": "iTB9VedYO-",
+      "ty": "image",
+      "parent": "CBqKdVwKt5",
+      "children": "MPYRom4xPM",
+      "external_id": null,
+      "external_type": null,
+      "data": {
+        "url": "https://beta.appflowy.cloud/api/file_storage/c29fafc4-b7c0-4549-8702-71339b0fd9ea/v1/blob/735c7c28%2D33a0%2D4e9f%2D92e6%2D089630656063/P5aRDW-HGm6vk4gjZg8w6jgD_z2yE402OuI1uutNN3A=.png",
+        "image_type": 1,
+        "align": "left",
+        "width": 553.7578125
+      }
+    },
+    "V29gc-eT1p": {
+      "id": "V29gc-eT1p",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "MVKh1KYpCF",
+      "external_id": "UkDub53QPr",
+      "external_type": "text",
+      "data": {}
+    },
+    "siNLesZRmx": {
+      "id": "siNLesZRmx",
+      "ty": "code",
+      "parent": "CBqKdVwKt5",
+      "children": "thSvfaL7sd",
+      "external_id": "ESAOyVhd2s",
+      "external_type": "text",
+      "data": {
+        "language": "mermaid"
+      }
+    },
+    "CBqKdVwKt5": {
+      "id": "CBqKdVwKt5",
+      "ty": "page",
+      "parent": "",
+      "children": "UlML5Pb-3U",
+      "external_id": null,
+      "external_type": null,
+      "data": {
+        "selected_icon": "{\"groupName\":\"Recent\",\"iconContent\":\"<svg width=\\\"14\\\" height=\\\"14\\\" viewBox=\\\"0 0 14 14\\\" fill=\\\"none\\\" xmlns=\\\"http://www.w3.org/2000/svg\\\">\\n<g clip-path=\\\"url(#clip0_1068_189559)\\\">\\n<path fill-rule=\\\"evenodd\\\" clip-rule=\\\"evenodd\\\" d=\\\"M9.81502 0.666197C9.9981 -0.170135 11.189 -0.175341 11.3793 0.65936L11.3883 0.698818C11.3944 0.725719 11.4 0.75057 11.4061 0.776468C11.6254 1.71056 12.3814 2.4243 13.3276 2.58893C14.2 2.74069 14.2 3.99292 13.3276 4.14468C12.3763 4.31019 11.6174 5.03067 11.4026 5.97212L11.3793 6.07425C11.189 6.90896 9.99809 6.90374 9.81502 6.06741L9.79583 5.97977C9.58899 5.03487 8.83104 4.30902 7.87808 4.14323C7.0074 3.99176 7.00739 2.74185 7.87808 2.59038C8.82772 2.42516 9.58371 1.70378 9.79365 0.763705L9.80781 0.699221L9.81502 0.666197ZM7.69172 5.21435C5.81589 4.88801 5.63841 2.41899 7.1594 1.68728C7.0236 1.44232 6.87994 1.20164 6.72859 0.965667C6.64978 0.962837 6.57062 0.961411 6.49113 0.961411C6.41169 0.961411 6.33258 0.962835 6.25382 0.965661C5.12844 2.72022 4.42868 4.7349 4.22016 6.83759H8.76225C8.7325 6.53763 8.69276 6.23947 8.64321 5.9436C8.46716 5.56473 8.11481 5.28796 7.69172 5.21435ZM0.0195433 6.83765C0.274572 4.16392 2.14899 1.96256 4.65082 1.22555C3.72044 2.95001 3.14382 4.86059 2.96455 6.83759H0.0284221L0.0195433 6.83765ZM0.0284221 8.08759H2.96451C3.1437 10.0646 3.72025 11.9752 4.65057 13.6997C2.14882 12.9626 0.274503 10.7612 0.0195312 8.08752L0.0284221 8.08759ZM4.22011 8.08759C4.42855 10.1903 5.12824 12.205 6.25357 13.9596C6.3324 13.9625 6.4116 13.9639 6.49113 13.9639C6.57071 13.9639 6.64996 13.9625 6.72885 13.9596C7.85417 12.205 8.55386 10.1903 8.7623 8.08759H4.22011ZM12.9628 8.08753C12.7078 10.7612 10.8336 12.9625 8.33187 13.6996C9.26217 11.9751 9.83871 10.0646 10.0179 8.08759H12.9542L12.9628 8.08753Z\\\" fill=\\\"black\\\"/>\\n</g>\\n<defs>\\n<clipPath id=\\\"clip0_1068_189559\\\">\\n<rect width=\\\"14\\\" height=\\\"14\\\" fill=\\\"white\\\"/>\\n</clipPath>\\n</defs>\\n</svg>\\n\",\"iconName\":\"ai-network-spark\",\"color\":\"0xFF808080\"}",
+        "image_type": "1"
+      }
+    },
+    "Pd7peQv_Sy": {
+      "id": "Pd7peQv_Sy",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "csxsKLiuST",
+      "external_id": "6woWpvwAg3",
+      "external_type": "text",
+      "data": {}
+    },
+    "LEtl5Z3T_O": {
+      "id": "LEtl5Z3T_O",
+      "ty": "numbered_list",
+      "parent": "CBqKdVwKt5",
+      "children": "2M9egPrqFa",
+      "external_id": "GOv5n9bWTM",
+      "external_type": "text",
+      "data": {}
+    },
+    "XgI3j8o1XJ": {
+      "id": "XgI3j8o1XJ",
+      "ty": "heading",
+      "parent": "CBqKdVwKt5",
+      "children": "ddaBWXf6sH",
+      "external_id": "4rK45VY12-",
+      "external_type": "text",
+      "data": {
+        "level": 3
+      }
+    },
+    "TM9VXK6T1K": {
+      "id": "TM9VXK6T1K",
+      "ty": "todo_list",
+      "parent": "jUcQ1tJevm",
+      "children": "ZDBFByjWnY",
+      "external_id": "W32m4SWk1y",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    },
+    "n5deSonI3C": {
+      "id": "n5deSonI3C",
+      "ty": "todo_list",
+      "parent": "CBqKdVwKt5",
+      "children": "cvVs-9uFmE",
+      "external_id": "RTg-E6Gs19",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    },
+    "s3r7oBKfDx": {
+      "id": "s3r7oBKfDx",
+      "ty": "todo_list",
+      "parent": "CBqKdVwKt5",
+      "children": "aIy5EaDpkM",
+      "external_id": "MCvz4ICSeT",
+      "external_type": "text",
+      "data": {
+        "checked": true
+      }
+    },
+    "Xmx8fMO2lI": {
+      "id": "Xmx8fMO2lI",
+      "ty": "image",
+      "parent": "CBqKdVwKt5",
+      "children": "-4UqtzMVTF",
+      "external_id": null,
+      "external_type": null,
+      "data": {
+        "image_type": 1,
+        "align": "center",
+        "url": "https://beta.appflowy.cloud/api/file_storage/c29fafc4-b7c0-4549-8702-71339b0fd9ea/v1/blob/735c7c28%2D33a0%2D4e9f%2D92e6%2D089630656063/TRYYtsRlWsmEYPSsIkpYs0uawhrtj3W52kg0VgwZ2J0=.png"
+      }
+    },
+    "L3NCsuV5s4": {
+      "id": "L3NCsuV5s4",
+      "ty": "todo_list",
+      "parent": "CBqKdVwKt5",
+      "children": "Ju1xOfwsFi",
+      "external_id": "B6ggD8Ns3D",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    },
+    "3bQIUJWeIj": {
+      "id": "3bQIUJWeIj",
+      "ty": "todo_list",
+      "parent": "CBqKdVwKt5",
+      "children": "8rcLYUzfoT",
+      "external_id": "zt_pHL1ShV",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    },
+    "V5yXe-YXnV": {
+      "id": "V5yXe-YXnV",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "89bABRx5zU",
+      "external_id": "Q2VVh3FLxh",
+      "external_type": "text",
+      "data": {}
+    },
+    "bRtcS2dRjR": {
+      "id": "bRtcS2dRjR",
+      "ty": "image",
+      "parent": "CBqKdVwKt5",
+      "children": "_vXdXSoJeS",
+      "external_id": null,
+      "external_type": null,
+      "data": {
+        "align": "center",
+        "image_type": 1,
+        "url": "https://beta.appflowy.cloud/api/file_storage/c29fafc4-b7c0-4549-8702-71339b0fd9ea/v1/blob/735c7c28%2D33a0%2D4e9f%2D92e6%2D089630656063/JimDFWOY8_ATw20LkDuBg68TwkwtmSysbRbMd2eNjZ0=.png"
+      }
+    },
+    "ZnbQ8EglFC": {
+      "id": "ZnbQ8EglFC",
+      "ty": "paragraph",
+      "parent": "CBqKdVwKt5",
+      "children": "EZC8f1FGll",
+      "external_id": "Sv5Jcju5MN",
+      "external_type": "text",
+      "data": {}
+    }
+  },
+  "meta": {
+    "children_map": {
+      "-4UqtzMVTF": [],
+      "GOGB_K7B7k": [],
+      "8rcLYUzfoT": [],
+      "cvVs-9uFmE": [],
+      "thSvfaL7sd": [],
+      "2M9egPrqFa": [],
+      "MPYRom4xPM": [],
+      "FiIxTquezS": [],
+      "OKBTiAe_fE": [],
+      "eGv8ylEiLu": [
+        "TM9VXK6T1K"
+      ],
+      "89bABRx5zU": [],
+      "EZC8f1FGll": [],
+      "MVKh1KYpCF": [],
+      "BIKXQX2wFb": [],
+      "csxsKLiuST": [],
+      "IKvT0w9ZUA": [],
+      "UWzu05GCXL": [],
+      "OL9x1SSL1a": [],
+      "A2905OenOT": [],
+      "AokOzy_HWA": [],
+      "Ju1xOfwsFi": [],
+      "ddaBWXf6sH": [],
+      "N0JBhfWsvN": [],
+      "ZDBFByjWnY": [],
+      "VIbrLAYdW-": [],
+      "In4vArMYbk": [],
+      "UlML5Pb-3U": [
+        "TYorQM1cTV",
+        "JspIy-0OWa",
+        "KuIUZFJw-7",
+        "s3r7oBKfDx",
+        "L3NCsuV5s4",
+        "n5deSonI3C",
+        "jUcQ1tJevm",
+        "3bQIUJWeIj",
+        "V5yXe-YXnV",
+        "nba_MYvwLP",
+        "eWEC8iwMyr",
+        "e9KBxWVSRD",
+        "qVrUSbGfhY",
+        "iTB9VedYO-",
+        "fe0CLTGlY4",
+        "FYVuDeOaGg",
+        "Xmx8fMO2lI",
+        "8JS6CIWY8U",
+        "ZnbQ8EglFC",
+        "bRtcS2dRjR",
+        "Pd7peQv_Sy",
+        "XgI3j8o1XJ",
+        "LEtl5Z3T_O",
+        "-sWhRzKUul",
+        "zyVtuZzpiq",
+        "siNLesZRmx",
+        "V29gc-eT1p",
+        "jMdirbaAt0",
+        "Rhu_K6rPJV"
+      ],
+      "aIy5EaDpkM": [],
+      "_vXdXSoJeS": [],
+      "C1uWz20wCA": [],
+      "9AekR803kK": []
+    },
+    "text_map": {
+      "ESAOyVhd2s": "[{\"insert\":\"graph LR\\n    A[Square Rect] -- Link text --> B((Circle))\\n    A --> C(Round Rect)\\n    B --> D{Rhombus}\\n    C --> D\"}]",
+      "B6ggD8Ns3D": "[{\"insert\":\"Click anywhere and just start typing.\"}]",
+      "RTg-E6Gs19": "[{\"insert\":\"Highlight \",\"attributes\":{\"bg_color\":\"0x4dffeb3b\"}},{\"insert\":\"any text, and use the editing menu to \"},{\"insert\":\"style\",\"attributes\":{\"italic\":true}},{\"insert\":\" \"},{\"insert\":\"your\",\"attributes\":{\"bold\":true}},{\"insert\":\" \"},{\"insert\":\"writing\",\"attributes\":{\"underline\":true}},{\"insert\":\" \"},{\"insert\":\"however\",\"attributes\":{\"code\":true}},{\"insert\":\" you \"},{\"insert\":\"like.\",\"attributes\":{\"strikethrough\":true}}]",
+      "MCvz4ICSeT": "[{\"insert\":\"Click \"},{\"insert\":\"+\",\"attributes\":{\"code\":true}},{\"insert\":\" button next to a Space name to quickly add a new page.\"}]",
+      "o6CR3W4DNh": "[]",
+      "UkDub53QPr": "[]",
+      "6woWpvwAg3": "[]",
+      "fyO-Q7i3hX": "[{\"insert\":\"Have a question❓\"}]",
+      "Sv5Jcju5MN": "[{\"insert\":\"Expand the notepad into a larger window to get more editing space.\"}]",
+      "b2nRDKbDJx": "[{\"insert\":\"Click \"},{\"insert\":\"?\",\"attributes\":{\"code\":true}},{\"insert\":\" at the bottom right for help and support\"}]",
+      "4rK45VY12-": "[{\"insert\":\"Keyboard shortcuts, markdown, and code block\"}]",
+      "NssjeDmBr1": "[{\"insert\":\"Type \"},{\"insert\":\"/code\",\"attributes\":{\"code\":true}},{\"insert\":\" or \"},{\"insert\":\"```\",\"attributes\":{\"code\":true}},{\"insert\":\" to insert a code block (Mermaid is supported in our web app 🧜‍♀️)\"}]",
+      "9AE2KbWrwY": "[{\"insert\":\"Basics\"}]",
+      "tbEIk3l1bg": "[{\"insert\":\"As soon as you type \"},{\"insert\":\"/\",\"attributes\":{\"font_color\":\"0xff00b5ff\",\"code\":true}},{\"insert\":\" a menu will pop up. Select \"},{\"insert\":\"different types\",\"attributes\":{\"bg_color\":\"0x4d9c27b0\"}},{\"insert\":\" of content blocks you can add.\"}]",
+      "sknrj1QmDu": "[{\"insert\":\"CMD\",\"attributes\":{\"code\":true}},{\"insert\":\" / \"},{\"insert\":\"CTRL\",\"attributes\":{\"code\":true}},{\"insert\":\" + \"},{\"insert\":\"/\",\"attributes\":{\"code\":true}},{\"insert\":\" to quickly add a quick note ✍️\"}]",
+      "dWk6-9Pj7f": "[{\"insert\":\"Drag the notepad to the desired location.\"}]",
+      "w7_hlxpo4C": "[]",
+      "tsx6bDOXU_": "[{\"insert\":\"Markdown \"},{\"insert\":\"reference\",\"attributes\":{\"href\":\"https://appflowy.gitbook.io/docs/essential-documentation/markdown\"}}]",
+      "3P8JbtF0Th": "[{\"insert\":\"AppFlowy is right in \"},{\"insert\":\"your browser\",\"attributes\":{\"href\":\"https://appflowy.com/\"}}]",
+      "zt_pHL1ShV": "[{\"insert\":\"Click \"},{\"insert\":\"+\",\"attributes\":{\"code\":true}},{\"insert\":\" next to any page title or space name in the sidebar to add a new page/subpage.\"}]",
+      "t8e_O5qQnb": "[]",
+      "WzhYI9cOQ3": "[{\"insert\":\"Quick Note\"}]",
+      "PSe1EBAv7u": "[]",
+      "GOv5n9bWTM": "[{\"insert\":\"Keyboard shortcuts \"},{\"insert\":\"guide\",\"attributes\":{\"href\":\"https://appflowy.gitbook.io/docs/essential-documentation/shortcuts\"}}]",
+      "Q2VVh3FLxh": "[]",
+      "JOO652BQPM": "[{\"insert\":\"Use Quick Note to save anything you want to remember—such as meeting notes, ideas, or to-dos.\"}]",
+      "W32m4SWk1y": "[{\"insert\":\"Type \"},{\"insert\":\"/\",\"attributes\":{\"code\":true}},{\"insert\":\" followed by \"},{\"insert\":\"/bullet\",\"attributes\":{\"code\":true}},{\"insert\":\" or \"},{\"insert\":\"/num\",\"attributes\":{\"code\":true}},{\"insert\":\" to create a list. \",\"attributes\":{\"code\":false}}]"
+    }
+  }
+}
