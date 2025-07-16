@@ -1,6 +1,6 @@
+use crate::workspace::entities::WorkspaceRelationMap;
 use std::collections::HashMap;
 use uuid::Uuid;
-use crate::workspace::entities::WorkspaceRelationMap;
 
 pub struct IdMapper {
   pub id_map: HashMap<String, String>,

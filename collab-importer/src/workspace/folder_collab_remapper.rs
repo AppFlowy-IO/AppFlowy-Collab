@@ -1,6 +1,8 @@
 use anyhow::{Result, anyhow};
 use collab::preclude::Collab;
-use collab_folder::{Folder, View, Workspace, default_folder_data, RepeatedViewIdentifier, ViewIdentifier, timestamp};
+use collab_folder::{
+  Folder, RepeatedViewIdentifier, View, ViewIdentifier, Workspace, default_folder_data, timestamp,
+};
 
 use crate::workspace::entities::WorkspaceRelationMap;
 use crate::workspace::id_mapper::IdMapper;
@@ -41,7 +43,11 @@ impl FolderCollabRemapper {
         new_workspace_id.clone()
       };
 
-      if view_metadata.parent_id.as_ref().map_or(true, |pid| pid == &relation_map.workspace_id) {
+      if view_metadata
+        .parent_id
+        .as_ref()
+        .map_or(true, |pid| pid == &relation_map.workspace_id)
+      {
         top_level_view_ids.push(ViewIdentifier::new(new_view_id.clone()));
       }
 

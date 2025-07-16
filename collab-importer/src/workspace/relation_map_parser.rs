@@ -3,7 +3,6 @@ use std::fs::read_to_string;
 use crate::workspace::entities::WorkspaceRelationMap;
 use anyhow::{Result, anyhow};
 
-
 pub struct RelationMapParser {}
 
 impl RelationMapParser {
