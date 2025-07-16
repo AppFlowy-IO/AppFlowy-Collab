@@ -2,14 +2,12 @@ use std::fs::read_to_string;
 
 use crate::workspace::entities::WorkspaceRelationMap;
 use anyhow::{Result, anyhow};
-use tracing::{debug};
+
 
 pub struct RelationMapParser {}
 
 impl RelationMapParser {
   pub async fn parse_relation_map(&self, relation_map_path: &str) -> Result<WorkspaceRelationMap> {
-    debug!("Parsing relation map from: {}", relation_map_path);
-
     let relation_map_content = read_to_string(&relation_map_path)
       .map_err(|e| anyhow!(format!("Failed to read relation_map.json: {}", e)))?;
 
