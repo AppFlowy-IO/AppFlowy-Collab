@@ -38,6 +38,14 @@ impl IdMapper {
       Self::map_id(&mut id_map, &dependency.target_view_id);
     }
 
+    // workspace database meta
+    for database_meta in &relation_map.workspace_database_meta {
+      Self::map_id(&mut id_map, &database_meta.database_id);
+      for view_id in &database_meta.view_ids {
+        Self::map_id(&mut id_map, view_id);
+      }
+    }
+
     Self { id_map }
   }
 

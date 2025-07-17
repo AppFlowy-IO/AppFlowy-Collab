@@ -3,4 +3,5 @@ mod document_collab_remapper;
 mod folder_collab_remapper;
 mod id_mapper;
 mod relation_map_parser;
+mod workspace_database_remapper;
 mod workspace_remapper_test;

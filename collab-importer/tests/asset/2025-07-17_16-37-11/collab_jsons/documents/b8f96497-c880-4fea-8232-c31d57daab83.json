@@ -1,0 +1,223 @@
+{
+  "page_id": "wl_3CTczV-",
+  "blocks": {
+    "s03YwRjKP6": {
+      "id": "s03YwRjKP6",
+      "ty": "paragraph",
+      "parent": "wl_3CTczV-",
+      "children": "PqaSV2AQ8Q",
+      "external_id": "qdZzybGayN",
+      "external_type": "text",
+      "data": {}
+    },
+    "W9-j8gsU7d": {
+      "id": "W9-j8gsU7d",
+      "ty": "todo_list",
+      "parent": "wl_3CTczV-",
+      "children": "zFkzr7gxi3",
+      "external_id": "MIOwT3KxuE",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    },
+    "p0Ks6qwTKu": {
+      "id": "p0Ks6qwTKu",
+      "ty": "paragraph",
+      "parent": "SUCAfFGoM2",
+      "children": "CuNHCZduDc",
+      "external_id": "0WauX77OLc",
+      "external_type": "text",
+      "data": {}
+    },
+    "W4dAJdcSi6": {
+      "id": "W4dAJdcSi6",
+      "ty": "paragraph",
+      "parent": "wl_3CTczV-",
+      "children": "3olQjWagJO",
+      "external_id": "hS6vv5u43p",
+      "external_type": "text",
+      "data": {}
+    },
+    "GZZKIAfmPj": {
+      "id": "GZZKIAfmPj",
+      "ty": "heading",
+      "parent": "wl_3CTczV-",
+      "children": "cxpWtV4Gz5",
+      "external_id": "Eo1Z7e15qu",
+      "external_type": "text",
+      "data": {
+        "level": 2
+      }
+    },
+    "F0vM8DLAXe": {
+      "id": "F0vM8DLAXe",
+      "ty": "callout",
+      "parent": "wl_3CTczV-",
+      "children": "J7hNBLYfYO",
+      "external_id": "FZ-ZwN8knW",
+      "external_type": "text",
+      "data": {
+        "icon": "",
+        "bgColor": "0x0"
+      }
+    },
+    "SUCAfFGoM2": {
+      "id": "SUCAfFGoM2",
+      "ty": "toggle_list",
+      "parent": "wl_3CTczV-",
+      "children": "5XjansUwOZ",
+      "external_id": "R_GTbTX2Kx",
+      "external_type": "text",
+      "data": {
+        "collapsed": true
+      }
+    },
+    "64p1uPdBuo": {
+      "id": "64p1uPdBuo",
+      "ty": "heading",
+      "parent": "wl_3CTczV-",
+      "children": "8dXbXzH7f5",
+      "external_id": "Ze8Y6vuneX",
+      "external_type": "text",
+      "data": {
+        "level": 4
+      }
+    },
+    "dFhgpeeWqS": {
+      "id": "dFhgpeeWqS",
+      "ty": "heading",
+      "parent": "wl_3CTczV-",
+      "children": "tHIMUZEhL3",
+      "external_id": "7uf16a95nA",
+      "external_type": "text",
+      "data": {
+        "level": 4
+      }
+    },
+    "AN59Wi_LKB": {
+      "id": "AN59Wi_LKB",
+      "ty": "divider",
+      "parent": "wl_3CTczV-",
+      "children": "-6pWNfrf-l",
+      "external_id": null,
+      "external_type": null,
+      "data": {}
+    },
+    "kK8YfhgEwR": {
+      "id": "kK8YfhgEwR",
+      "ty": "todo_list",
+      "parent": "wl_3CTczV-",
+      "children": "XcsqsEnqyv",
+      "external_id": "IuAGfCvlvD",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    },
+    "wl_3CTczV-": {
+      "id": "wl_3CTczV-",
+      "ty": "page",
+      "parent": "",
+      "children": "9HaPo6SKKI",
+      "external_id": null,
+      "external_type": null,
+      "data": {}
+    },
+    "vcoYM-oLGe": {
+      "id": "vcoYM-oLGe",
+      "ty": "heading",
+      "parent": "wl_3CTczV-",
+      "children": "2LKCWb29lr",
+      "external_id": "TqjGIX2Yx2",
+      "external_type": "text",
+      "data": {
+        "level": 4
+      }
+    },
+    "DNvPsUv6p5": {
+      "id": "DNvPsUv6p5",
+      "ty": "paragraph",
+      "parent": "wl_3CTczV-",
+      "children": "Vv79mjU3TG",
+      "external_id": "1DHSuQOfWs",
+      "external_type": "text",
+      "data": {}
+    },
+    "YF02K6wy3-": {
+      "id": "YF02K6wy3-",
+      "ty": "heading",
+      "parent": "wl_3CTczV-",
+      "children": "q1s9qATS5y",
+      "external_id": "M4QeHOut2z",
+      "external_type": "text",
+      "data": {
+        "level": 4
+      }
+    },
+    "byHBctVv1I": {
+      "id": "byHBctVv1I",
+      "ty": "todo_list",
+      "parent": "wl_3CTczV-",
+      "children": "vcjtiI0Ox5",
+      "external_id": "-yiWuJ1vw2",
+      "external_type": "text",
+      "data": {
+        "checked": false
+      }
+    }
+  },
+  "meta": {
+    "children_map": {
+      "PqaSV2AQ8Q": [],
+      "2LKCWb29lr": [],
+      "tHIMUZEhL3": [],
+      "zFkzr7gxi3": [],
+      "3olQjWagJO": [],
+      "XcsqsEnqyv": [],
+      "Vv79mjU3TG": [],
+      "9HaPo6SKKI": [
+        "GZZKIAfmPj",
+        "64p1uPdBuo",
+        "SUCAfFGoM2",
+        "vcoYM-oLGe",
+        "dFhgpeeWqS",
+        "YF02K6wy3-",
+        "W4dAJdcSi6",
+        "F0vM8DLAXe",
+        "AN59Wi_LKB",
+        "s03YwRjKP6",
+        "W9-j8gsU7d",
+        "kK8YfhgEwR",
+        "byHBctVv1I",
+        "DNvPsUv6p5"
+      ],
+      "CuNHCZduDc": [],
+      "5XjansUwOZ": [
+        "p0Ks6qwTKu"
+      ],
+      "q1s9qATS5y": [],
+      "8dXbXzH7f5": [],
+      "cxpWtV4Gz5": [],
+      "J7hNBLYfYO": [],
+      "-6pWNfrf-l": [],
+      "vcjtiI0Ox5": []
+    },
+    "text_map": {
+      "TqjGIX2Yx2": "[{\"insert\":\"$\",\"attributes\":{\"bold\":true,\"mention\":{\"type\":\"page\",\"page_id\":\"0a0fd09b-31ed-4cb6-814d-34280d65c5ef\"}}}]",
+      "FZ-ZwN8knW": "[{\"insert\":\"Ask AI\",\"attributes\":{\"bold\":true}},{\"insert\":\" powered by advanced AI models: chat, search, write, and much more ✨\"}]",
+      "Eo1Z7e15qu": "[{\"insert\":\"Welcome to AppFlowy\"}]",
+      "1DHSuQOfWs": "[]",
+      "hS6vv5u43p": "[]",
+      "R_GTbTX2Kx": "[{\"insert\":\"Download for macOS, Windows, and Linux\"}]",
+      "-yiWuJ1vw2": "[{\"insert\":\"Github\",\"attributes\":{\"href\":\"https://github.com/AppFlowy-IO/AppFlowy\"}}]",
+      "M4QeHOut2z": "[{\"insert\":\"$\",\"attributes\":{\"bold\":true,\"mention\":{\"type\":\"page\",\"page_id\":\"6cbe3ff3-7b3a-4d3b-9eec-f0d1e0a8b8c3\"}}},{\"insert\":\"quick start\",\"attributes\":{\"code\":true}}]",
+      "0WauX77OLc": "[{\"insert\":\" \"},{\"insert\":\"link\",\"attributes\":{\"href\":\"https://appflowy.io/download\"}}]",
+      "MIOwT3KxuE": "[{\"insert\":\"Twitter\",\"attributes\":{\"href\":\"https://twitter.com/appflowy\"}},{\"insert\":\": @appflowy\"}]",
+      "IuAGfCvlvD": "[{\"insert\":\"Reddit\",\"attributes\":{\"href\":\"https://www.reddit.com/r/AppFlowy/\"}},{\"insert\":\": r/appflowy\"}]",
+      "qdZzybGayN": "[{\"insert\":\"❤️Love AppFlowy and open source? Follow our latest product updates:\"}]",
+      "Ze8Y6vuneX": "[{\"insert\":\"$\",\"attributes\":{\"mention\":{\"type\":\"page\",\"page_id\":\"d0b0104e-996d-498b-b644-0556ebe6a37a\"},\"bold\":true}}]",
+      "7uf16a95nA": "[{\"insert\":\"$\",\"attributes\":{\"mention\":{\"type\":\"page\",\"page_id\":\"b68f3000-6f31-452f-b781-db3a65aced1f\"},\"bold\":true}}]"
+    }
+  }
+}
