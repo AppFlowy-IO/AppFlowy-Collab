@@ -341,14 +341,8 @@ impl Collab {
     Ok(this)
   }
 
-  pub fn revisions(&self) -> Result<Vec<Revision>, CollabError> {
-    let txn = self.context.transact();
-    let mut revisions = Vec::new();
-    let iter = self.revisions.iter(&txn);
-    for revision in iter {
-      revisions.push(revision?);
-    }
-    Ok(revisions)
+  pub fn revisions(&self) -> &Revisions {
+    &self.revisions
   }
 
   pub fn gc(&mut self) -> Result<(), CollabError> {
