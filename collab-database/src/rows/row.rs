@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+#[cfg(feature = "verbose_log")]
 use tracing::trace;
 
 use collab::preclude::encoding::serde::from_any;

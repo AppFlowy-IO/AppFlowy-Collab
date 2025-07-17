@@ -47,7 +47,7 @@ impl FolderCollabRemapper {
       if view_metadata
         .parent_id
         .as_ref()
-        .map_or(true, |pid| pid == &relation_map.workspace_id)
+        .is_none_or(|pid| pid == &relation_map.workspace_id)
       {
         top_level_view_ids.push(ViewIdentifier::new(new_view_id.clone()));
       }

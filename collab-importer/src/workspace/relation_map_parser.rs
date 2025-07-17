@@ -7,7 +7,7 @@ pub struct RelationMapParser {}
 
 impl RelationMapParser {
   pub async fn parse_relation_map(&self, relation_map_path: &str) -> Result<WorkspaceRelationMap> {
-    let relation_map_content = read_to_string(&relation_map_path)
+    let relation_map_content = read_to_string(relation_map_path)
       .map_err(|e| anyhow!(format!("failed to read relation_map.json: {}", e)))?;
 
     let relation_map: WorkspaceRelationMap = serde_json::from_str(&relation_map_content)

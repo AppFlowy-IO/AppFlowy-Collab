@@ -29,13 +29,13 @@ impl DatabaseCollabRemapper {
   ///
   /// 1. replace all the row id
   /// 2. replace all the order id
-  /// 3 .replace all the view id
+  /// 3. replace all the view id
   /// 4. replace all the relation id (not supported yet)
   pub async fn remap_database_collab_state(
     &self,
     database_id: &str,
     user_id: &str,
-    db_state: &Vec<u8>,
+    db_state: &[u8],
   ) -> Result<Vec<u8>, DatabaseError> {
     let database_data = self
       .collab_bytes_to_database_data(database_id, user_id, db_state)
@@ -52,11 +52,11 @@ impl DatabaseCollabRemapper {
     &self,
     database_id: &str,
     user_id: &str,
-    db_state: &Vec<u8>,
+    db_state: &[u8],
   ) -> Result<DatabaseData, DatabaseError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
 
-    let data_source = DataSource::DocStateV1(db_state.clone());
+    let data_source = DataSource::DocStateV1(db_state.to_owned());
 
     let options =
       CollabOptions::new(database_id.to_string(), client_id).with_data_source(data_source);

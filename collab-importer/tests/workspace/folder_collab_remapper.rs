@@ -3,6 +3,7 @@ use collab_importer::workspace::folder_collab_remapper::FolderCollabRemapper;
 use collab_importer::workspace::id_mapper::IdMapper;
 use collab_importer::workspace::relation_map_parser::RelationMapParser;
 
+#[allow(clippy::too_many_arguments)]
 fn verify_view(
   folder: &Folder,
   id_mapper: &IdMapper,
@@ -60,7 +61,7 @@ async fn test_folder_collab_remapper() {
       view
         .parent_id
         .as_ref()
-        .map_or(true, |pid| pid == &relation_map.workspace_id)
+        .is_none_or(|pid| pid == &relation_map.workspace_id)
     })
     .count();
   assert_eq!(workspace_info.child_views.len(), top_level_views_count);
