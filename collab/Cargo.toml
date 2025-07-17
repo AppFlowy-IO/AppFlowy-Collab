@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 yrs.workspace = true
+uuid.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 serde = { workspace = true, features = ["rc"] }
