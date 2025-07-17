@@ -27,7 +27,7 @@ use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use serde::{Deserialize, Serialize};
-use tracing::{error};
+use tracing::error;
 use uuid::Uuid;
 use yrs::block::ClientID;
 
