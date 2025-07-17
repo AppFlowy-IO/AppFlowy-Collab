@@ -111,10 +111,10 @@ impl Revisions {
   pub fn remove_where<F>(
     &self,
     txn: &mut TransactionMut,
-    predicate: F,
+    mut predicate: F,
   ) -> Result<usize, CollabError>
   where
-    F: Fn(&Revision) -> bool,
+    F: FnMut(&Revision) -> bool,
   {
     ensure_gc_disabled(txn)?;
 
