@@ -1,5 +1,7 @@
+pub mod database_collab_remapper;
 pub mod document_collab_remapper;
 pub mod entities;
 pub mod folder_collab_remapper;
 pub mod id_mapper;
+pub mod id_remapper;
 pub mod relation_map_parser;

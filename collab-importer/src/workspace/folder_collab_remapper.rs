@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use collab::core::collab::default_client_id;
 use collab::preclude::Collab;
 use collab_folder::{
   Folder, RepeatedViewIdentifier, View, ViewIdentifier, Workspace, default_folder_data, timestamp,
@@ -88,7 +89,7 @@ impl FolderCollabRemapper {
       last_edited_by: Some(uid),
     };
 
-    let collab = Collab::new(uid, &new_workspace_id, device_id, 0);
+    let collab = Collab::new(uid, &new_workspace_id, device_id, default_client_id());
     let folder = Folder::create(collab, None, folder_data);
     Ok(folder)
   }

@@ -157,6 +157,51 @@ impl DatabaseCollabRemapper {
     }
   }
 
+  pub fn create_database_params_with_mapped_ids(data: DatabaseData) -> CreateDatabaseParams {
+    let timestamp = timestamp();
+
+    let create_row_params = data
+      .rows
+      .into_iter()
+      .map(|row| CreateRowParams {
+        id: row.id,
+        database_id: data.database_id.clone(),
+        created_at: timestamp,
+        modified_at: timestamp,
+        cells: row.cells,
+        height: row.height,
+        visibility: row.visibility,
+        row_position: OrderObjectPosition::End,
+      })
+      .collect();
+
+    let create_view_params = data
+      .views
+      .into_iter()
+      .map(|view| CreateViewParams {
+        database_id: data.database_id.clone(),
+        view_id: view.id,
+        name: view.name,
+        layout: view.layout,
+        layout_settings: view.layout_settings,
+        filters: view.filters,
+        group_settings: view.group_settings,
+        sorts: view.sorts,
+        field_settings: view.field_settings,
+        created_at: timestamp,
+        modified_at: timestamp,
+        ..Default::default()
+      })
+      .collect();
+
+    CreateDatabaseParams {
+      database_id: data.database_id.clone(),
+      rows: create_row_params,
+      fields: data.fields,
+      views: create_view_params,
+    }
+  }
+
   pub fn remap_database_data(
     &self,
     mut database_data: DatabaseData,
