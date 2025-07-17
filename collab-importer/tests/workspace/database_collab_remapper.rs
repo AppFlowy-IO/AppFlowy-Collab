@@ -70,4 +70,42 @@ async fn test_parse_real_database_json() {
       );
     }
   }
+
+  let rows = database_data.rows;
+  assert_eq!(rows.len(), 5);
+  
+  for row in &rows {
+    let row_id_str = row.id.to_string();
+    for original_uuid in &original_uuids {
+      assert!(
+        row_id_str != *original_uuid,
+        "row id {} should not contain original uuid {}",
+        row_id_str,
+        original_uuid
+      );
+    }
+    
+    if let Some(new_row_id) = id_mapper.get_new_id(&row_id_str) {
+      assert_eq!(
+        &row_id_str, new_row_id,
+        "row id should be mapped correctly"
+      );
+    }
+    
+    assert_eq!(
+      &row.database_id, &database.get_database_id(),
+      "row database_id should match database id"
+    );
+    
+    let row_json = serde_json::to_string(&row).unwrap();
+    for original_uuid in &original_uuids {
+      if id_mapper.get_new_id(original_uuid).is_some() {
+        assert!(
+          !row_json.contains(original_uuid),
+          "row data should not contain original uuid {}",
+          original_uuid
+        );
+      }
+    }
+  }
 }
