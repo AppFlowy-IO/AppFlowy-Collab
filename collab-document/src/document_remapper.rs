@@ -53,11 +53,11 @@ impl DocumentCollabRemapper {
     &self,
     doc_id: &str,
     user_id: &str,
-    doc_state: &Vec<u8>,
+    doc_state: &[u8],
   ) -> Result<Vec<u8>, DocumentError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
     let options = CollabOptions::new(doc_id.to_string(), client_id)
-      .with_data_source(DataSource::DocStateV1(doc_state.clone()));
+      .with_data_source(DataSource::DocStateV1(doc_state.to_owned()));
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)
       .map_err(|e| DocumentError::Internal(anyhow::Error::new(e)))?;
     let document = Document::open(collab)?;

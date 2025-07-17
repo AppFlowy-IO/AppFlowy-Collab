@@ -27,8 +27,8 @@ impl IdMapper {
     }
 
     // collab objects
-    for (object_id_key, collab_metadata) in &relation_map.collab_objects {
-      Self::map_id(&mut id_map, object_id_key);
+    for (view_id, collab_metadata) in &relation_map.collab_objects {
+      Self::map_id(&mut id_map, view_id);
       Self::map_id(&mut id_map, &collab_metadata.object_id);
     }
 

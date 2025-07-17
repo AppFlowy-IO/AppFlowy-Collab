@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+use tracing::trace;
 
 use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
