@@ -347,7 +347,7 @@ impl Collab {
 
   pub fn prune_revisions<F>(&mut self, predicate: F) -> Result<usize, CollabError>
   where
-    F: Fn(&Revision) -> bool,
+    F: FnMut(&Revision) -> bool,
   {
     let mut txn = self.context.transact_mut();
     let removed = self.revisions.remove_where(&mut txn, predicate)?;
