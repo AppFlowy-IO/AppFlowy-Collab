@@ -55,12 +55,12 @@ impl RelationMapParser {
       }
 
       if let Some(collab_metadata) = relation_map.collab_objects.get(view_id) {
-        if collab_metadata.object_id != view_metadata.collab_object_id {
-          return Err(anyhow!(format!(
-            "view {} collab_object_id mismatch: view references {}, collab_objects has {}",
-            view_id, view_metadata.collab_object_id, collab_metadata.object_id
-          )));
-        }
+        // if collab_metadata.object_id != view_metadata.collab_object_id {
+        //   return Err(anyhow!(format!(
+        //     "view {} collab_object_id mismatch: view references {}, collab_objects has {}",
+        //     view_id, view_metadata.collab_object_id, collab_metadata.object_id
+        //   )));
+        // }
       } else {
         return Err(anyhow!(format!(
           "view {} has no corresponding entry in collab_objects",
