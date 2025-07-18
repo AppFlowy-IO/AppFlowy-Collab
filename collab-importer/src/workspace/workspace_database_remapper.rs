@@ -56,9 +56,9 @@ impl WorkspaceDatabaseRemapper {
     Ok(workspace_database_data)
   }
 
-  pub fn build_workspace_database(&self, workspace_database_id: &str) -> Result<WorkspaceDatabase> {
+  pub fn build_workspace_database(&self, database_storage_id: &str) -> Result<WorkspaceDatabase> {
     let workspace_database_data = self.build_workspace_database_data()?;
-    let options = CollabOptions::new(workspace_database_id.to_string(), default_client_id());
+    let options = CollabOptions::new(database_storage_id.to_string(), default_client_id());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)?;
     let mut workspace_database = WorkspaceDatabase::create(collab);
 

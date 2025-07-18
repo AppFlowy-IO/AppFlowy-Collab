@@ -2,9 +2,10 @@ use collab_importer::workspace::WorkspaceRemapper;
 
 #[tokio::test]
 async fn test_workspace_remapper_creation() {
-  let test_assets_path = "tests/asset/2025-07-16_22-15-54";
+  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
+  let test_assets_path = unzip_path;
 
-  let remapper = WorkspaceRemapper::new(test_assets_path.as_ref())
+  let remapper = WorkspaceRemapper::new(test_assets_path.as_ref(), None)
     .await
     .unwrap();
 
@@ -17,17 +18,20 @@ async fn test_workspace_remapper_creation() {
     .unwrap();
   let databases = remapper.build_database_collabs().await.unwrap();
   let documents = remapper.build_document_collabs().unwrap();
+  let row_documents = remapper.build_row_document_collabs().unwrap();
 
   assert!(!folder.get_workspace_id().unwrap().is_empty());
   assert_eq!(databases.len(), 1);
   assert_eq!(documents.len(), 6);
+  assert_eq!(row_documents.len(), 0);
 }
 
 #[tokio::test]
 async fn test_workspace_remapper_folder_structure() {
-  let test_assets_path = "tests/asset/2025-07-16_22-15-54";
+  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
+  let test_assets_path = unzip_path;
 
-  let remapper = WorkspaceRemapper::new(test_assets_path.as_ref())
+  let remapper = WorkspaceRemapper::new(test_assets_path.as_ref(), None)
     .await
     .unwrap();
 
@@ -51,9 +55,10 @@ async fn test_workspace_remapper_folder_structure() {
 
 #[tokio::test]
 async fn test_workspace_remapper_all_collabs() {
-  let test_assets_path = "tests/asset/2025-07-16_22-15-54";
+  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
+  let test_assets_path = unzip_path;
 
-  let remapper = WorkspaceRemapper::new(test_assets_path.as_ref())
+  let remapper = WorkspaceRemapper::new(test_assets_path.as_ref(), None)
     .await
     .unwrap();
 
@@ -62,7 +67,12 @@ async fn test_workspace_remapper_all_collabs() {
   let workspace_name = "workspace_name";
 
   let workspace_collabs = remapper
-    .build_all_collabs(uid, device_id, workspace_name)
+    .build_all_collabs(
+      uid,
+      device_id,
+      workspace_name,
+      "workspace_database_storage_id",
+    )
     .await
     .unwrap();
 
@@ -75,4 +85,5 @@ async fn test_workspace_remapper_all_collabs() {
   );
   assert_eq!(workspace_collabs.databases.len(), 1);
   assert_eq!(workspace_collabs.documents.len(), 6);
+  assert_eq!(workspace_collabs.row_documents.len(), 0);
 }

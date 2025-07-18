@@ -40,7 +40,7 @@ pub struct WorkspaceRelationMap {
   pub views: HashMap<String, ViewMetadata>,
   pub collab_objects: HashMap<String, CollabMetadata>,
   pub dependencies: Vec<ViewDependency>,
-  pub workspace_database_meta: Vec<WorkspaceDatabaseMeta>,
+  pub workspace_database_meta: Option<Vec<WorkspaceDatabaseMeta>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -4,14 +4,14 @@ use collab_importer::workspace::relation_map_parser::RelationMapParser;
 
 #[tokio::test]
 async fn test_parse_real_database_json() {
-  let json_content = include_str!(
-    "../asset/2025-07-16_22-15-54/collab_jsons/databases/6cbe3ff3-7b3a-4d3b-9eec-f0d1e0a8b8c3.json"
-  );
-  let json_value: serde_json::Value = serde_json::from_str(json_content).unwrap();
+  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
+  let json_path = unzip_path.join("collab_jsons/databases/6cbe3ff3-7b3a-4d3b-9eec-f0d1e0a8b8c3.json");
+  let json_content = std::fs::read_to_string(&json_path).unwrap();
+  let json_value: serde_json::Value = serde_json::from_str(&json_content).unwrap();
 
-  let relation_map_path = "tests/asset/2025-07-16_22-15-54/relation_map.json";
+  let relation_map_path = unzip_path.join("relation_map.json");
   let parser = RelationMapParser {};
-  let relation_map = parser.parse_relation_map(relation_map_path).await.unwrap();
+  let relation_map = parser.parse_relation_map(&relation_map_path.to_string_lossy()).await.unwrap();
   let id_mapper = IdMapper::new(&relation_map);
 
   let view_id_mapping = id_mapper.id_map.clone();

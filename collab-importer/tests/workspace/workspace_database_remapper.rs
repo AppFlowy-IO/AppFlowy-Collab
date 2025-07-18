@@ -4,9 +4,15 @@ use collab_importer::workspace::workspace_database_remapper::WorkspaceDatabaseRe
 
 #[tokio::test]
 async fn test_workspace_database_remapper() {
-  let relation_map_path = "tests/asset/2025-07-17_16-37-11/relation_map.json";
+  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-17_16-37-11")
+    .await
+    .unwrap();
+  let relation_map_path = unzip_path.join("relation_map.json");
   let parser = RelationMapParser {};
-  let relation_map = parser.parse_relation_map(relation_map_path).await.unwrap();
+  let relation_map = parser
+    .parse_relation_map(&relation_map_path.to_string_lossy())
+    .await
+    .unwrap();
   let id_mapper = IdMapper::new(&relation_map);
 
   let view_id_mapping = id_mapper.id_map.clone();

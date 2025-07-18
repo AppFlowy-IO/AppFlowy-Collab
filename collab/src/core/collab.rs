@@ -54,7 +54,7 @@ pub type IndexContentReceiver = tokio::sync::broadcast::Receiver<IndexContent>;
 pub struct Collab {
   /// The object id can be the document id or the database id. It must be unique for
   /// each [Collab] instance.
-  object_id: String,
+  pub object_id: String,
   state: Arc<State>,
   update_subscription: ArcSwapOption<Subscription>,
   awareness_subscription: ArcSwapOption<Subscription>,
