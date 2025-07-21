@@ -111,7 +111,6 @@ impl WorkspaceDatabase {
   /// Return the a [DatabaseMeta] with the given view id
   pub fn get_database_meta_with_view_id(&self, view_id: &str) -> Option<DatabaseMeta> {
     let all = self.get_all_database_meta();
-    println!("all: {:?}", all);
     all
       .into_iter()
       .find(|record| record.linked_views.iter().any(|id| id == view_id))
