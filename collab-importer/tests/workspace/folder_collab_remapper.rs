@@ -26,20 +26,23 @@ fn verify_view(
 #[tokio::test]
 async fn test_folder_collab_remapper() {
   let parser = RelationMapParser {};
-  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
+  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54")
+    .await
+    .unwrap();
   let test_file_path = unzip_path.join("relation_map.json");
 
-  let relation_map = parser.parse_relation_map(&test_file_path.to_string_lossy()).await.unwrap();
+  let relation_map = parser
+    .parse_relation_map(&test_file_path.to_string_lossy())
+    .await
+    .unwrap();
   let id_mapper = IdMapper::new(&relation_map);
 
   let uid = 123;
-  let device_id = "test_device";
 
   let folder = FolderCollabRemapper::remap_to_folder_collab(
     &relation_map,
     &id_mapper,
     uid,
-    device_id,
     "My Custom Workspace",
   )
   .unwrap();
@@ -110,20 +113,23 @@ async fn test_folder_collab_remapper() {
 #[tokio::test]
 async fn test_folder_hierarchy_structure() {
   let parser = RelationMapParser {};
-  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
+  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54")
+    .await
+    .unwrap();
   let test_file_path = unzip_path.join("relation_map.json");
 
-  let relation_map = parser.parse_relation_map(&test_file_path.to_string_lossy()).await.unwrap();
+  let relation_map = parser
+    .parse_relation_map(&test_file_path.to_string_lossy())
+    .await
+    .unwrap();
   let id_mapper = IdMapper::new(&relation_map);
 
   let uid = 456;
-  let device_id = "test_device_2";
 
   let folder = FolderCollabRemapper::remap_to_folder_collab(
     &relation_map,
     &id_mapper,
     uid,
-    device_id,
     "My Custom Workspace",
   )
   .unwrap();

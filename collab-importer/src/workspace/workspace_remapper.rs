@@ -72,12 +72,7 @@ impl WorkspaceRemapper {
     })
   }
 
-  pub fn build_folder_collab(
-    &self,
-    uid: i64,
-    device_id: &str,
-    workspace_name: &str,
-  ) -> Result<Folder> {
+  pub fn build_folder_collab(&self, uid: i64, workspace_name: &str) -> Result<Folder> {
     let id_mapper = IdMapper {
       id_map: self.id_mapping.clone(),
     };
@@ -85,7 +80,6 @@ impl WorkspaceRemapper {
       &self.relation_map,
       &id_mapper,
       uid,
-      device_id,
       workspace_name,
     )
   }
@@ -223,11 +217,10 @@ impl WorkspaceRemapper {
   pub async fn build_all_collabs(
     &self,
     uid: i64,
-    device_id: &str,
     workspace_name: &str,
     database_storage_id: &str,
   ) -> Result<WorkspaceCollabs> {
-    let folder = self.build_folder_collab(uid, device_id, workspace_name)?;
+    let folder = self.build_folder_collab(uid, workspace_name)?;
     let databases = self.build_database_collabs().await?;
     let documents = self.build_document_collabs()?;
     let row_documents = self.build_row_document_collabs()?;

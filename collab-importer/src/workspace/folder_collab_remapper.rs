@@ -1,8 +1,9 @@
 use anyhow::{Result, anyhow};
-use collab::core::collab::default_client_id;
+use collab::core::collab::{CollabOptions, default_client_id};
 use collab::preclude::Collab;
 use collab_folder::{
-  Folder, RepeatedViewIdentifier, View, ViewIdentifier, Workspace, default_folder_data, timestamp,
+  CollabOrigin, Folder, RepeatedViewIdentifier, View, ViewIdentifier, Workspace,
+  default_folder_data, timestamp,
 };
 
 use crate::workspace::entities::WorkspaceRelationMap;
@@ -15,7 +16,6 @@ impl FolderCollabRemapper {
     relation_map: &WorkspaceRelationMap,
     id_mapper: &IdMapper,
     uid: i64,
-    device_id: &str,
     workspace_name: &str,
   ) -> Result<Folder> {
     let new_workspace_id = id_mapper
@@ -89,7 +89,8 @@ impl FolderCollabRemapper {
       last_edited_by: Some(uid),
     };
 
-    let collab = Collab::new(uid, &new_workspace_id, device_id, default_client_id());
+    let options = CollabOptions::new(new_workspace_id.clone(), default_client_id());
+    let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let folder = Folder::create(collab, None, folder_data);
     Ok(folder)
   }

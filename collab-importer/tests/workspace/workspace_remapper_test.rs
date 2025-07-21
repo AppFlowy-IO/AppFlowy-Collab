@@ -12,12 +12,9 @@ async fn test_workspace_remapper_creation() {
     .unwrap();
 
   let uid = 2368123586656;
-  let device_id = "device_id";
   let workspace_name = "workspace_name";
 
-  let folder = remapper
-    .build_folder_collab(uid, device_id, workspace_name)
-    .unwrap();
+  let folder = remapper.build_folder_collab(uid, workspace_name).unwrap();
   let databases = remapper.build_database_collabs().await.unwrap();
   let documents = remapper.build_document_collabs().unwrap();
   let row_documents = remapper.build_row_document_collabs().unwrap();
@@ -40,12 +37,9 @@ async fn test_workspace_remapper_folder_structure() {
     .unwrap();
 
   let uid = 2368123586656;
-  let device_id = "device_id";
   let workspace_name = "workspace_name";
 
-  let folder = remapper
-    .build_folder_collab(uid, device_id, workspace_name)
-    .unwrap();
+  let folder = remapper.build_folder_collab(uid, workspace_name).unwrap();
 
   let workspace_id = folder.get_workspace_id().unwrap();
   let workspace_info = folder.get_workspace_info(&workspace_id, uid).unwrap();
@@ -69,16 +63,10 @@ async fn test_workspace_remapper_all_collabs() {
     .unwrap();
 
   let uid = 2368123586656;
-  let device_id = "device_id";
   let workspace_name = "workspace_name";
 
   let workspace_collabs = remapper
-    .build_all_collabs(
-      uid,
-      device_id,
-      workspace_name,
-      "workspace_database_storage_id",
-    )
+    .build_all_collabs(uid, workspace_name, "workspace_database_storage_id")
     .await
     .unwrap();
 
@@ -106,12 +94,9 @@ async fn test_workspace_remapper_row_document_collabs() {
     .unwrap();
 
   let uid = 2368123586656;
-  let device_id = "device_id";
   let workspace_name = "workspace_name";
 
-  let folder = remapper
-    .build_folder_collab(uid, device_id, workspace_name)
-    .unwrap();
+  let folder = remapper.build_folder_collab(uid, workspace_name).unwrap();
   let databases = remapper.build_database_collabs().await.unwrap();
   let row_documents = remapper.build_row_document_collabs().unwrap();
 
