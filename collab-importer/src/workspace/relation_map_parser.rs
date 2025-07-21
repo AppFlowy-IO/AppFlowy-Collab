@@ -54,7 +54,7 @@ impl RelationMapParser {
         }
       }
 
-      if let Some(collab_metadata) = relation_map.collab_objects.get(view_id) {
+      if let Some(_collab_metadata) = relation_map.collab_objects.get(view_id) {
         // if collab_metadata.object_id != view_metadata.collab_object_id {
         //   return Err(anyhow!(format!(
         //     "view {} collab_object_id mismatch: view references {}, collab_objects has {}",

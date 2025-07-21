@@ -36,7 +36,7 @@ impl IdMapper {
     // dependencies
     for dependency in &relation_map.dependencies {
       let mapped_source_view_id = Self::map_id(&mut id_map, &dependency.source_view_id);
-      let mapped_target_view_id = Self::map_id(&mut id_map, &dependency.target_view_id);
+      let _mapped_target_view_id = Self::map_id(&mut id_map, &dependency.target_view_id);
 
       // if the dependency is database row document, we need to handle it differently
       if dependency.dependency_type == DependencyType::DatabaseRowDocument {

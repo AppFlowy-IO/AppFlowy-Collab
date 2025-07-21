@@ -3,10 +3,14 @@ use collab_importer::workspace::relation_map_parser::RelationMapParser;
 #[tokio::test]
 async fn test_parse_with_valid_relation_map() {
   let parser = RelationMapParser {};
-  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
+  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54")
+    .await
+    .unwrap();
   let test_file_path = unzip_path.join("relation_map.json");
 
-  let result = parser.parse_relation_map(&test_file_path.to_string_lossy()).await;
+  let result = parser
+    .parse_relation_map(&test_file_path.to_string_lossy())
+    .await;
   let relation_map = result.unwrap();
   assert_eq!(
     relation_map.workspace_id,

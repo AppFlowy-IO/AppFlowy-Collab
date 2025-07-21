@@ -18,6 +18,7 @@ use crate::workspace::relation_map_parser::RelationMapParser;
 use crate::workspace::workspace_database_remapper::WorkspaceDatabaseRemapper;
 
 pub struct WorkspaceRemapper {
+  #[allow(dead_code)]
   custom_workspace_id: Option<String>,
   relation_map: WorkspaceRelationMap,
   id_mapping: HashMap<String, String>,
