@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use crate::workspace::database_collab_remapper::DatabaseCollabRemapper;
 use crate::workspace::document_collab_remapper::DocumentCollabRemapper;
-use crate::workspace::entities::WorkspaceRelationMap;
+use crate::workspace::entities::{DependencyType, WorkspaceRelationMap};
 use crate::workspace::folder_collab_remapper::FolderCollabRemapper;
 use crate::workspace::id_mapper::IdMapper;
 use crate::workspace::relation_map_parser::RelationMapParser;
@@ -102,10 +102,7 @@ impl WorkspaceRemapper {
           .join(format!("{}.json", view_id));
 
         if !json_path.exists() {
-          return Err(anyhow!(
-            "database json file not found: {}",
-            json_path.display()
-          ));
+          return Err(anyhow!("database json file not found: {:?}", json_path));
         }
 
         let json_content = fs::read_to_string(&json_path)?;
@@ -123,7 +120,19 @@ impl WorkspaceRemapper {
   pub fn build_document_collabs(&self) -> Result<Vec<Document>> {
     let mut documents = Vec::new();
 
+    let row_document_dependencies = self
+      .relation_map
+      .dependencies
+      .iter()
+      .filter(|d| d.dependency_type == DependencyType::DatabaseRowDocument)
+      .map(|d| d.target_view_id.clone())
+      .collect::<Vec<_>>();
+
     for (view_id, collab_metadata) in &self.relation_map.collab_objects {
+      if row_document_dependencies.contains(view_id) {
+        continue;
+      }
+
       if collab_metadata.collab_type == CollabType::Document {
         let json_path = self
           .workspace_path
@@ -132,10 +141,7 @@ impl WorkspaceRemapper {
           .join(format!("{}.json", view_id));
 
         if !json_path.exists() {
-          return Err(anyhow!(
-            "document json file not found: {}",
-            json_path.display()
-          ));
+          return Err(anyhow!("document json file not found: {:?}", json_path));
         }
 
         let json_content = fs::read_to_string(&json_path)?;
