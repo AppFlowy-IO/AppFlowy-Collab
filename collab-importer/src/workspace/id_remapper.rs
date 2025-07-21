@@ -2,7 +2,6 @@ use serde_json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-/// Common utilities for remapping IDs in JSON structures
 pub struct JsonIdRemapper<'a> {
   id_mapping: &'a HashMap<String, String>,
 }
@@ -12,7 +11,6 @@ impl<'a> JsonIdRemapper<'a> {
     Self { id_mapping }
   }
 
-  /// Recursively remap all IDs in a JSON value
   pub fn remap_json_value(&self, value: &mut serde_json::Value) {
     match value {
       serde_json::Value::Object(map) => {
@@ -36,7 +34,6 @@ impl<'a> JsonIdRemapper<'a> {
     }
   }
 
-  /// Map an old ID to a new ID, or return the old ID if no mapping exists
   pub fn map_id(&self, old_id: &str) -> String {
     self
       .id_mapping
@@ -45,7 +42,6 @@ impl<'a> JsonIdRemapper<'a> {
       .unwrap_or_else(|| old_id.to_string())
   }
 
-  /// Replace all UUID occurrences in a string
   pub fn remap_uuids_in_string(&self, s: &str) -> String {
     let mut result = s.to_string();
 
@@ -59,7 +55,6 @@ impl<'a> JsonIdRemapper<'a> {
   }
 }
 
-/// Check if a string is a valid UUID
 pub fn is_uuid(s: &str) -> bool {
   Uuid::parse_str(s).is_ok()
 }

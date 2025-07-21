@@ -1,4 +1,5 @@
-use crate::workspace::entities::WorkspaceRelationMap;
+use crate::workspace::entities::{DependencyType, WorkspaceRelationMap};
+use collab_database::{database::get_row_document_id, rows::RowId};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -36,6 +37,15 @@ impl IdMapper {
     for dependency in &relation_map.dependencies {
       Self::map_id(&mut id_map, &dependency.source_view_id);
       Self::map_id(&mut id_map, &dependency.target_view_id);
+
+      // if the dependency is database row document, we need to handle it differently
+      if dependency.dependency_type == DependencyType::DatabaseRowDocument {
+        let row_id = RowId::from(dependency.source_view_id.clone());
+        let new_id = get_row_document_id(&row_id);
+        if let Ok(new_id) = new_id {
+          Self::overwrite_id(&mut id_map, &dependency.target_view_id, &new_id);
+        }
+      }
     }
 
     // workspace database meta
@@ -59,5 +69,9 @@ impl IdMapper {
     map
       .entry(old_id.to_string())
       .or_insert_with(|| Uuid::new_v4().to_string());
+  }
+
+  fn overwrite_id(map: &mut HashMap<String, String>, old_id: &str, new_id: &str) {
+    map.insert(old_id.to_string(), new_id.to_string());
   }
 }
