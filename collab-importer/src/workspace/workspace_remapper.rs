@@ -235,4 +235,12 @@ impl WorkspaceRemapper {
       workspace_database,
     })
   }
+
+  pub fn get_id_mapping(&self) -> HashMap<String, String> {
+    self.id_mapping.clone()
+  }
+
+  pub fn get_relation_map(&self) -> WorkspaceRelationMap {
+    self.relation_map.clone()
+  }
 }
