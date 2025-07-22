@@ -36,6 +36,12 @@ impl IdMapper {
     // dependencies
     for dependency in &relation_map.dependencies {
       let mapped_source_view_id = Self::map_id(&mut id_map, &dependency.source_view_id);
+
+      // ignore the file attachment for target view id
+      if dependency.dependency_type == DependencyType::FileAttachment {
+        continue;
+      }
+
       let _mapped_target_view_id = Self::map_id(&mut id_map, &dependency.target_view_id);
 
       // if the dependency is database row document, we need to handle it differently
