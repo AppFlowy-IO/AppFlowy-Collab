@@ -17,17 +17,8 @@ pub struct UnzipFile {
 
 pub fn sync_unzip(
   file_path: PathBuf,
-  out_dir: PathBuf,
-  default_file_name: Option<String>,
-) -> Result<UnzipFile, ImporterError> {
-  sync_unzip_with_options(file_path, out_dir, default_file_name, false)
-}
-
-pub fn sync_unzip_with_options(
-  file_path: PathBuf,
   mut out_dir: PathBuf,
   default_file_name: Option<String>,
-  skip_zip_check: bool,
 ) -> Result<UnzipFile, ImporterError> {
   let file = File::open(file_path)
     .map_err(|e| ImporterError::Internal(anyhow!("Failed to open zip file: {:?}", e)))?;
@@ -63,8 +54,8 @@ pub fn sync_unzip_with_options(
       .map_err(|e| ImporterError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
 
     let filename = entry.name().to_string();
-
-    if !skip_zip_check && entry.is_file() && filename.ends_with(".zip") && i != 0 {
+    // Skip zip files within subdirectories
+    if entry.is_file() && filename.ends_with(".zip") && i != 0 {
       trace!("Skipping zip file: {:?}", filename);
       continue;
     }
