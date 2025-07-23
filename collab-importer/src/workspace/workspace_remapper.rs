@@ -8,6 +8,7 @@ use serde_json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::workspace::database_collab_remapper::DatabaseCollabRemapper;
 use crate::workspace::document_collab_remapper::DocumentCollabRemapper;
@@ -15,6 +16,7 @@ use crate::workspace::entities::{DependencyType, WorkspaceRelationMap};
 use crate::workspace::folder_collab_remapper::FolderCollabRemapper;
 use crate::workspace::id_mapper::IdMapper;
 use crate::workspace::relation_map_parser::RelationMapParser;
+use crate::workspace::space_view_edge_case_handler::SpaceViewEdgeCaseHandler;
 use crate::workspace::workspace_database_remapper::WorkspaceDatabaseRemapper;
 
 pub struct WorkspaceRemapper {
@@ -51,7 +53,7 @@ impl WorkspaceRemapper {
     }
 
     let parser = RelationMapParser {};
-    let relation_map = parser
+    let mut relation_map = parser
       .parse_relation_map(&relation_map_path.to_string_lossy())
       .await
       .map_err(|e| anyhow!("failed to parse relation map: {}", e))?;
@@ -63,6 +65,11 @@ impl WorkspaceRemapper {
         custom_workspace_id.clone(),
       );
     }
+
+    let handler = SpaceViewEdgeCaseHandler::new(Arc::new(id_mapper.clone()), relation_map.workspace_id.clone());
+
+    handler.handle_missing_space_view(&mut relation_map, workspace_path, &mut id_mapper)?;
+
     let id_mapping = id_mapper.id_map.clone();
 
     Ok(Self {

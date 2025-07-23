@@ -1,10 +1,11 @@
 use collab_importer::workspace::id_mapper::IdMapper;
 use collab_importer::workspace::relation_map_parser::RelationMapParser;
 use collab_importer::workspace::workspace_database_remapper::WorkspaceDatabaseRemapper;
+use crate::util::sync_unzip_asset;
 
 #[tokio::test]
 async fn test_workspace_database_remapper() {
-  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-17_16-37-11")
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-17_16-37-11")
     .await
     .unwrap();
   let relation_map_path = unzip_path.join("relation_map.json");

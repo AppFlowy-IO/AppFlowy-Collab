@@ -3,6 +3,7 @@ use collab_database::{database::get_row_document_id, rows::RowId};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct IdMapper {
   pub id_map: HashMap<String, String>,
 }
@@ -69,6 +70,10 @@ impl IdMapper {
 
   pub fn get_new_id(&self, old_id: &str) -> Option<&String> {
     self.id_map.get(old_id)
+  }
+
+  pub fn generate_new_id(&self) -> String {
+    Uuid::new_v4().to_string()
   }
 
   fn map_id(map: &mut HashMap<String, String>, old_id: &str) -> String {

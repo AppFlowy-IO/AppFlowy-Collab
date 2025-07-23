@@ -2,6 +2,7 @@ use collab_folder::{Folder, ViewLayout};
 use collab_importer::workspace::folder_collab_remapper::FolderCollabRemapper;
 use collab_importer::workspace::id_mapper::IdMapper;
 use collab_importer::workspace::relation_map_parser::RelationMapParser;
+use crate::util::sync_unzip_asset;
 
 #[allow(clippy::too_many_arguments)]
 fn verify_view(
@@ -26,7 +27,7 @@ fn verify_view(
 #[tokio::test]
 async fn test_folder_collab_remapper() {
   let parser = RelationMapParser {};
-  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54")
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54")
     .await
     .unwrap();
   let test_file_path = unzip_path.join("relation_map.json");
@@ -113,7 +114,7 @@ async fn test_folder_collab_remapper() {
 #[tokio::test]
 async fn test_folder_hierarchy_structure() {
   let parser = RelationMapParser {};
-  let (_cleaner, unzip_path) = crate::util::sync_unzip_asset("2025-07-16_22-15-54")
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54")
     .await
     .unwrap();
   let test_file_path = unzip_path.join("relation_map.json");
