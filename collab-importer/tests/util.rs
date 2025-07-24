@@ -47,7 +47,6 @@ pub async fn sync_unzip_asset(file_name: &str) -> std::io::Result<(Cleaner, Path
   //   .join(uuid::Uuid::new_v4().to_string());
   tokio::fs::create_dir_all(&output_folder_path).await?;
 
-  let start = std::time::Instant::now();
   let unzip_file_path = tokio::task::spawn_blocking(move || {
     sync_unzip(zip_file_path, output_folder_path.clone(), Some(file_name))
       .unwrap()
@@ -55,8 +54,6 @@ pub async fn sync_unzip_asset(file_name: &str) -> std::io::Result<(Cleaner, Path
   })
   .await
   .unwrap();
-
-  println!("sync_unzip_asset took: {:?}", start.elapsed());
 
   Ok((Cleaner::new(unzip_file_path.clone()), unzip_file_path))
 }

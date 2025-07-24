@@ -213,3 +213,67 @@ fn unzip_single_file(
     }),
   }
 }
+
+// this function will not return parts
+pub fn sync_simple_unzip(
+  zip_path: PathBuf,
+  output_dir: PathBuf,
+  workspace_name: Option<String>,
+) -> Result<UnzipFile, ImporterError> {
+  let file = File::open(&zip_path)
+    .map_err(|e| ImporterError::Internal(anyhow!("Failed to open zip file: {:?}", e)))?;
+
+  let mut archive = ZipArchive::new(file)
+    .map_err(|e| ImporterError::Internal(anyhow!("Failed to read zip archive: {:?}", e)))?;
+
+  let output_dir = if let Some(name) = workspace_name {
+    output_dir.join(name)
+  } else {
+    output_dir.join(format!("workspace_{}", uuid::Uuid::new_v4()))
+  };
+
+  if !output_dir.exists() {
+    std::fs::create_dir_all(&output_dir).map_err(|e| {
+      ImporterError::Internal(anyhow!("Failed to create output directory: {:?}", e))
+    })?;
+  }
+
+  for i in 0..archive.len() {
+    let mut file = archive
+      .by_index(i)
+      .map_err(|e| ImporterError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
+
+    let output_path = match file.enclosed_name() {
+      Some(path) => output_dir.join(path),
+      None => continue,
+    };
+
+    if file.is_dir() {
+      std::fs::create_dir_all(&output_path)
+        .map_err(|e| ImporterError::Internal(anyhow!("Failed to create directory: {:?}", e)))?;
+    } else {
+      if let Some(p) = output_path.parent() {
+        if !p.exists() {
+          std::fs::create_dir_all(p).map_err(|e| {
+            ImporterError::Internal(anyhow!("Failed to create parent directory: {:?}", e))
+          })?;
+        }
+      }
+
+      let mut outfile = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&output_path)
+        .map_err(|e| ImporterError::Internal(anyhow!("Failed to create file: {:?}", e)))?;
+
+      std::io::copy(&mut file, &mut outfile)
+        .map_err(|e| ImporterError::Internal(anyhow!("Failed to extract file: {:?}", e)))?;
+    }
+  }
+
+  Ok(UnzipFile {
+    dir_name: output_dir.to_string_lossy().to_string(),
+    unzip_dir: output_dir,
+    parts: vec![],
+  })
+}

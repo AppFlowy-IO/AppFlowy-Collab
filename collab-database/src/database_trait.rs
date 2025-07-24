@@ -348,6 +348,13 @@ impl NoPersistenceDatabaseCollabService {
       cache: Arc::new(DashMap::new()),
     }
   }
+
+  pub fn new_with_cache(
+    client_id: ClientID,
+    cache: Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>,
+  ) -> Self {
+    Self { client_id, cache }
+  }
 }
 
 #[async_trait]

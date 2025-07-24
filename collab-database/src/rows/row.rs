@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+#[cfg(feature = "verbose_log")]
+use tracing::trace;
 
 use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
@@ -27,7 +29,7 @@ use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use serde::{Deserialize, Serialize};
-use tracing::{error, trace};
+use tracing::error;
 use uuid::Uuid;
 use yrs::block::ClientID;
 
