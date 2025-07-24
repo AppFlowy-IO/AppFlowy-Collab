@@ -338,7 +338,7 @@ async fn build_collab(
 #[derive(Clone)]
 pub struct NoPersistenceDatabaseCollabService {
   pub client_id: ClientID,
-  pub cache: Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>,
+  cache: Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>,
 }
 
 impl NoPersistenceDatabaseCollabService {

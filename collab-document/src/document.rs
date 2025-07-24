@@ -40,8 +40,8 @@ const CHILDREN_MAP: &str = "children_map";
 const TEXT_MAP: &str = "text_map";
 
 pub struct Document {
-  pub collab: Collab,
-  pub body: DocumentBody,
+  collab: Collab,
+  body: DocumentBody,
 }
 
 impl Document {
