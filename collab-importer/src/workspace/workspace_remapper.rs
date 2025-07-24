@@ -66,7 +66,10 @@ impl WorkspaceRemapper {
       );
     }
 
-    let handler = SpaceViewEdgeCaseHandler::new(Arc::new(id_mapper.clone()), relation_map.workspace_id.clone());
+    let handler = SpaceViewEdgeCaseHandler::new(
+      Arc::new(id_mapper.clone()),
+      relation_map.workspace_id.clone(),
+    );
 
     handler.handle_missing_space_view(&mut relation_map, workspace_path, &mut id_mapper)?;
 

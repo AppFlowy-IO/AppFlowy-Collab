@@ -1,12 +1,10 @@
-use collab_importer::workspace::relation_map_parser::RelationMapParser;
 use crate::util::sync_unzip_asset;
+use collab_importer::workspace::relation_map_parser::RelationMapParser;
 
 #[tokio::test]
 async fn test_parse_with_valid_relation_map() {
   let parser = RelationMapParser {};
-  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54")
-    .await
-    .unwrap();
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
   let test_file_path = unzip_path.join("relation_map.json");
 
   let result = parser

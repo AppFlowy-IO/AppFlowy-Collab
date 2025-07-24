@@ -1,13 +1,11 @@
+use crate::util::sync_unzip_asset;
 use collab_importer::workspace::document_collab_remapper::DocumentCollabRemapper;
 use collab_importer::workspace::id_mapper::IdMapper;
 use collab_importer::workspace::relation_map_parser::RelationMapParser;
-use crate::util::sync_unzip_asset;
 
 #[tokio::test]
 async fn test_parse_real_document_json() {
-  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54")
-    .await
-    .unwrap();
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
   let json_path =
     unzip_path.join("collab_jsons/documents/b8f96497-c880-4fea-8232-c31d57daab83.json");
   let json_content = std::fs::read_to_string(&json_path).unwrap();

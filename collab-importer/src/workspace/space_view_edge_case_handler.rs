@@ -1,8 +1,10 @@
 use crate::workspace::entities::{ViewMetadata, WorkspaceRelationMap};
 use crate::workspace::id_mapper::IdMapper;
 use anyhow::Result;
-use collab_folder::{IconType, ViewIcon, ViewLayout};
+use collab_database::database::timestamp;
+use collab_folder::ViewLayout;
 use serde_json;
+use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -30,15 +32,13 @@ impl SpaceViewEdgeCaseHandler {
     }
 
     let space_view_id = self.id_mapper.generate_new_id();
-    
-    id_mapper.id_map.insert(space_view_id.clone(), space_view_id.clone());
-
     let space_view = self.create_default_space_view(&space_view_id)?;
-
-    self.reparent_workspace_views(relation_map, &space_view_id)?;
-
     relation_map.views.insert(space_view_id.clone(), space_view);
 
+    id_mapper
+      .id_map
+      .insert(space_view_id.clone(), space_view_id.clone());
+    self.reparent_workspace_views(relation_map, &space_view_id)?;
     self.generate_space_document(&space_view_id, export_path)?;
 
     Ok(Some(space_view_id))
@@ -60,20 +60,15 @@ impl SpaceViewEdgeCaseHandler {
   }
 
   fn create_default_space_view(&self, space_view_id: &str) -> Result<ViewMetadata> {
-    let current_time = chrono::Utc::now().timestamp();
+    let current_time = timestamp();
 
     let space_info = serde_json::json!({
         "is_space": true,
         "space_permission": 0,
         "space_created_at": current_time,
-        "space_icon": "interface_essential/star-2",
-        "space_icon_color": "0xFFFFBA00"
+        "space_icon": "interface_essential/home-3",
+        "space_icon_color": "0xFFA34AFD"
     });
-
-    let icon = ViewIcon {
-      ty: IconType::Emoji,
-      value: "⭐".to_string(),
-    };
 
     let space_view = ViewMetadata {
       view_id: space_view_id.to_string(),
@@ -85,7 +80,7 @@ impl SpaceViewEdgeCaseHandler {
       created_at: current_time,
       updated_at: current_time,
       extra: Some(space_info.to_string()),
-      icon: Some(icon),
+      icon: None,
     };
 
     Ok(space_view)
@@ -117,7 +112,7 @@ impl SpaceViewEdgeCaseHandler {
 
   fn generate_space_document(&self, space_view_id: &str, export_path: &Path) -> Result<()> {
     let documents_dir = export_path.join("collab_jsons").join("documents");
-    std::fs::create_dir_all(&documents_dir)?;
+    fs::create_dir_all(&documents_dir)?;
 
     let document_path = documents_dir.join(format!("{}.json", space_view_id));
 
@@ -132,7 +127,7 @@ impl SpaceViewEdgeCaseHandler {
         }
     });
 
-    std::fs::write(
+    fs::write(
       &document_path,
       serde_json::to_string_pretty(&document_content)?,
     )?;

@@ -1,13 +1,11 @@
+use crate::util::sync_unzip_asset;
 use collab_importer::workspace::id_mapper::IdMapper;
 use collab_importer::workspace::relation_map_parser::RelationMapParser;
-use crate::util::sync_unzip_asset;
 use std::collections::HashSet;
 
 #[tokio::test]
 async fn test_id_mapper() {
-  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54")
-    .await
-    .unwrap();
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
   let path = unzip_path.join("relation_map.json");
   let parser = RelationMapParser {};
   let relation_map = parser

@@ -1,11 +1,9 @@
-use collab_importer::workspace::WorkspaceRemapper;
 use crate::util::sync_unzip_asset;
+use collab_importer::workspace::WorkspaceRemapper;
 
 #[tokio::test]
 async fn test_workspace_remapper_creation() {
-  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54")
-    .await
-    .unwrap();
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
   let test_assets_path = unzip_path;
 
   let remapper = WorkspaceRemapper::new(test_assets_path.as_ref(), None)
@@ -28,9 +26,7 @@ async fn test_workspace_remapper_creation() {
 
 #[tokio::test]
 async fn test_workspace_remapper_folder_structure() {
-  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54")
-    .await
-    .unwrap();
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
   let test_assets_path = unzip_path;
 
   let remapper = WorkspaceRemapper::new(test_assets_path.as_ref(), None)
@@ -54,9 +50,7 @@ async fn test_workspace_remapper_folder_structure() {
 
 #[tokio::test]
 async fn test_workspace_remapper_all_collabs() {
-  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54")
-    .await
-    .unwrap();
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-16_22-15-54").await.unwrap();
   let test_assets_path = unzip_path;
 
   let remapper = WorkspaceRemapper::new(test_assets_path.as_ref(), None)
@@ -85,9 +79,7 @@ async fn test_workspace_remapper_all_collabs() {
 
 #[tokio::test]
 async fn test_workspace_remapper_row_document_collabs() {
-  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-18_15-31-18")
-    .await
-    .unwrap();
+  let (_cleaner, unzip_path) = sync_unzip_asset("2025-07-18_15-31-18").await.unwrap();
   let test_assets_path = unzip_path;
 
   let remapper = WorkspaceRemapper::new(test_assets_path.as_ref(), None)
