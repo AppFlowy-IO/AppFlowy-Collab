@@ -270,18 +270,6 @@ impl Folder {
     move_favorite_view_id
   );
 
-  // Recent
-  impl_section_op!(
-    Section::Recent,
-    set_recent,
-    add_recent_view_ids,
-    delete_recent_view_ids,
-    get_my_recent_sections,
-    get_all_recent_sections,
-    remove_all_my_recent_sections,
-    move_recent_view_id
-  );
-
   // Trash
   impl_section_op!(
     Section::Trash,
