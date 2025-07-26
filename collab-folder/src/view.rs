@@ -660,28 +660,6 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     }
   }
 
-  /// Add or remove the view_id from the recent section.
-  ///
-  /// If the view is in the recent section, it's timestamp will be updated.
-  pub fn set_recent(self, add_in_recent: bool) -> Self {
-    if let Some(recent_section) =
-      self
-        .section_map
-        .section_op(self.txn, Section::Recent, self.uid.as_i64())
-    {
-      // try to remove the section, if the section is not found, it will be ignored.
-      recent_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
-
-      // add the section if add_in_recent is true since we have removed the section before.
-      if add_in_recent {
-        recent_section
-          .add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
-      }
-    }
-
-    self
-  }
-
   pub fn set_trash(self, is_trash: bool) -> Self {
     if let Some(trash_section) =
       self
