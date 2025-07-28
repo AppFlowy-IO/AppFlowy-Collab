@@ -1326,6 +1326,7 @@ impl Database {
       row_position: OrderObjectPosition::After(row.id.into()),
       created_at: timestamp,
       modified_at: timestamp,
+      row_meta: None,
     })
   }
 
@@ -1375,11 +1376,19 @@ impl Database {
       .collect()
       .await;
 
+    let mut row_metas = HashMap::new();
+    for row in &rows {
+      if let Some(row_meta) = self.get_row_meta(&row.id).await {
+        row_metas.insert(row.id.clone(), row_meta);
+      }
+    }
+
     DatabaseData {
       database_id,
       fields,
       rows,
       views,
+      row_metas,
     }
   }
 
@@ -1550,6 +1559,8 @@ pub struct DatabaseData {
   pub views: Vec<DatabaseView>,
   pub fields: Vec<Field>,
   pub rows: Vec<Row>,
+  #[serde(default)]
+  pub row_metas: HashMap<RowId, RowMeta>,
 }
 
 impl DatabaseData {
