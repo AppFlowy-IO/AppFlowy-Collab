@@ -118,15 +118,21 @@ impl DatabaseCollabRemapper {
     let create_row_params = data
       .rows
       .into_iter()
-      .map(|row| CreateRowParams {
-        id: row.id,
-        database_id: database_id.clone(),
-        created_at: timestamp,
-        modified_at: timestamp,
-        cells: row.cells,
-        height: row.height,
-        visibility: row.visibility,
-        row_position: OrderObjectPosition::End,
+      .map(|row| {
+        let row_id = row.id.clone();
+        let row_meta = data.row_metas.get(&row_id).cloned();
+
+        CreateRowParams {
+          id: row.id,
+          database_id: database_id.clone(),
+          created_at: timestamp,
+          modified_at: timestamp,
+          cells: row.cells,
+          height: row.height,
+          visibility: row.visibility,
+          row_position: OrderObjectPosition::End,
+          row_meta,
+        }
       })
       .collect();
 
@@ -163,15 +169,21 @@ impl DatabaseCollabRemapper {
     let create_row_params = data
       .rows
       .into_iter()
-      .map(|row| CreateRowParams {
-        id: row.id,
-        database_id: data.database_id.clone(),
-        created_at: timestamp,
-        modified_at: timestamp,
-        cells: row.cells,
-        height: row.height,
-        visibility: row.visibility,
-        row_position: OrderObjectPosition::End,
+      .map(|row| {
+        let row_id = row.id.clone();
+        let row_metas = data.row_metas.get(&row_id).cloned();
+
+        CreateRowParams {
+          id: row.id,
+          database_id: data.database_id.clone(),
+          created_at: timestamp,
+          modified_at: timestamp,
+          cells: row.cells,
+          height: row.height,
+          visibility: row.visibility,
+          row_position: OrderObjectPosition::End,
+          row_meta: row_metas,
+        }
       })
       .collect();
 

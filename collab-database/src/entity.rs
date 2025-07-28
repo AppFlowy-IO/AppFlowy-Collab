@@ -233,6 +233,7 @@ impl CreateDatabaseParams {
         height: row.height,
         visibility: row.visibility,
         row_position: OrderObjectPosition::End,
+        row_meta: None,
       })
       .collect();
 
