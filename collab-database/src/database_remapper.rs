@@ -171,8 +171,7 @@ impl DatabaseCollabRemapper {
       .into_iter()
       .map(|row| {
         let row_id = row.id.clone();
-        let row_metas = data.row_metas.get(&row_id).cloned();
-
+        let row_meta = data.row_metas.get(&row_id).cloned();
         CreateRowParams {
           id: row.id,
           database_id: data.database_id.clone(),
@@ -182,7 +181,7 @@ impl DatabaseCollabRemapper {
           height: row.height,
           visibility: row.visibility,
           row_position: OrderObjectPosition::End,
-          row_meta: row_metas,
+          row_meta,
         }
       })
       .collect();

@@ -112,14 +112,14 @@ impl Block {
       )
       .await?;
 
-    if let Some(row_metas) = params.row_meta {
+    if let Some(row_meta) = params.row_meta {
       let mut write_guard = database_row.write().await;
       write_guard.update_meta(|update| {
         update
-          .insert_icon_if_not_none(row_metas.icon_url)
-          .insert_cover_if_not_none(row_metas.cover)
-          .update_is_document_empty_if_not_none(Some(row_metas.is_document_empty))
-          .update_attachment_count_if_not_none(Some(row_metas.attachment_count));
+          .insert_icon_if_not_none(row_meta.icon_url)
+          .insert_cover_if_not_none(row_meta.cover)
+          .update_is_document_empty_if_not_none(Some(row_meta.is_document_empty))
+          .update_attachment_count_if_not_none(Some(row_meta.attachment_count));
       });
     }
 
