@@ -224,16 +224,19 @@ impl CreateDatabaseParams {
     let create_row_params = data
       .rows
       .into_iter()
-      .map(|row| CreateRowParams {
-        id: gen_row_id(),
-        database_id: database_id.clone(),
-        created_at: timestamp,
-        modified_at: timestamp,
-        cells: row.cells,
-        height: row.height,
-        visibility: row.visibility,
-        row_position: OrderObjectPosition::End,
-        row_meta: None,
+      .map(|row| {
+        let row_meta = data.row_metas.get(&row.id).cloned();
+        CreateRowParams {
+          id: gen_row_id(),
+          database_id: database_id.clone(),
+          created_at: timestamp,
+          modified_at: timestamp,
+          cells: row.cells,
+          height: row.height,
+          visibility: row.visibility,
+          row_position: OrderObjectPosition::End,
+          row_meta,
+        }
       })
       .collect();
 
