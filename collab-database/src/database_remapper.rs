@@ -12,7 +12,7 @@ use crate::database::{
 use crate::database_trait::NoPersistenceDatabaseCollabService;
 use crate::entity::{CreateDatabaseParams, CreateViewParams, DatabaseView};
 use crate::error::DatabaseError;
-use crate::rows::{CreateRowParams, Row, RowId};
+use crate::rows::{CreateRowParams, Row, RowId, RowMeta};
 use crate::views::{OrderObjectPosition, RowOrder};
 use collab_entity::CollabType;
 
@@ -72,7 +72,7 @@ impl DatabaseCollabRemapper {
       body: database_body,
       collab_service,
     };
-    let database_data = database.get_database_data(20, false).await;
+    let database_data = database.get_database_data(20, true).await;
     Ok(database_data)
   }
 
@@ -223,6 +223,7 @@ impl DatabaseCollabRemapper {
     }
     database_data.views = self.remap_database_views(database_data.views);
     database_data.rows = self.remap_database_rows(database_data.rows);
+    database_data.row_metas = self.remap_row_metas(database_data.row_metas);
 
     Ok(database_data)
   }
@@ -274,6 +275,20 @@ impl DatabaseCollabRemapper {
           row_order.id = RowId::from(new_row_id.clone());
         }
         row_order
+      })
+      .collect()
+  }
+
+  fn remap_row_metas(&self, row_metas: HashMap<RowId, RowMeta>) -> HashMap<RowId, RowMeta> {
+    row_metas
+      .into_iter()
+      .map(|(row_id, row_meta)| {
+        let new_row_id = if let Some(new_id) = self.id_mapping.get(&row_id.to_string()) {
+          RowId::from(new_id.clone())
+        } else {
+          row_id
+        };
+        (new_row_id, row_meta)
       })
       .collect()
   }
