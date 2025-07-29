@@ -732,8 +732,8 @@ impl CreateRowParams {
     self
   }
 
-  pub fn with_meta(mut self, row_metas: RowMeta) -> Self {
-    self.row_meta = Some(row_metas);
+  pub fn with_row_meta(mut self, row_meta: Option<RowMeta>) -> Self {
+    self.row_meta = row_meta;
     self
   }
 }

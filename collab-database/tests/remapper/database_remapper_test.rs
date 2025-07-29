@@ -167,10 +167,10 @@ async fn test_database_remapper_with_row_meta() {
   let remapped_row_id = RowId::from("22222222-2222-2222-2222-222222222222".to_string());
   let remapped_meta = remapped_data.row_metas.get(&remapped_row_id).unwrap();
 
-  assert_eq!(remapped_meta.icon_url, Some("🥀".to_string()),);
-  assert!(remapped_meta.cover.is_some(),);
-  assert_eq!(remapped_meta.is_document_empty, false,);
+  assert_eq!(remapped_meta.icon_url, Some("🥀".to_string()));
+  assert!(remapped_meta.cover.is_some());
+  assert!(!remapped_meta.is_document_empty);
 
   let old_row_id = RowId::from("be970ba6-9576-4e5f-a15d-c9a04d589a57".to_string());
-  assert!(remapped_data.row_metas.get(&old_row_id).is_none(),);
+  assert!(!remapped_data.row_metas.contains_key(&old_row_id));
 }

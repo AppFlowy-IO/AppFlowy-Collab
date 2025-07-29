@@ -156,7 +156,7 @@ async fn test_workspace_remapper_with_row_meta() {
     assert!(!row_meta_ids.contains(*original_id));
   }
 
-  for (row_meta_id, _row_meta) in &database_data.row_metas {
+  for row_meta_id in database_data.row_metas.keys() {
     let row_exists = database_data.rows.iter().any(|row| row.id == *row_meta_id);
     assert!(row_exists);
   }
