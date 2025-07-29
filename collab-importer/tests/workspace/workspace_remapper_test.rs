@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::util::sync_unzip_asset;
 use collab_importer::workspace::WorkspaceRemapper;
 
@@ -102,4 +104,47 @@ async fn test_workspace_remapper_row_document_collabs() {
 
   let original_row_doc_id = "3edeba80-8862-54b6-bf1b-8d868dad3e0c";
   assert_ne!(row_document.object_id(), original_row_doc_id);
+}
+
+#[tokio::test]
+async fn test_workspace_remapper_with_row_meta() {
+  let (_cleaner, unzip_path) = sync_unzip_asset("VWspace_2025-07-29_15-58-31")
+    .await
+    .unwrap();
+  let test_assets_path = unzip_path;
+
+  let remapper = WorkspaceRemapper::new(test_assets_path.as_ref(), None)
+    .await
+    .unwrap();
+
+  let databases = remapper.build_database_collabs().await.unwrap();
+
+  assert_eq!(databases.len(), 1);
+
+  let database = &databases[0];
+  let database_data = database.get_database_data(20, true).await;
+
+  assert_eq!(database_data.row_metas.len(), 4);
+  assert_eq!(database_data.rows.len(), 4);
+
+  for row in &database_data.rows {
+    assert!(database_data.row_metas.contains_key(&row.id));
+  }
+
+  let original_row_ids = vec![
+    "dce14a70-6574-4205-8f10-6f72aca8aa78",
+    "4a8b1b48-6843-4bbc-afb0-0fb88e34cb14",
+    "b2463ce4-d95f-43a1-98ca-7be711a6b8e0",
+    "e76cccd6-c7e4-4ac7-8bd2-6165dad6b1b2",
+  ];
+
+  let remapped_row_ids = database_data
+    .row_metas
+    .keys()
+    .map(|row_id| row_id.to_string())
+    .collect::<HashSet<_>>();
+
+  for original_id in &original_row_ids {
+    assert!(!remapped_row_ids.contains(*original_id));
+  }
 }
