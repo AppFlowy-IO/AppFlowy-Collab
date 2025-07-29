@@ -1,6 +1,7 @@
 mod child_views_test;
 mod custom_section;
 mod favorite_test;
+mod folder_hierarchy_test;
 mod load_disk;
 // mod recent_views_test;
 mod serde_test;

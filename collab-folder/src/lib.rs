@@ -1,5 +1,6 @@
 pub use entities::*;
 pub use folder::*;
+pub use folder_hierarchy::*;
 pub use folder_migration::*;
 pub use folder_observe::*;
 pub use relation::*;
@@ -11,6 +12,7 @@ pub use workspace::*;
 
 mod entities;
 mod folder;
+mod folder_hierarchy;
 mod relation;
 mod section;
 // mod trash;
