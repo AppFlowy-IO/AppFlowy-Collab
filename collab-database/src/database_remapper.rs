@@ -119,8 +119,7 @@ impl DatabaseCollabRemapper {
       .rows
       .into_iter()
       .map(|row| {
-        let row_id = row.id.clone();
-        let row_meta = data.row_metas.get(&row_id).cloned();
+        let row_meta = data.row_metas.get(&row.id).cloned();
 
         CreateRowParams {
           id: row.id,
@@ -170,8 +169,7 @@ impl DatabaseCollabRemapper {
       .rows
       .into_iter()
       .map(|row| {
-        let row_id = row.id.clone();
-        let row_meta = data.row_metas.get(&row_id).cloned();
+        let row_meta = data.row_metas.get(&row.id).cloned();
         CreateRowParams {
           id: row.id,
           database_id: data.database_id.clone(),
@@ -282,11 +280,10 @@ impl DatabaseCollabRemapper {
     row_metas
       .into_iter()
       .map(|(row_id, row_meta)| {
-        let new_row_id = if let Some(new_id) = self.id_mapping.get(&row_id.to_string()) {
-          RowId::from(new_id.clone())
-        } else {
-          row_id
-        };
+        let new_row_id = self
+          .id_mapping
+          .get(row_id.as_str())
+          .map_or(row_id.clone(), RowId::from);
         (new_row_id, row_meta)
       })
       .collect()

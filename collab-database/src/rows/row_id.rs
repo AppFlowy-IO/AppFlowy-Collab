@@ -68,6 +68,12 @@ impl From<&str> for RowId {
   }
 }
 
+impl From<&String> for RowId {
+  fn from(data: &String) -> Self {
+    Self(data.to_string())
+  }
+}
+
 impl AsRef<str> for RowId {
   fn as_ref(&self) -> &str {
     &self.0

@@ -1376,7 +1376,7 @@ impl Database {
       .collect()
       .await;
 
-    let mut row_metas = HashMap::new();
+    let mut row_metas = HashMap::with_capacity(rows.len());
     for row in &rows {
       if let Some(row_meta) = self.get_row_meta(&row.id).await {
         row_metas.insert(row.id.clone(), row_meta);
