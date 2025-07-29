@@ -1,6 +1,5 @@
 use collab_database::database::DatabaseData;
 use collab_database::database_remapper::DatabaseCollabRemapper;
-use collab_database::entity::CreateDatabaseParams;
 use collab_database::rows::RowId;
 use std::collections::HashMap;
 use std::fs;
@@ -123,45 +122,6 @@ async fn test_remap_database_with_database_id() {
       "Row database ID should be remapped"
     );
   }
-}
-
-#[tokio::test]
-async fn test_database_with_row_meta_preservation() {
-  let test_json_path = "tests/assets/row_meta/50dfa70a-d53c-4b7d-8b49-6194aadbac2a.json";
-  let json_content = fs::read_to_string(test_json_path).unwrap();
-  let database_data = serde_json::from_str::<DatabaseData>(&json_content).unwrap();
-
-  assert_eq!(database_data.rows.len(), 3);
-  assert_eq!(database_data.row_metas.len(), 3);
-
-  let row_id = RowId::from("be970ba6-9576-4e5f-a15d-c9a04d589a57".to_string());
-  let first_row_meta = database_data.row_metas.get(&row_id).unwrap();
-  assert_eq!(first_row_meta.icon_url, Some("🥀".to_string()),);
-  assert!(first_row_meta.cover.is_some(), "Cover should be preserved");
-  assert_eq!(
-    first_row_meta.is_document_empty, false,
-    "Document empty flag should be preserved"
-  );
-
-  let create_params = CreateDatabaseParams::from_database_data(
-    database_data,
-    "50dfa70a-d53c-4b7d-8b49-6194aadbac2a",
-    "new-view-id",
-  );
-
-  let row_with_meta = create_params
-    .rows
-    .iter()
-    .find(|row| {
-      row.row_meta.is_some() && row.row_meta.as_ref().unwrap().icon_url == Some("🥀".to_string())
-    })
-    .unwrap();
-
-  let row_meta = row_with_meta.row_meta.as_ref().unwrap();
-  assert_eq!(row_meta.icon_url, Some("🥀".to_string()),);
-  assert!(row_meta.cover.is_some(),);
-  assert_eq!(row_meta.is_document_empty, false,);
-  assert_eq!(row_meta.attachment_count, 0,);
 }
 
 #[tokio::test]

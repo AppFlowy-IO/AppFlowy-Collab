@@ -116,7 +116,6 @@ async fn test_workspace_remapper_with_row_meta() {
   let remapper = WorkspaceRemapper::new(test_assets_path.as_ref(), None)
     .await
     .unwrap();
-
   let databases = remapper.build_database_collabs().await.unwrap();
 
   assert_eq!(databases.len(), 1);
@@ -131,6 +130,20 @@ async fn test_workspace_remapper_with_row_meta() {
     assert!(database_data.row_metas.contains_key(&row.id));
   }
 
+  let row_ids = database_data
+    .rows
+    .iter()
+    .map(|row| row.id.to_string())
+    .collect::<HashSet<_>>();
+
+  let row_meta_ids = database_data
+    .row_metas
+    .keys()
+    .map(|row_id| row_id.to_string())
+    .collect::<HashSet<_>>();
+
+  assert_eq!(row_ids, row_meta_ids);
+
   let original_row_ids = vec![
     "dce14a70-6574-4205-8f10-6f72aca8aa78",
     "4a8b1b48-6843-4bbc-afb0-0fb88e34cb14",
@@ -138,13 +151,13 @@ async fn test_workspace_remapper_with_row_meta() {
     "e76cccd6-c7e4-4ac7-8bd2-6165dad6b1b2",
   ];
 
-  let remapped_row_ids = database_data
-    .row_metas
-    .keys()
-    .map(|row_id| row_id.to_string())
-    .collect::<HashSet<_>>();
-
   for original_id in &original_row_ids {
-    assert!(!remapped_row_ids.contains(*original_id));
+    assert!(!row_ids.contains(*original_id));
+    assert!(!row_meta_ids.contains(*original_id));
+  }
+
+  for (row_meta_id, _row_meta) in &database_data.row_metas {
+    let row_exists = database_data.rows.iter().any(|row| row.id == *row_meta_id);
+    assert!(row_exists);
   }
 }

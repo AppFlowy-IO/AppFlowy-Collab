@@ -1,4 +1,4 @@
-use serde_json;
+use serde_json::{self, Map, Value};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -11,20 +11,22 @@ impl<'a> JsonIdRemapper<'a> {
     Self { id_mapping }
   }
 
-  pub fn remap_json_value(&self, value: &mut serde_json::Value) {
+  pub fn remap_json_value(&self, value: &mut Value) {
     match value {
-      serde_json::Value::Object(map) => {
+      Value::Object(map) => {
+        self.remap_json_keys(map);
+
         for (_key, val) in map.iter_mut() {
           self.remap_json_value(val);
         }
       },
-      serde_json::Value::Array(arr) => {
+      Value::Array(arr) => {
         for item in arr.iter_mut() {
           self.remap_json_value(item);
         }
       },
-      serde_json::Value::String(s) => {
-        if is_uuid(s) {
+      Value::String(s) => {
+        if Self::is_uuid(s) {
           *s = self.map_id(s);
         } else {
           *s = self.remap_uuids_in_string(s);
@@ -53,8 +55,26 @@ impl<'a> JsonIdRemapper<'a> {
 
     result
   }
-}
 
-pub fn is_uuid(s: &str) -> bool {
-  Uuid::parse_str(s).is_ok()
+  pub fn remap_json_keys(&self, map: &mut Map<String, Value>) {
+    let mut remap_pairs = Vec::with_capacity(map.len());
+    for key in map.keys() {
+      if Self::is_uuid(key) {
+        let new_key = self.map_id(key);
+        if new_key != *key {
+          remap_pairs.push((key.clone(), new_key));
+        }
+      }
+    }
+
+    for (old_key, new_key) in remap_pairs {
+      if let Some(value) = map.remove(&old_key) {
+        map.insert(new_key, value);
+      }
+    }
+  }
+
+  fn is_uuid(s: &str) -> bool {
+    Uuid::parse_str(s).is_ok()
+  }
 }
