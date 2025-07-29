@@ -674,6 +674,7 @@ pub struct CreateRowParams {
   pub created_at: i64,
   #[serde(rename = "last_modified")]
   pub modified_at: i64,
+  pub row_meta: Option<RowMeta>,
 }
 
 pub(crate) struct CreateRowParamsValidator;
@@ -708,6 +709,7 @@ impl CreateRowParams {
       row_position: OrderObjectPosition::default(),
       created_at: timestamp,
       modified_at: timestamp,
+      row_meta: None,
     }
   }
 
@@ -727,6 +729,11 @@ impl CreateRowParams {
   }
   pub fn with_row_position(mut self, row_position: OrderObjectPosition) -> Self {
     self.row_position = row_position;
+    self
+  }
+
+  pub fn with_row_meta(mut self, row_meta: Option<RowMeta>) -> Self {
+    self.row_meta = row_meta;
     self
   }
 }

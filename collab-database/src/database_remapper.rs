@@ -12,7 +12,7 @@ use crate::database::{
 use crate::database_trait::NoPersistenceDatabaseCollabService;
 use crate::entity::{CreateDatabaseParams, CreateViewParams, DatabaseView};
 use crate::error::DatabaseError;
-use crate::rows::{CreateRowParams, Row, RowId};
+use crate::rows::{CreateRowParams, Row, RowId, RowMeta};
 use crate::views::{OrderObjectPosition, RowOrder};
 use collab_entity::CollabType;
 
@@ -118,15 +118,20 @@ impl DatabaseCollabRemapper {
     let create_row_params = data
       .rows
       .into_iter()
-      .map(|row| CreateRowParams {
-        id: row.id,
-        database_id: database_id.clone(),
-        created_at: timestamp,
-        modified_at: timestamp,
-        cells: row.cells,
-        height: row.height,
-        visibility: row.visibility,
-        row_position: OrderObjectPosition::End,
+      .map(|row| {
+        let row_meta = data.row_metas.get(&row.id).cloned();
+
+        CreateRowParams {
+          id: row.id,
+          database_id: database_id.clone(),
+          created_at: timestamp,
+          modified_at: timestamp,
+          cells: row.cells,
+          height: row.height,
+          visibility: row.visibility,
+          row_position: OrderObjectPosition::End,
+          row_meta,
+        }
       })
       .collect();
 
@@ -163,15 +168,19 @@ impl DatabaseCollabRemapper {
     let create_row_params = data
       .rows
       .into_iter()
-      .map(|row| CreateRowParams {
-        id: row.id,
-        database_id: data.database_id.clone(),
-        created_at: timestamp,
-        modified_at: timestamp,
-        cells: row.cells,
-        height: row.height,
-        visibility: row.visibility,
-        row_position: OrderObjectPosition::End,
+      .map(|row| {
+        let row_meta = data.row_metas.get(&row.id).cloned();
+        CreateRowParams {
+          id: row.id,
+          database_id: data.database_id.clone(),
+          created_at: timestamp,
+          modified_at: timestamp,
+          cells: row.cells,
+          height: row.height,
+          visibility: row.visibility,
+          row_position: OrderObjectPosition::End,
+          row_meta,
+        }
       })
       .collect();
 
@@ -211,6 +220,7 @@ impl DatabaseCollabRemapper {
     }
     database_data.views = self.remap_database_views(database_data.views);
     database_data.rows = self.remap_database_rows(database_data.rows);
+    database_data.row_metas = self.remap_row_metas(database_data.row_metas);
 
     Ok(database_data)
   }
@@ -262,6 +272,19 @@ impl DatabaseCollabRemapper {
           row_order.id = RowId::from(new_row_id.clone());
         }
         row_order
+      })
+      .collect()
+  }
+
+  fn remap_row_metas(&self, row_metas: HashMap<RowId, RowMeta>) -> HashMap<RowId, RowMeta> {
+    row_metas
+      .into_iter()
+      .map(|(row_id, row_meta)| {
+        let new_row_id = self
+          .id_mapping
+          .get(row_id.as_str())
+          .map_or(row_id.clone(), RowId::from);
+        (new_row_id, row_meta)
       })
       .collect()
   }

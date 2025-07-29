@@ -1,7 +1,7 @@
 use crate::error::DatabaseError;
 use crate::rows::{
-  Cell, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate,
-  RowUpdate, meta_id_from_row_id,
+  Cell, CreateRowParams, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta, RowMetaKey,
+  RowMetaUpdate, RowUpdate, meta_id_from_row_id,
 };
 use crate::views::RowOrder;
 
@@ -78,7 +78,7 @@ impl Block {
 
   pub async fn create_rows<T>(&self, rows: Vec<T>, client_id: ClientID) -> Vec<RowOrder>
   where
-    T: Into<Row> + Send,
+    T: Into<CreateRowParams> + Send,
   {
     let mut row_orders = Vec::with_capacity(rows.len());
     for row in rows {
@@ -89,12 +89,13 @@ impl Block {
     row_orders
   }
 
-  pub async fn create_new_row<T: Into<Row>>(
+  pub async fn create_new_row<T: Into<CreateRowParams>>(
     &self,
-    row: T,
+    row_params: T,
     _client_id: ClientID,
   ) -> Result<RowOrder, DatabaseError> {
-    let row = row.into();
+    let params = row_params.into();
+    let row: Row = params.clone().into();
     let row_id = row.id.clone();
     let row_order = RowOrder {
       id: row.id.clone(),
@@ -102,7 +103,7 @@ impl Block {
     };
 
     trace!("creating new database row: {}", row_id);
-    let _ = self
+    let database_row = self
       .collab_service
       .create_arc_database_row(
         &row_id,
@@ -110,6 +111,17 @@ impl Block {
         self.row_change_tx.clone(),
       )
       .await?;
+
+    if let Some(row_meta) = params.row_meta {
+      let mut write_guard = database_row.write().await;
+      write_guard.update_meta(|update| {
+        update
+          .insert_icon_if_not_none(row_meta.icon_url)
+          .insert_cover_if_not_none(row_meta.cover)
+          .update_is_document_empty_if_not_none(Some(row_meta.is_document_empty))
+          .update_attachment_count_if_not_none(Some(row_meta.attachment_count));
+      });
+    }
 
     trace!("created new database row: {}", row_id);
     Ok(row_order)

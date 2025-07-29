@@ -1,4 +1,6 @@
+use collab_database::database::DatabaseData;
 use collab_database::database_remapper::DatabaseCollabRemapper;
+use collab_database::rows::RowId;
 use std::collections::HashMap;
 use std::fs;
 
@@ -120,4 +122,55 @@ async fn test_remap_database_with_database_id() {
       "Row database ID should be remapped"
     );
   }
+}
+
+#[tokio::test]
+async fn test_database_remapper_with_row_meta() {
+  let test_json_path = "tests/assets/row_meta/50dfa70a-d53c-4b7d-8b49-6194aadbac2a.json";
+  let json_content = fs::read_to_string(test_json_path).unwrap();
+  let database_data = serde_json::from_str::<DatabaseData>(&json_content).unwrap();
+
+  let mut id_mapping: HashMap<String, String> = HashMap::new();
+  // database id
+  id_mapping.insert(
+    "17bf4626-c209-4b88-948d-be2ee423c6dd".to_string(),
+    "00000000-0000-0000-0000-000000000000".to_string(),
+  );
+  // view id
+  id_mapping.insert(
+    "50dfa70a-d53c-4b7d-8b49-6194aadbac2a".to_string(),
+    "11111111-1111-1111-1111-111111111111".to_string(),
+  );
+  // row ids
+  id_mapping.insert(
+    "be970ba6-9576-4e5f-a15d-c9a04d589a57".to_string(),
+    "22222222-2222-2222-2222-222222222222".to_string(),
+  );
+  id_mapping.insert(
+    "7f7a7058-2bf9-4bce-ba17-0bfa3255462b".to_string(),
+    "33333333-3333-3333-3333-333333333333".to_string(),
+  );
+  id_mapping.insert(
+    "cd4b8daa-868b-4a7e-ba17-03ccb93be3d2".to_string(),
+    "44444444-4444-4444-4444-444444444444".to_string(),
+  );
+
+  let remapper = DatabaseCollabRemapper::new(id_mapping);
+  let remapped_data = remapper.remap_database_data(database_data).unwrap();
+  assert_eq!(remapped_data.rows.len(), 3);
+  assert_eq!(
+    remapped_data.database_id,
+    "00000000-0000-0000-0000-000000000000"
+  );
+  assert_eq!(remapped_data.row_metas.len(), 3);
+
+  let remapped_row_id = RowId::from("22222222-2222-2222-2222-222222222222".to_string());
+  let remapped_meta = remapped_data.row_metas.get(&remapped_row_id).unwrap();
+
+  assert_eq!(remapped_meta.icon_url, Some("🥀".to_string()));
+  assert!(remapped_meta.cover.is_some());
+  assert!(!remapped_meta.is_document_empty);
+
+  let old_row_id = RowId::from("be970ba6-9576-4e5f-a15d-c9a04d589a57".to_string());
+  assert!(!remapped_data.row_metas.contains_key(&old_row_id));
 }
