@@ -40,14 +40,6 @@ type AfterTransactionSubscription = Subscription;
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription;
 
-#[derive(Debug, Clone)]
-pub enum IndexContent {
-  Create(serde_json::Value),
-  Update(serde_json::Value),
-  Delete(Vec<String>),
-}
-pub type IndexContentSender = tokio::sync::broadcast::Sender<IndexContent>;
-pub type IndexContentReceiver = tokio::sync::broadcast::Receiver<IndexContent>;
 /// A [Collab] is a wrapper around a [Doc] and [Awareness] that provides a set
 /// of helper methods for interacting with the [Doc] and [Awareness]. The [MutexCollab]
 /// is a thread-safe wrapper around the [Collab].
@@ -61,7 +53,6 @@ pub struct Collab {
   after_txn_subscription: ArcSwapOption<AfterTransactionSubscription>,
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
-  pub index_json_sender: IndexContentSender,
 
   // EXPLANATION: context, meta and data are often used within the same context: &mut context
   //  used to obtain TransactionMut, which is then used by &data and &meta. This is why they are
@@ -69,8 +60,6 @@ pub struct Collab {
   //  will be able to infere that &mut context and &data/&meta don't overlap.
   /// Every [Collab] instance has a data section that can be used to store
   pub data: MapRef,
-  #[allow(dead_code)]
-  meta: MapRef,
   /// This is an inner collab state that requires mut access in order to modify it.
   pub context: CollabContext,
 }
@@ -297,7 +286,6 @@ impl Collab {
     let object_id = options.object_id;
     let doc = make_yrs_doc(&object_id, false, options.client_id);
     let data = doc.get_or_insert_map(DATA_SECTION);
-    let meta = doc.get_or_insert_map(META_SECTION);
     let plugins = Plugins::new(vec![]);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc);
@@ -306,12 +294,10 @@ impl Collab {
       context: CollabContext::new(origin, awareness),
       state,
       data,
-      meta,
       plugins,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
       awareness_subscription: Default::default(),
-      index_json_sender: tokio::sync::broadcast::channel(100).0,
     };
 
     if let Some(data_source) = options.data_source {
@@ -361,7 +347,6 @@ impl Collab {
     // doc guid is by default a UUID v4, we can inherit it
     let object_id = doc.guid().to_string();
     let data = doc.get_or_insert_map(DATA_SECTION);
-    let meta = doc.get_or_insert_map(META_SECTION);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc);
     Self {
@@ -371,12 +356,10 @@ impl Collab {
       context: CollabContext::new(origin, awareness),
       state,
       data,
-      meta,
       plugins: Plugins::default(),
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
       awareness_subscription: Default::default(),
-      index_json_sender: tokio::sync::broadcast::channel(100).0,
     }
   }
 
@@ -454,16 +437,6 @@ impl Collab {
     WatchStream::new(self.state.snapshot_state_notifier.subscribe())
   }
 
-  /// Subscribes to the `IndexJson` associated with a `Collab` object.
-  ///
-  /// `IndexJson` is a JSON object containing data used for indexing purposes. The structure and
-  /// content of this data may vary between different collaborative objects derived from `Collab`.
-  /// The interpretation of `IndexJson` is specific to the subscriber, as only they know how to
-  /// process and utilize the contained indexing information.
-  pub fn subscribe_index_content(&self) -> IndexContentReceiver {
-    self.index_json_sender.subscribe()
-  }
-
   /// Add a plugin to the [Collab]. The plugin's callbacks will be called in the order they are added.
   pub fn add_plugin(&self, plugin: Box<dyn CollabPlugin>) {
     self.add_plugins([plugin]);
@@ -498,12 +471,6 @@ impl Collab {
 
   pub fn get_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<Out> {
     self.data.get(txn, key)
-  }
-
-  pub fn start_init_sync(&self) {
-    self.plugins.each(|plugin| {
-      plugin.start_init_sync();
-    });
   }
 
   pub fn insert<P>(&mut self, key: &str, value: P) -> P::Return

@@ -1,9 +1,4 @@
-use std::borrow::{Borrow, BorrowMut};
-use std::collections::{HashMap, HashSet};
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
-
-use collab::core::collab::{CollabOptions, DataSource, IndexContentSender};
+use collab::core::collab::{CollabOptions, DataSource};
 pub use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::*;
@@ -11,6 +6,10 @@ use collab::util::any_to_json_value;
 use collab_entity::CollabType;
 use collab_entity::define::{FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID};
 use serde::{Deserialize, Serialize};
+use std::borrow::{Borrow, BorrowMut};
+use std::collections::{HashMap, HashSet};
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 use tracing::error;
 
 use crate::error::FolderError;
@@ -20,7 +19,7 @@ use crate::section::{Section, SectionItem, SectionMap};
 use crate::view::view_from_map_ref;
 use crate::{
   FolderData, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
-  ViewUpdate, ViewsMap, Workspace, impl_section_op, subscribe_folder_change,
+  ViewChangeReceiver, ViewUpdate, ViewsMap, Workspace, impl_section_op,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -157,16 +156,6 @@ impl Folder {
   pub fn get_folder_data(&self, workspace_id: &str, uid: i64) -> Option<FolderData> {
     let txn = self.collab.transact();
     self.body.get_folder_data(&txn, workspace_id, uid)
-  }
-
-  pub async fn subscribe_view_change(&self, uid: i64) -> Result<(), FolderError> {
-    let txn = self.collab.transact();
-    let index_json_sender = self.collab.index_json_sender.clone();
-    self
-      .body
-      .subscribe_view_change(uid, index_json_sender, txn)
-      .await;
-    Ok(())
   }
 
   /// Fetches the current workspace.
@@ -453,6 +442,7 @@ pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
   }
 }
 
+#[allow(dead_code)]
 fn get_views_from_root<T: ReadTxn>(
   root: &MapRef,
   view_relations: &Arc<ParentChildRelations>,
@@ -479,8 +469,6 @@ pub struct FolderBody {
   pub section: Arc<SectionMap>,
   pub meta: MapRef,
   #[allow(dead_code)]
-  subscription: Subscription,
-  #[allow(dead_code)]
   notifier: Option<FolderNotify>,
 }
 
@@ -497,15 +485,14 @@ impl FolderBody {
   ) -> Self {
     let mut txn = collab.context.transact_mut();
     // create the folder
-    let mut folder = collab.data.get_or_init_map(&mut txn, FOLDER);
-    let subscription = subscribe_folder_change(&mut folder);
+    let root = collab.data.get_or_init_map(&mut txn, FOLDER);
 
     // create the folder data
-    let views: MapRef = folder.get_or_init(&mut txn, VIEWS);
-    let section: MapRef = folder.get_or_init(&mut txn, SECTION);
-    let meta: MapRef = folder.get_or_init(&mut txn, FOLDER_META);
+    let views: MapRef = root.get_or_init(&mut txn, VIEWS);
+    let section: MapRef = root.get_or_init(&mut txn, SECTION);
+    let meta: MapRef = root.get_or_init(&mut txn, FOLDER_META);
     let parent_child_relations = Arc::new(ParentChildRelations::new(
-      folder.get_or_init(&mut txn, PARENT_CHILD_VIEW_RELATION),
+      root.get_or_init(&mut txn, PARENT_CHILD_VIEW_RELATION),
     ));
 
     let section = Arc::new(SectionMap::create(
@@ -560,32 +547,12 @@ impl FolderBody {
       }
     }
     Self {
-      root: folder,
+      root,
       views,
       section,
       meta,
-      subscription,
       notifier,
     }
-  }
-
-  pub async fn subscribe_view_change<T: ReadTxn>(
-    &self,
-    uid: i64,
-    index_json_sender: IndexContentSender,
-    txn: T,
-  ) {
-    let all_views = get_views_from_root(
-      &self.root,
-      &self.views.parent_children_relation,
-      &self.section,
-      &txn,
-      uid,
-    );
-    self
-      .views
-      .subscribe_view_change(uid, all_views, index_json_sender)
-      .await;
   }
 
   pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
@@ -728,6 +695,17 @@ impl FolderBody {
 
   pub fn get_workspace_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
     self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)
+  }
+
+  pub async fn observe_view_changes(&self, uid: i64) {
+    self.views.observe_view_change(uid, HashMap::new()).await;
+  }
+
+  pub async fn subscribe_view_changes(&self) -> Option<ViewChangeReceiver> {
+    self
+      .notifier
+      .as_ref()
+      .map(|notifier| notifier.view_change_tx.subscribe())
   }
 
   pub fn move_view(

@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::bail;
-use collab::core::collab::IndexContentSender;
 use collab::preclude::{
   Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut, YrsValue,
 };
@@ -66,12 +65,7 @@ impl ViewsMap {
     }
   }
 
-  pub async fn subscribe_view_change(
-    &self,
-    uid: i64,
-    views: HashMap<String, Arc<View>>,
-    index_json_sender: IndexContentSender,
-  ) {
+  pub async fn observe_view_change(&self, uid: i64, views: HashMap<String, Arc<View>>) {
     for (k, v) in views {
       self.deletion_cache.insert(k, v);
     }
@@ -82,7 +76,6 @@ impl ViewsMap {
         change_tx.clone(),
         self.parent_children_relation.clone(),
         self.section_map.clone(),
-        index_json_sender.clone(),
         uid,
       )
     });
@@ -777,30 +770,6 @@ impl View {
   pub fn space_info(&self) -> Option<SpaceInfo> {
     let extra = self.extra.as_ref()?;
     serde_json::from_str::<SpaceInfo>(extra).ok()
-  }
-}
-
-/// Represents a the index of a view.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ViewIndexContent {
-  pub id: String,
-  pub parent_view_id: String,
-  pub name: String,
-  pub is_favorite: bool,
-  pub layout: ViewLayout,
-  pub icon: Option<ViewIcon>,
-}
-
-impl From<&View> for ViewIndexContent {
-  fn from(value: &View) -> Self {
-    Self {
-      id: value.id.clone(),
-      parent_view_id: value.parent_view_id.clone(),
-      name: value.name.clone(),
-      is_favorite: value.is_favorite,
-      layout: value.layout.clone(),
-      icon: value.icon.clone(),
-    }
   }
 }
 

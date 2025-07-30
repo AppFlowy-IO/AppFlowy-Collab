@@ -1,7 +1,7 @@
 use crate::util::{create_folder_with_workspace, make_test_view, setup_log};
-use collab::core::collab::{IndexContent, default_client_id};
+use collab::core::collab::default_client_id;
 use collab_folder::folder_diff::FolderViewChange;
-use collab_folder::{IconType, UserId, ViewIcon, ViewIndexContent, timestamp};
+use collab_folder::{IconType, UserId, ViewChange, ViewIcon, timestamp};
 
 #[test]
 fn create_view_test() {
@@ -583,20 +583,24 @@ async fn create_view_and_then_sub_index_content_test() {
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
   folder_test
     .folder
-    .subscribe_view_change(uid.as_i64())
+    .body
+    .observe_view_changes(uid.as_i64())
+    .await;
+
+  let mut change_rx = folder_test
+    .folder
+    .body
+    .subscribe_view_changes()
     .await
     .unwrap();
-
-  let mut index_content_rx = folder_test.subscribe_index_content();
   let o_view = make_test_view("v1", "w1", vec![]);
   let mut folder = folder_test.folder;
 
   // subscribe the index content
   let (tx, rx) = tokio::sync::oneshot::channel();
   tokio::spawn(async move {
-    if let IndexContent::Create(json) = index_content_rx.recv().await.unwrap() {
-      tx.send(serde_json::from_value::<ViewIndexContent>(json).unwrap())
-        .unwrap();
+    if let Ok(ViewChange::DidCreateView { view }) = change_rx.recv().await {
+      tx.send(view).unwrap();
     } else {
       panic!("expected IndexContent::Create");
     }
