@@ -1,8 +1,8 @@
 mod child_views_test;
 mod custom_section;
-mod view_tree_test;
 mod favorite_test;
 mod load_disk;
+mod view_tree_test;
 // mod recent_views_test;
 mod serde_test;
 mod space_info_test;

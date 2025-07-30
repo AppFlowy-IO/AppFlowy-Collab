@@ -103,10 +103,18 @@ fn test_folder_tree_basic_hierarchy() {
   };
 
   // Insert views into folder
-  folder_test.folder.insert_view(document_1, None, user_id.as_i64());
-  folder_test.folder.insert_view(folder_1, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_2, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_3, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_1, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(folder_1, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_2, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_3, None, user_id.as_i64());
 
   // Export to FolderData
   let folder_data = folder_test
@@ -284,9 +292,21 @@ fn test_folder_tree_sections() {
   let tree = FolderTree::from_folder_data(folder_data).unwrap();
 
   // Test section membership
-  assert!(tree.is_in_section(&favorite_document_id, FolderSection::Favorites, user_id.as_i64()));
-  assert!(!tree.is_in_section(&private_document_id, FolderSection::Favorites, user_id.as_i64()));
-  assert!(tree.is_in_section(&private_document_id, FolderSection::Private, user_id.as_i64()));
+  assert!(tree.is_in_section(
+    &favorite_document_id,
+    FolderSection::Favorites,
+    user_id.as_i64()
+  ));
+  assert!(!tree.is_in_section(
+    &private_document_id,
+    FolderSection::Favorites,
+    user_id.as_i64()
+  ));
+  assert!(tree.is_in_section(
+    &private_document_id,
+    FolderSection::Private,
+    user_id.as_i64()
+  ));
   assert!(tree.is_in_section(&trashed_document_id, FolderSection::Trash, user_id.as_i64()));
 
   // Test section views retrieval
@@ -357,14 +377,30 @@ fn test_folder_tree_complex_hierarchy() {
   let document_4 = make_test_view(&document_4_id, &folder_4_id, vec![]);
 
   // Insert all views
-  folder_test.folder.insert_view(folder_1, None, user_id.as_i64());
-  folder_test.folder.insert_view(folder_2, None, user_id.as_i64());
-  folder_test.folder.insert_view(folder_3, None, user_id.as_i64());
-  folder_test.folder.insert_view(folder_4, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_1, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_2, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_3, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_4, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(folder_1, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(folder_2, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(folder_3, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(folder_4, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_1, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_2, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_3, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_4, None, user_id.as_i64());
 
   // Export to FolderData
   let folder_data = folder_test
@@ -400,7 +436,9 @@ fn test_folder_tree_complex_hierarchy() {
   for descendant in &folder_1_descendants {
     if descendant.id == folder_2_uuid {
       assert_eq!(tree.get_depth(&descendant.id), 2);
-    } else if descendant.id.to_string() == document_1_id || descendant.id.to_string() == document_2_id {
+    } else if descendant.id.to_string() == document_1_id
+      || descendant.id.to_string() == document_2_id
+    {
       assert_eq!(tree.get_depth(&descendant.id), 3);
     } else if descendant.id.to_string() == document_3_id {
       assert_eq!(tree.get_depth(&descendant.id), 2);
@@ -466,8 +504,12 @@ fn test_folder_tree_view_properties() {
   };
 
   // Insert views
-  folder_test.folder.insert_view(document_view, None, user_id.as_i64());
-  folder_test.folder.insert_view(grid_view, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_view, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(grid_view, None, user_id.as_i64());
 
   // Export and create FolderTree
   let folder_data = folder_test
@@ -574,7 +616,9 @@ fn test_folder_tree_private_section_multi_user() {
 
   // Insert all views
   for view in views {
-    folder_test.folder.insert_view(view, None, user_1_id.as_i64());
+    folder_test
+      .folder
+      .insert_view(view, None, user_1_id.as_i64());
   }
 
   // Add private views for each user
@@ -600,21 +644,47 @@ fn test_folder_tree_private_section_multi_user() {
   let tree_user_2 = FolderTree::from_folder_data(folder_data_user_2).unwrap();
 
   // Test that user1 sees only their private view
-  assert!(tree_user_1.is_in_section(&user_1_private_document_id, FolderSection::Private, user_1_id.as_i64()));
-  assert!(!tree_user_1.is_in_section(&user_2_private_document_id, FolderSection::Private, user_1_id.as_i64()));
-  assert!(!tree_user_1.is_in_section(&shared_document_id, FolderSection::Private, user_1_id.as_i64()));
+  assert!(tree_user_1.is_in_section(
+    &user_1_private_document_id,
+    FolderSection::Private,
+    user_1_id.as_i64()
+  ));
+  assert!(!tree_user_1.is_in_section(
+    &user_2_private_document_id,
+    FolderSection::Private,
+    user_1_id.as_i64()
+  ));
+  assert!(!tree_user_1.is_in_section(
+    &shared_document_id,
+    FolderSection::Private,
+    user_1_id.as_i64()
+  ));
 
   // Test that user2 sees only their private view
-  assert!(!tree_user_2.is_in_section(&user_1_private_document_id, FolderSection::Private, user_2_id.as_i64()));
-  assert!(tree_user_2.is_in_section(&user_2_private_document_id, FolderSection::Private, user_2_id.as_i64()));
-  assert!(!tree_user_2.is_in_section(&shared_document_id, FolderSection::Private, user_2_id.as_i64()));
+  assert!(!tree_user_2.is_in_section(
+    &user_1_private_document_id,
+    FolderSection::Private,
+    user_2_id.as_i64()
+  ));
+  assert!(tree_user_2.is_in_section(
+    &user_2_private_document_id,
+    FolderSection::Private,
+    user_2_id.as_i64()
+  ));
+  assert!(!tree_user_2.is_in_section(
+    &shared_document_id,
+    FolderSection::Private,
+    user_2_id.as_i64()
+  ));
 
   // Check private section views for each user
-  let user_1_private_views = tree_user_1.get_section_views(FolderSection::Private, user_1_id.as_i64());
+  let user_1_private_views =
+    tree_user_1.get_section_views(FolderSection::Private, user_1_id.as_i64());
   assert_eq!(user_1_private_views.len(), 1);
   assert_eq!(user_1_private_views[0].name, "User1 Private Document");
 
-  let user_2_private_views = tree_user_2.get_section_views(FolderSection::Private, user_2_id.as_i64());
+  let user_2_private_views =
+    tree_user_2.get_section_views(FolderSection::Private, user_2_id.as_i64());
   assert_eq!(user_2_private_views.len(), 1);
   assert_eq!(user_2_private_views[0].name, "User2 Private Document");
 }
@@ -703,10 +773,18 @@ fn test_folder_tree_private_section_nested_views() {
   };
 
   // Insert views
-  folder_test.folder.insert_view(private_folder, None, user_id.as_i64());
-  folder_test.folder.insert_view(child_1, None, user_id.as_i64());
-  folder_test.folder.insert_view(child_2, None, user_id.as_i64());
-  folder_test.folder.insert_view(nested_child, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(private_folder, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(child_1, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(child_2, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(nested_child, None, user_id.as_i64());
 
   // Add only the parent folder to private section
   folder_test
@@ -843,12 +921,14 @@ fn test_folder_tree_private_section_mixed_ownership() {
   );
 
   // Each user marks different documents as private
-  folder_test
-    .folder
-    .add_private_view_ids(vec![document_1_id.clone(), document_3_id.clone()], user_1_id.as_i64());
-  folder_test
-    .folder
-    .add_private_view_ids(vec![document_2_id.clone(), document_3_id.clone()], user_2_id.as_i64());
+  folder_test.folder.add_private_view_ids(
+    vec![document_1_id.clone(), document_3_id.clone()],
+    user_1_id.as_i64(),
+  );
+  folder_test.folder.add_private_view_ids(
+    vec![document_2_id.clone(), document_3_id.clone()],
+    user_2_id.as_i64(),
+  );
   folder_test
     .folder
     .add_private_view_ids(vec![document_4_id.clone()], user_3_id.as_i64());
@@ -860,9 +940,13 @@ fn test_folder_tree_private_section_mixed_ownership() {
     .unwrap();
   let tree_user_1 = FolderTree::from_folder_data(folder_data_user_1).unwrap();
 
-  let user_1_private_views = tree_user_1.get_section_views(FolderSection::Private, user_1_id.as_i64());
+  let user_1_private_views =
+    tree_user_1.get_section_views(FolderSection::Private, user_1_id.as_i64());
   assert_eq!(user_1_private_views.len(), 2);
-  let private_names: Vec<&str> = user_1_private_views.iter().map(|v| v.name.as_str()).collect();
+  let private_names: Vec<&str> = user_1_private_views
+    .iter()
+    .map(|v| v.name.as_str())
+    .collect();
   assert!(private_names.contains(&"Document 1 by User1"));
   assert!(private_names.contains(&"Document 3 created by User1, edited by User2"));
 
@@ -873,9 +957,13 @@ fn test_folder_tree_private_section_mixed_ownership() {
     .unwrap();
   let tree_user_2 = FolderTree::from_folder_data(folder_data_user_2).unwrap();
 
-  let user_2_private_views = tree_user_2.get_section_views(FolderSection::Private, user_2_id.as_i64());
+  let user_2_private_views =
+    tree_user_2.get_section_views(FolderSection::Private, user_2_id.as_i64());
   assert_eq!(user_2_private_views.len(), 2);
-  let private_names: Vec<&str> = user_2_private_views.iter().map(|v| v.name.as_str()).collect();
+  let private_names: Vec<&str> = user_2_private_views
+    .iter()
+    .map(|v| v.name.as_str())
+    .collect();
   assert!(private_names.contains(&"Document 2 by User2"));
   assert!(private_names.contains(&"Document 3 created by User1, edited by User2"));
 
@@ -886,7 +974,8 @@ fn test_folder_tree_private_section_mixed_ownership() {
     .unwrap();
   let tree_user_3 = FolderTree::from_folder_data(folder_data_user_3).unwrap();
 
-  let user_3_private_views = tree_user_3.get_section_views(FolderSection::Private, user_3_id.as_i64());
+  let user_3_private_views =
+    tree_user_3.get_section_views(FolderSection::Private, user_3_id.as_i64());
   assert_eq!(user_3_private_views.len(), 1);
   assert_eq!(user_3_private_views[0].name, "Document 4 by User3");
 
@@ -1030,10 +1119,18 @@ fn test_folder_tree_descendants_with_depth_limit() {
   };
 
   // Insert views
-  folder_test.folder.insert_view(folder_1, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_1, None, user_id.as_i64());
-  folder_test.folder.insert_view(subfolder, None, user_id.as_i64());
-  folder_test.folder.insert_view(subdocument, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(folder_1, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_1, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(subfolder, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(subdocument, None, user_id.as_i64());
 
   // Export and create FolderTree
   let folder_data = folder_test
@@ -1051,7 +1148,10 @@ fn test_folder_tree_descendants_with_depth_limit() {
   // Test depth = 1: only direct children (document_1 and subfolder)
   let descendants_depth_1 = tree.get_descendants_with_children(&folder_1_uuid, 1);
   assert_eq!(descendants_depth_1.len(), 2);
-  let names_depth_1: Vec<String> = descendants_depth_1.iter().map(|d| d.view.name.clone()).collect();
+  let names_depth_1: Vec<String> = descendants_depth_1
+    .iter()
+    .map(|d| d.view.name.clone())
+    .collect();
   assert!(names_depth_1.contains(&"Document 1".to_string()));
   assert!(names_depth_1.contains(&"Subfolder".to_string()));
 
@@ -1180,17 +1280,25 @@ fn test_folder_tree_cycle_detection_normal_tree() {
   };
 
   // Insert views
-  folder_test.folder.insert_view(folder_1, None, user_id.as_i64());
-  folder_test.folder.insert_view(folder_2, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_1, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_2, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(folder_1, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(folder_2, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_1, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_2, None, user_id.as_i64());
 
   // Export and create FolderTree
   let folder_data = folder_test
     .folder
     .get_folder_data(&workspace_id, user_id.as_i64())
     .unwrap();
-  
+
   let tree = FolderTree::from_folder_data(folder_data).unwrap();
 
   // Test that normal tree has no cycles
@@ -1208,7 +1316,7 @@ fn test_folder_tree_cycle_detection_normal_tree() {
   // Test ancestor relationships
   let folder_1_uuid = Uuid::parse_str(&folder_1_id).unwrap();
   let folder_2_uuid = Uuid::parse_str(&folder_2_id).unwrap();
-  
+
   assert!(tree.is_ancestor_of(&folder_1_uuid, &document_2_uuid));
   assert!(tree.is_ancestor_of(&folder_2_uuid, &document_2_uuid));
   assert!(!tree.is_ancestor_of(&document_2_uuid, &folder_1_uuid));
@@ -1243,12 +1351,14 @@ fn test_folder_tree_potential_issues() {
     extra: None,
   };
 
-  folder_test.folder.insert_view(self_referencing_view, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(self_referencing_view, None, user_id.as_i64());
 
   // Test 2: Circular reference (A -> B -> A)
   let document_a_id = Uuid::new_v4().to_string();
   let document_b_id = Uuid::new_v4().to_string();
-  
+
   let document_a = View {
     id: document_a_id.clone(),
     parent_view_id: document_b_id.clone(), // A's parent is B
@@ -1281,8 +1391,12 @@ fn test_folder_tree_potential_issues() {
     extra: None,
   };
 
-  folder_test.folder.insert_view(document_a, None, user_id.as_i64());
-  folder_test.folder.insert_view(document_b, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_a, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(document_b, None, user_id.as_i64());
 
   // Test 3: Orphaned view (parent doesn't exist)
   let orphaned_document_id = Uuid::new_v4().to_string();
@@ -1303,14 +1417,16 @@ fn test_folder_tree_potential_issues() {
     extra: None,
   };
 
-  folder_test.folder.insert_view(orphaned_view, None, user_id.as_i64());
+  folder_test
+    .folder
+    .insert_view(orphaned_view, None, user_id.as_i64());
 
   // Export and create FolderTree
   let folder_data = folder_test
     .folder
     .get_folder_data(&workspace_id, user_id.as_i64())
     .unwrap();
-  
+
   let tree = FolderTree::from_folder_data(folder_data).unwrap();
 
   // Test that tree creation didn't panic
@@ -1342,7 +1458,10 @@ fn test_folder_tree_potential_issues() {
   let has_cycles = tree.has_cycles();
 
   // Print debug info
-  println!("Self-referencing ancestors count: {}", self_referencing_ancestors.len());
+  println!(
+    "Self-referencing ancestors count: {}",
+    self_referencing_ancestors.len()
+  );
   println!("Document A ancestors count: {}", document_a_ancestors.len());
   println!("Document B ancestors count: {}", document_b_ancestors.len());
   println!("Orphaned ancestors count: {}", orphaned_ancestors.len());
@@ -1356,16 +1475,25 @@ fn test_folder_tree_potential_issues() {
 
   // Basic assertions to ensure the tree is functional
   let all_views = tree.get_all_views();
-  assert!(all_views.len() > 0);
-  
+  assert!(!all_views.is_empty());
+
   // The tree should handle these edge cases gracefully
   // We expect cycles to be detected
   assert!(has_cycles, "Tree should detect cycles");
-  
+
   // Self-referencing should result in limited ancestors (due to cycle detection)
-  assert!(self_referencing_ancestors.len() < 1000, "Self-reference should be limited by cycle detection");
-  
+  assert!(
+    self_referencing_ancestors.len() < 1000,
+    "Self-reference should be limited by cycle detection"
+  );
+
   // Circular references should result in limited ancestors
-  assert!(document_a_ancestors.len() < 1000, "Circular reference should be limited by cycle detection");
-  assert!(document_b_ancestors.len() < 1000, "Circular reference should be limited by cycle detection");
+  assert!(
+    document_a_ancestors.len() < 1000,
+    "Circular reference should be limited by cycle detection"
+  );
+  assert!(
+    document_b_ancestors.len() < 1000,
+    "Circular reference should be limited by cycle detection"
+  );
 }

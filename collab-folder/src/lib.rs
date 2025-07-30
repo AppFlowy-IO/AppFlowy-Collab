@@ -1,10 +1,10 @@
 pub use entities::*;
 pub use folder::*;
-pub use view_tree::*;
 pub use folder_migration::*;
 pub use folder_observe::*;
 pub use relation::*;
 pub use section::*;
+pub use view_tree::*;
 // pub use trash::*;
 pub use space_info::*;
 pub use view::*;
@@ -12,9 +12,9 @@ pub use workspace::*;
 
 mod entities;
 mod folder;
-mod view_tree;
 mod relation;
 mod section;
+mod view_tree;
 // mod trash;
 mod view;
 mod workspace;

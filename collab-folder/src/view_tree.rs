@@ -377,10 +377,8 @@ impl FolderTree {
     let mut rec_stack = std::collections::HashSet::new();
 
     for view_id in self.view_map.keys() {
-      if !visited.contains(view_id) {
-        if self.has_cycle_dfs(view_id, &mut visited, &mut rec_stack) {
-          return true;
-        }
+      if !visited.contains(view_id) && self.has_cycle_dfs(view_id, &mut visited, &mut rec_stack) {
+        return true;
       }
     }
     false
