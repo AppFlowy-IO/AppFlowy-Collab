@@ -64,12 +64,10 @@ pub fn create_folder_with_data(
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(10);
   let (section_tx, section_rx) = tokio::sync::broadcast::channel(10);
-  let (index_json_sender, _) = tokio::sync::broadcast::channel(10);
 
   let context = FolderNotify {
     view_change_tx: view_tx,
     section_change_tx: section_tx,
-    index_json_sender,
   };
   let folder = Folder::create(collab, Some(context), folder_data);
   FolderTest {

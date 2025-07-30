@@ -1,5 +1,4 @@
-use anyhow::anyhow;
-use collab::core::collab::{CollabOptions, DataSource, IndexContentReceiver, IndexContentSender};
+use collab::core::collab::{CollabOptions, DataSource};
 pub use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::*;
@@ -20,7 +19,7 @@ use crate::section::{Section, SectionItem, SectionMap};
 use crate::view::view_from_map_ref;
 use crate::{
   FolderData, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
-  ViewUpdate, ViewsMap, Workspace, impl_section_op,
+  ViewChangeReceiver, ViewUpdate, ViewsMap, Workspace, impl_section_op,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -63,7 +62,6 @@ const SECTION: &str = "section";
 pub struct FolderNotify {
   pub view_change_tx: ViewChangeSender,
   pub section_change_tx: SectionChangeSender,
-  pub index_json_sender: IndexContentSender,
 }
 
 /// Represents the folder hierarchy in a workspace.
@@ -158,12 +156,6 @@ impl Folder {
   pub fn get_folder_data(&self, workspace_id: &str, uid: i64) -> Option<FolderData> {
     let txn = self.collab.transact();
     self.body.get_folder_data(&txn, workspace_id, uid)
-  }
-
-  pub async fn observer_content_change(&self, uid: i64) -> Result<(), FolderError> {
-    let txn = self.collab.transact();
-    self.body.observe_content_change(uid, txn).await;
-    Ok(())
   }
 
   /// Fetches the current workspace.
@@ -450,6 +442,7 @@ pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
   }
 }
 
+#[allow(dead_code)]
 fn get_views_from_root<T: ReadTxn>(
   root: &MapRef,
   view_relations: &Arc<ParentChildRelations>,
@@ -559,30 +552,6 @@ impl FolderBody {
       section,
       meta,
       notifier,
-    }
-  }
-
-  pub async fn subscribe_content_change(&self) -> Result<IndexContentReceiver, FolderError> {
-    match self.notifier.as_ref() {
-      None => Err(FolderError::Internal(anyhow!("Folder notifier is not set"))),
-      Some(notifier) => Ok(notifier.index_json_sender.subscribe()),
-    }
-  }
-
-  pub async fn observe_content_change<T: ReadTxn>(&self, uid: i64, txn: T) {
-    let all_views = get_views_from_root(
-      &self.root,
-      &self.views.parent_children_relation,
-      &self.section,
-      &txn,
-      uid,
-    );
-
-    if let Some(notifier) = &self.notifier {
-      self
-        .views
-        .subscribe_view_change(uid, all_views, notifier.index_json_sender.clone())
-        .await;
     }
   }
 
@@ -726,6 +695,17 @@ impl FolderBody {
 
   pub fn get_workspace_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
     self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)
+  }
+
+  pub async fn observe_view_changes(&self, uid: i64) {
+    self.views.observe_view_change(uid, HashMap::new()).await;
+  }
+
+  pub async fn subscribe_view_changes(&self) -> Option<ViewChangeReceiver> {
+    self
+      .notifier
+      .as_ref()
+      .map(|notifier| notifier.view_change_tx.subscribe())
   }
 
   pub fn move_view(

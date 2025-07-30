@@ -40,14 +40,6 @@ type AfterTransactionSubscription = Subscription;
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription;
 
-#[derive(Debug, Clone)]
-pub enum IndexContent {
-  Create(serde_json::Value),
-  Update(serde_json::Value),
-  Delete(Vec<String>),
-}
-pub type IndexContentSender = tokio::sync::broadcast::Sender<IndexContent>;
-pub type IndexContentReceiver = tokio::sync::broadcast::Receiver<IndexContent>;
 /// A [Collab] is a wrapper around a [Doc] and [Awareness] that provides a set
 /// of helper methods for interacting with the [Doc] and [Awareness]. The [MutexCollab]
 /// is a thread-safe wrapper around the [Collab].

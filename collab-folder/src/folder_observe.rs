@@ -1,13 +1,11 @@
 use dashmap::DashMap;
 use std::sync::Arc;
 
-use collab::core::collab::{IndexContent, IndexContentSender};
 use collab::preclude::{DeepObservable, EntryChange, Event, MapRef, Subscription, YrsValue};
-use serde_json::json;
 use tokio::sync::broadcast;
 
 use crate::section::SectionMap;
-use crate::{ParentChildRelations, View, ViewIndexContent, view_from_map_ref};
+use crate::{ParentChildRelations, View, view_from_map_ref};
 
 #[derive(Debug, Clone)]
 pub enum ViewChange {
@@ -25,7 +23,6 @@ pub(crate) fn subscribe_view_change(
   change_tx: ViewChangeSender,
   view_relations: Arc<ParentChildRelations>,
   section_map: Arc<SectionMap>,
-  index_sender: IndexContentSender,
   uid: i64,
 ) -> Subscription {
   root.observe_deep(move |txn, events| {
@@ -45,8 +42,6 @@ pub(crate) fn subscribe_view_change(
                     deletion_cache.insert(view.id.clone(), Arc::new(view.clone()));
 
                     // Send indexing view
-                    let index_content = ViewIndexContent::from(&view);
-                    let _ = index_sender.send(IndexContent::Create(json!(index_content)));
                     let _ = change_tx.send(ViewChange::DidCreateView { view });
                   }
                 }
@@ -57,11 +52,6 @@ pub(crate) fn subscribe_view_change(
                 {
                   // Update deletion cache with the updated view
                   deletion_cache.insert(view.id.clone(), Arc::new(view.clone()));
-
-                  // Update indexing view
-                  let index_content = ViewIndexContent::from(&view);
-                  let _ = index_sender.send(IndexContent::Update(json!(index_content)));
-
                   let _ = change_tx.send(ViewChange::DidUpdate { view });
                 }
               },
@@ -79,7 +69,6 @@ pub(crate) fn subscribe_view_change(
                   .collect();
 
                 if !delete_ids.is_empty() {
-                  let _ = index_sender.send(IndexContent::Delete(delete_ids.clone()));
                   let _ = change_tx.send(ViewChange::DidDeleteView {
                     views: deleted_views,
                   });
