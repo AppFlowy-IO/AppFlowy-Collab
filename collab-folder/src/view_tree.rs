@@ -6,7 +6,7 @@ use uuid::Uuid;
 pub type UserSectionViews = HashMap<i64, Vec<Uuid>>;
 
 /// Convert SectionsByUid to UserSectionViews
-fn convert_sections_to_uuids(sections: SectionsByUid) -> UserSectionViews {
+pub fn convert_sections_to_uuids(sections: SectionsByUid) -> UserSectionViews {
   sections
     .into_iter()
     .map(|(user_id, items)| {
@@ -69,9 +69,6 @@ pub struct FolderTree {
   /// Root view (workspace)
   pub root: ViewNode,
 
-  /// Maps view ID to its parent ID
-  parent_map: HashMap<Uuid, Uuid>,
-
   /// Maps view ID to its children IDs
   children_map: HashMap<Uuid, Vec<Uuid>>,
 
@@ -85,19 +82,11 @@ pub struct FolderTree {
 }
 
 impl FolderTree {
-  /// Create a ViewTree from FolderData
-  pub fn from_folder_data(folder_data: FolderData) -> Result<Self, uuid::Error> {
-    let root_view = View::from(folder_data.workspace);
-    let root = ViewNode::from_view(&root_view)?;
-
-    // Convert sections to new format
-    let favorites = convert_sections_to_uuids(folder_data.favorites);
-    let trash = convert_sections_to_uuids(folder_data.trash);
-    let private = convert_sections_to_uuids(folder_data.private);
+  pub fn from_data(root: View, favorites: UserSectionViews, trash: UserSectionViews, private: UserSectionViews, views: Vec<View>) -> Result<Self, uuid::Error> {
+    let root_node = ViewNode::from_view(&root)?;
 
     let mut tree = Self {
-      root: root.clone(),
-      parent_map: HashMap::new(),
+      root: root_node.clone(),
       children_map: HashMap::new(),
       view_map: HashMap::new(),
       favorites,
@@ -106,26 +95,26 @@ impl FolderTree {
     };
 
     // Add root to view map
-    tree.view_map.insert(root.id, root.clone());
+    tree.view_map.insert(root_node.id, root_node.clone());
 
     // Initialize root's children
-    tree.children_map.insert(root.id, Vec::new());
+    tree.children_map.insert(root_node.id, Vec::new());
 
-    // Add all views
-    for view in folder_data.views {
+    // Add the root view itself
+    for view in views {
       tree.add_view(view)?;
     }
 
-    // Add workspace's direct children
-    if let Some(root_children) = tree.children_map.get(&tree.root.id).cloned() {
-      for child_id in root_children {
-        if let std::collections::hash_map::Entry::Vacant(e) = tree.parent_map.entry(child_id) {
-          e.insert(tree.root.id);
-        }
-      }
-    }
-
     Ok(tree)
+  }
+
+  /// Create a ViewTree from FolderData
+  pub fn from_folder_data(folder_data: FolderData) -> Result<Self, uuid::Error> {
+    let root_view = View::from(folder_data.workspace);
+    let favorites = convert_sections_to_uuids(folder_data.favorites);
+    let trash = convert_sections_to_uuids(folder_data.trash);
+    let private = convert_sections_to_uuids(folder_data.private);
+    Self::from_data(root_view, favorites, trash, private, folder_data.views)
   }
 
   /// Add a view to the tree
@@ -138,9 +127,6 @@ impl FolderTree {
 
     // Add to view map
     self.view_map.insert(view_uuid, view_node);
-
-    // Set up parent relationship
-    self.parent_map.insert(view_uuid, parent_uuid);
 
     // Add to parent's children
     self
@@ -155,22 +141,31 @@ impl FolderTree {
     Ok(())
   }
 
+  /// Find parent ID by searching through children_map
+  fn find_parent_id(&self, view_id: &Uuid) -> Option<Uuid> {
+    for (parent_id, children) in &self.children_map {
+      if children.contains(view_id) {
+        return Some(*parent_id);
+      }
+    }
+    None
+  }
+
   /// Get a view by ID
   pub fn get_view(&self, view_id: &Uuid) -> Option<&ViewNode> {
     self.view_map.get(view_id)
   }
 
   /// Get parent ID of a view
-  pub fn get_parent(&self, view_id: &Uuid) -> Option<&Uuid> {
-    self.parent_map.get(view_id)
+  pub fn get_parent(&self, view_id: &Uuid) -> Option<Uuid> {
+    self.find_parent_id(view_id)
   }
 
   /// Get parent view
   pub fn get_parent_view(&self, view_id: &Uuid) -> Option<&ViewNode> {
     self
-      .parent_map
-      .get(view_id)
-      .and_then(|parent_id| self.view_map.get(parent_id))
+      .find_parent_id(view_id)
+      .and_then(|parent_id| self.view_map.get(&parent_id))
   }
 
   /// Get children IDs of a view
@@ -203,19 +198,19 @@ impl FolderTree {
   /// Includes cycle detection to prevent infinite loops
   pub fn get_ancestors(&self, view_id: &Uuid) -> Vec<&ViewNode> {
     let mut ancestors = Vec::new();
-    let mut current_id = view_id;
+    let mut current_id = *view_id;
     let mut visited = std::collections::HashSet::new();
     let max_depth = 1000; // Prevent infinite loops
 
     for _ in 0..max_depth {
-      if visited.contains(current_id) {
+      if visited.contains(&current_id) {
         // Cycle detected, break to prevent infinite loop
         break;
       }
       visited.insert(current_id);
 
-      if let Some(parent_id) = self.parent_map.get(current_id) {
-        if let Some(parent_view) = self.view_map.get(parent_id) {
+      if let Some(parent_id) = self.find_parent_id(&current_id) {
+        if let Some(parent_view) = self.view_map.get(&parent_id) {
           ancestors.push(parent_view);
           current_id = parent_id;
         } else {
@@ -305,9 +300,8 @@ impl FolderTree {
   /// Get siblings of a view (other children of the same parent)
   pub fn get_siblings(&self, view_id: &Uuid) -> Vec<&ViewNode> {
     self
-      .parent_map
-      .get(view_id)
-      .and_then(|parent_id| self.children_map.get(parent_id))
+      .find_parent_id(view_id)
+      .and_then(|parent_id| self.children_map.get(&parent_id))
       .map(|siblings| {
         siblings
           .iter()
@@ -321,19 +315,19 @@ impl FolderTree {
   /// Check if a view is an ancestor of another view
   /// Includes cycle detection to prevent infinite loops
   pub fn is_ancestor_of(&self, ancestor_id: &Uuid, descendant_id: &Uuid) -> bool {
-    let mut current_id = descendant_id;
+    let mut current_id = *descendant_id;
     let mut visited = std::collections::HashSet::new();
     let max_depth = 1000; // Prevent infinite loops
 
     for _ in 0..max_depth {
-      if visited.contains(current_id) {
+      if visited.contains(&current_id) {
         // Cycle detected, break to prevent infinite loop
         break;
       }
       visited.insert(current_id);
 
-      if let Some(parent_id) = self.parent_map.get(current_id) {
-        if parent_id == ancestor_id {
+      if let Some(parent_id) = self.find_parent_id(&current_id) {
+        if &parent_id == ancestor_id {
           return true;
         }
         current_id = parent_id;
@@ -349,18 +343,18 @@ impl FolderTree {
   /// Includes cycle detection to prevent infinite loops
   pub fn get_depth(&self, view_id: &Uuid) -> usize {
     let mut depth = 0;
-    let mut current_id = view_id;
+    let mut current_id = *view_id;
     let mut visited = std::collections::HashSet::new();
     let max_depth = 1000; // Prevent infinite loops
 
     for _ in 0..max_depth {
-      if visited.contains(current_id) {
+      if visited.contains(&current_id) {
         // Cycle detected, return current depth
         break;
       }
       visited.insert(current_id);
 
-      if let Some(parent_id) = self.parent_map.get(current_id) {
+      if let Some(parent_id) = self.find_parent_id(&current_id) {
         depth += 1;
         current_id = parent_id;
       } else {

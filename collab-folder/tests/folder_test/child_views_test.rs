@@ -59,7 +59,7 @@ fn create_child_views_test() {
 
   let folder_data = folder
     .body
-    .get_folder_data(&txn, &workspace_id, uid.as_i64())
+    .get_folder_data(&txn, uid.as_i64())
     .unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
   assert_json_include!(
@@ -338,7 +338,7 @@ fn create_orphan_child_views_test() {
   // The folder data should contains the orphan view
   let folder_data = folder
     .body
-    .get_folder_data(&txn, &workspace_id, uid.as_i64())
+    .get_folder_data(&txn, uid.as_i64())
     .unwrap();
   assert_json_include!(
     actual: json!(folder_data),

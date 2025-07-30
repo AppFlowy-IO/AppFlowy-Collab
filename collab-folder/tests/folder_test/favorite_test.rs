@@ -97,7 +97,7 @@ fn create_multiple_user_favorite_test() {
   assert_eq!(favorites[0].id, "1");
   assert_eq!(favorites[1].id, "2");
   let folder_data = folder_1
-    .get_folder_data(&workspace_id, uid_1.as_i64())
+    .get_folder_data(uid_1.as_i64())
     .unwrap();
 
   let uid_2 = UserId::from(2);
@@ -126,7 +126,7 @@ fn favorite_data_serde_test() {
 
   folder.add_favorite_view_ids(vec!["1".to_string(), "2".to_string()], uid_1.as_i64());
   let folder_data = folder
-    .get_folder_data(&workspace_id, uid_1.as_i64())
+    .get_folder_data(uid_1.as_i64())
     .unwrap();
   let value = serde_json::to_value(&folder_data).unwrap();
   assert_json_include!(

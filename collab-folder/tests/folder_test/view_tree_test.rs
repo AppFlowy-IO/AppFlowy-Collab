@@ -119,7 +119,7 @@ fn test_folder_tree_basic_hierarchy() {
   // Export to FolderData
   let folder_data = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_id.as_i64())
+    .get_folder_data(user_id.as_i64())
     .unwrap();
 
   // Create FolderTree from the exported data
@@ -136,10 +136,10 @@ fn test_folder_tree_basic_hierarchy() {
   let workspace_uuid = Uuid::parse_str(&workspace_id).unwrap();
 
   // Test parents
-  assert_eq!(tree.get_parent(&document_1_uuid), Some(&workspace_uuid));
-  assert_eq!(tree.get_parent(&folder_1_uuid), Some(&workspace_uuid));
-  assert_eq!(tree.get_parent(&document_2_uuid), Some(&folder_1_uuid));
-  assert_eq!(tree.get_parent(&document_3_uuid), Some(&folder_1_uuid));
+  assert_eq!(tree.get_parent(&document_1_uuid), Some(workspace_uuid));
+  assert_eq!(tree.get_parent(&folder_1_uuid), Some(workspace_uuid));
+  assert_eq!(tree.get_parent(&document_2_uuid), Some(folder_1_uuid));
+  assert_eq!(tree.get_parent(&document_3_uuid), Some(folder_1_uuid));
   assert_eq!(tree.get_parent(&workspace_uuid), None); // Root has no parent
 
   // Test children
@@ -285,7 +285,7 @@ fn test_folder_tree_sections() {
   // Export to FolderData
   let folder_data = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_id.as_i64())
+    .get_folder_data(user_id.as_i64())
     .unwrap();
 
   // Create FolderTree
@@ -405,7 +405,7 @@ fn test_folder_tree_complex_hierarchy() {
   // Export to FolderData
   let folder_data = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_id.as_i64())
+    .get_folder_data(user_id.as_i64())
     .unwrap();
 
   // Create FolderTree
@@ -514,7 +514,7 @@ fn test_folder_tree_view_properties() {
   // Export and create FolderTree
   let folder_data = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_id.as_i64())
+    .get_folder_data(user_id.as_i64())
     .unwrap();
   let tree = FolderTree::from_folder_data(folder_data).unwrap();
 
@@ -632,14 +632,14 @@ fn test_folder_tree_private_section_multi_user() {
   // Export folder data for user1
   let folder_data_user_1 = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_1_id.as_i64())
+    .get_folder_data(user_1_id.as_i64())
     .unwrap();
   let tree_user_1 = FolderTree::from_folder_data(folder_data_user_1).unwrap();
 
   // Export folder data for user2
   let folder_data_user_2 = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_2_id.as_i64())
+    .get_folder_data(user_2_id.as_i64())
     .unwrap();
   let tree_user_2 = FolderTree::from_folder_data(folder_data_user_2).unwrap();
 
@@ -794,7 +794,7 @@ fn test_folder_tree_private_section_nested_views() {
   // Export and create FolderTree
   let folder_data = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_id.as_i64())
+    .get_folder_data(user_id.as_i64())
     .unwrap();
   let tree = FolderTree::from_folder_data(folder_data).unwrap();
 
@@ -936,7 +936,7 @@ fn test_folder_tree_private_section_mixed_ownership() {
   // Test User1's view
   let folder_data_user_1 = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_1_id.as_i64())
+    .get_folder_data(user_1_id.as_i64())
     .unwrap();
   let tree_user_1 = FolderTree::from_folder_data(folder_data_user_1).unwrap();
 
@@ -953,7 +953,7 @@ fn test_folder_tree_private_section_mixed_ownership() {
   // Test User2's view
   let folder_data_user_2 = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_2_id.as_i64())
+    .get_folder_data(user_2_id.as_i64())
     .unwrap();
   let tree_user_2 = FolderTree::from_folder_data(folder_data_user_2).unwrap();
 
@@ -970,7 +970,7 @@ fn test_folder_tree_private_section_mixed_ownership() {
   // Test User3's view
   let folder_data_user_3 = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_3_id.as_i64())
+    .get_folder_data(user_3_id.as_i64())
     .unwrap();
   let tree_user_3 = FolderTree::from_folder_data(folder_data_user_3).unwrap();
 
@@ -1015,7 +1015,7 @@ fn test_folder_tree_private_section_empty() {
   // Export without adding any private views
   let folder_data = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_id.as_i64())
+    .get_folder_data(user_id.as_i64())
     .unwrap();
   let tree = FolderTree::from_folder_data(folder_data).unwrap();
 
@@ -1135,7 +1135,7 @@ fn test_folder_tree_descendants_with_depth_limit() {
   // Export and create FolderTree
   let folder_data = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_id.as_i64())
+    .get_folder_data(user_id.as_i64())
     .unwrap();
   let tree = FolderTree::from_folder_data(folder_data).unwrap();
 
@@ -1296,7 +1296,7 @@ fn test_folder_tree_cycle_detection_normal_tree() {
   // Export and create FolderTree
   let folder_data = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_id.as_i64())
+    .get_folder_data(user_id.as_i64())
     .unwrap();
 
   let tree = FolderTree::from_folder_data(folder_data).unwrap();
@@ -1424,7 +1424,7 @@ fn test_folder_tree_potential_issues() {
   // Export and create FolderTree
   let folder_data = folder_test
     .folder
-    .get_folder_data(&workspace_id, user_id.as_i64())
+    .get_folder_data(user_id.as_i64())
     .unwrap();
 
   let tree = FolderTree::from_folder_data(folder_data).unwrap();

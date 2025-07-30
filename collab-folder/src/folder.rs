@@ -19,8 +19,8 @@ use crate::hierarchy_builder::{FlattedViews, ParentChildViews};
 use crate::section::{Section, SectionItem, SectionMap};
 use crate::view::view_from_map_ref;
 use crate::{
-  FolderData, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
-  ViewUpdate, ViewsMap, Workspace, impl_section_op, subscribe_folder_change,
+  FolderData, FolderTree, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
+  ViewUpdate, ViewsMap, Workspace, impl_section_op, subscribe_folder_change, convert_sections_to_uuids,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -154,9 +154,30 @@ impl Folder {
   ///
   /// * `None`: If the operation is unsuccessful (though it should typically not be the case as `Some`
   ///   is returned explicitly), it returns `None`.
-  pub fn get_folder_data(&self, workspace_id: &str, uid: i64) -> Option<FolderData> {
+  pub fn get_folder_data(&self, uid: i64) -> Option<FolderData> {
     let txn = self.collab.transact();
-    self.body.get_folder_data(&txn, workspace_id, uid)
+    self.body.get_folder_data(&txn, uid)
+  }
+
+  /// Fetches the folder tree structure with all data.
+  ///
+  /// This function creates a tree structure directly from the folder for efficient
+  /// navigation and queries. The tree provides methods for traversing the view hierarchy,
+  /// finding relationships between views, and accessing section information for all users.
+  ///
+  /// The function uses user ID 0 as a special identifier to access all data without user filtering.
+  /// This allows retrieval of the complete folder structure including all views and sections
+  /// that are accessible to any user, providing a comprehensive view of the folder's organization.
+  ///
+  /// # Returns
+  ///
+  /// * `Some(FolderTree)`: If the operation is successful, it returns `Some` variant wrapping `FolderTree`
+  ///   object, which provides efficient tree-based operations on the folder structure.
+  ///
+  /// * `None`: If the operation is unsuccessful or if the folder data cannot be retrieved.
+  pub fn get_folder_tree(&self) -> Option<FolderTree> {
+    let txn = self.collab.transact();
+    self.body.get_folder_tree(&txn)
   }
 
   pub async fn subscribe_view_change(&self, uid: i64) -> Result<(), FolderError> {
@@ -653,21 +674,13 @@ impl FolderBody {
   pub fn get_folder_data<T: ReadTxn>(
     &self,
     txn: &T,
-    workspace_id: &str,
     uid: i64,
   ) -> Option<FolderData> {
-    let folder_workspace_id = self.get_workspace_id_with_txn(txn)?;
-    if folder_workspace_id != workspace_id {
-      error!(
-        "Workspace id not match when get folder data, expected: {}, actual: {}",
-        workspace_id, folder_workspace_id
-      );
-      return None;
-    }
+    let workspace_id = self.get_workspace_id_with_txn(txn)?;
     let workspace = Workspace::from(
       self
         .views
-        .get_view_with_txn(txn, workspace_id, uid)?
+        .get_view_with_txn(txn, &workspace_id, uid)?
         .as_ref(),
     );
     let current_view = self.get_current_view(txn, uid).unwrap_or_default();
@@ -678,7 +691,7 @@ impl FolderBody {
       .iter()
       .map(|view| view.as_ref().clone())
       .collect::<Vec<View>>();
-    for view in self.views.get_views_belong_to(txn, workspace_id, uid) {
+    for view in self.views.get_views_belong_to(txn, &workspace_id, uid) {
       let mut all_views_in_workspace = vec![];
       self.get_view_recursively_with_txn(
         txn,
@@ -724,6 +737,63 @@ impl FolderBody {
       trash,
       private,
     })
+  }
+
+  pub fn get_folder_tree<T: ReadTxn>(&self, txn: &T) -> Option<FolderTree> {
+    let workspace_id = self.get_workspace_id_with_txn(txn)?;
+    
+    // Use user ID 0 as a special identifier to access all data without user filtering.
+    let workspace_view = self.views.get_view_with_txn(txn, &workspace_id, 0)?;
+    
+    // Get all views in the workspace using user ID 0 to bypass user-specific filtering
+    let mut all_views = vec![];
+    let orphan_views = self
+      .views
+      .get_orphan_views_with_txn(txn, 0)
+      .iter()
+      .map(|view| view.as_ref().clone())
+      .collect::<Vec<View>>();
+    
+    for view in self.views.get_views_belong_to(txn, &workspace_id, 0) {
+      let mut views_in_workspace = vec![];
+      self.get_view_recursively_with_txn(
+        txn,
+        &view.id,
+        &mut HashSet::default(),
+        &mut views_in_workspace,
+        0, // Use user ID 0 to get all views regardless of user permissions
+      );
+      all_views.extend(views_in_workspace);
+    }
+    all_views.extend(orphan_views);
+    
+    // Add the workspace view itself
+    all_views.push(workspace_view.as_ref().clone());
+    
+    // Get sections for all users using user ID 0 (excluding recent section)
+    let mut favorites = HashMap::new();
+    let mut trash = HashMap::new();
+    let mut private = HashMap::new();
+
+    // User ID 0 provides access to all section data across all users.
+    if let Some(fav_op) = self.section.section_op(txn, Section::Favorite, 0) {
+      favorites = fav_op.get_sections(txn);
+    }
+    if let Some(trash_op) = self.section.section_op(txn, Section::Trash, 0) {
+      trash = trash_op.get_sections(txn);
+    }
+    if let Some(private_op) = self.section.section_op(txn, Section::Private, 0) {
+      private = private_op.get_sections(txn);
+    }
+
+    // Build folder tree directly from workspace, views, and sections
+    // Convert sections to UserSectionViews format
+    let favorites_uuids = convert_sections_to_uuids(favorites);
+    let trash_uuids = convert_sections_to_uuids(trash);
+    let private_uuids = convert_sections_to_uuids(private);
+    
+    // Create FolderTree directly from workspace view, sections, and all views
+    FolderTree::from_data(workspace_view.as_ref().clone(), favorites_uuids, trash_uuids, private_uuids, all_views).ok()
   }
 
   pub fn get_workspace_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
@@ -1041,4 +1111,8 @@ mod tests {
     ];
     assert_eq!(favorite_sections, expected_favorites);
   }
+
+
+
+
 }

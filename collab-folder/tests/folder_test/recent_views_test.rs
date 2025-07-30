@@ -104,8 +104,9 @@ fn create_multiple_user_recent_test() {
   assert_eq!(recent.len(), 2);
   assert_eq!(recent[0].id, id_1);
   assert_eq!(recent[1].id, id_2);
-  let folder_data = folder_1
-    .get_folder_data(&workspace_id, uid_1.as_i64())
+  let folder_data = folder_test_1
+    .folder
+    .get_folder_data(uid_1.as_i64())
     .unwrap();
 
   let uid_2 = UserId::from(2);
@@ -138,7 +139,7 @@ fn recent_data_serde_test() {
     uid_1.as_i64(),
   );
   let folder_data = folder
-    .get_folder_data(&workspace_id, uid_1.as_i64())
+    .get_folder_data(uid_1.as_i64())
     .unwrap();
   let value = serde_json::to_value(&folder_data).unwrap();
   assert_json_include!(
