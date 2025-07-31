@@ -119,9 +119,9 @@ impl SelectOption {
     }
   }
 }
-#[derive(PartialEq, Eq, Serialize, Deserialize, Debug, Clone)]
+
+#[derive(Default, PartialEq, Eq, Serialize, Deserialize, Debug, Clone)]
 #[repr(u8)]
-#[derive(Default)]
 pub enum SelectOptionColor {
   #[default]
   Purple = 0,
@@ -133,6 +133,11 @@ pub enum SelectOptionColor {
   Green = 6,
   Aqua = 7,
   Blue = 8,
+  Cream = 9,
+  Mint = 10,
+  Sky = 11,
+  Lilac = 12,
+  Pearl = 13,
 }
 
 impl TryFrom<u8> for SelectOptionColor {
@@ -149,6 +154,11 @@ impl TryFrom<u8> for SelectOptionColor {
       6 => Ok(SelectOptionColor::Green),
       7 => Ok(SelectOptionColor::Aqua),
       8 => Ok(SelectOptionColor::Blue),
+      9 => Ok(SelectOptionColor::Cream),
+      10 => Ok(SelectOptionColor::Mint),
+      11 => Ok(SelectOptionColor::Sky),
+      12 => Ok(SelectOptionColor::Lilac),
+      13 => Ok(SelectOptionColor::Pearl),
       _ => Err("Invalid color value"),
     }
   }
@@ -172,6 +182,11 @@ impl From<usize> for SelectOptionColor {
       6 => SelectOptionColor::Green,
       7 => SelectOptionColor::Aqua,
       8 => SelectOptionColor::Blue,
+      9 => SelectOptionColor::Cream,
+      10 => SelectOptionColor::Mint,
+      11 => SelectOptionColor::Sky,
+      12 => SelectOptionColor::Lilac,
+      13 => SelectOptionColor::Pearl,
       _ => SelectOptionColor::Purple,
     }
   }
