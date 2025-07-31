@@ -574,7 +574,7 @@ mod tests {
       SelectOptionColor::try_from(8_u8).unwrap(),
       SelectOptionColor::Blue
     );
-    assert!(SelectOptionColor::try_from(10_u8).is_err());
+    assert!(SelectOptionColor::try_from(15_u8).is_err());
   }
 
   #[test]
