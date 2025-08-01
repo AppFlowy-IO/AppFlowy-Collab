@@ -3,6 +3,7 @@ use crate::entity::FieldType;
 use crate::fields::select_type_option::{SelectOption, SelectOptionColor};
 use crate::rows::{Cell, new_cell_builder};
 use crate::template::entity::CELL_DATA;
+use crate::template::option_parse::SELECT_OPTION_COLOR_COUNT;
 use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
@@ -67,7 +68,7 @@ impl From<(Vec<String>, Vec<String>)> for ChecklistCellData {
       .map(|(index, name)| SelectOption {
         id: gen_option_id(),
         name: name.clone(),
-        color: SelectOptionColor::from(index % 8),
+        color: SelectOptionColor::from(index % SELECT_OPTION_COLOR_COUNT),
       })
       .collect();
 

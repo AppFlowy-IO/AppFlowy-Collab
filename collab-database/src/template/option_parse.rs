@@ -3,6 +3,8 @@ use crate::fields::select_type_option::{SelectOption, SelectOptionColor};
 use std::collections::HashSet;
 
 pub(crate) const SELECT_OPTION_SEPARATOR: &str = ",";
+pub(crate) const SELECT_OPTION_COLOR_COUNT: usize = 14;
+
 pub(crate) fn replace_cells_with_options_id(
   cells: Vec<String>,
   options: &[SelectOption],
@@ -39,7 +41,7 @@ pub fn build_options_from_cells(cells: &[String]) -> Vec<SelectOption> {
   let mut options = vec![];
   for (index, name) in option_names.into_iter().enumerate() {
     // pick a color by mod 8
-    let color = SelectOptionColor::from(index % 8);
+    let color = SelectOptionColor::from(index % SELECT_OPTION_COLOR_COUNT);
     let option = SelectOption {
       id: gen_option_id(),
       name,
