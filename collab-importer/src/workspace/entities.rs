@@ -1,5 +1,6 @@
 use collab_entity::CollabType;
 use collab_folder::{ViewIcon, ViewLayout};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -37,7 +38,7 @@ use std::collections::HashMap;
 pub struct WorkspaceRelationMap {
   pub workspace_id: String,
   pub export_timestamp: i64,
-  pub views: HashMap<String, ViewMetadata>,
+  pub views: IndexMap<String, ViewMetadata>,
   pub collab_objects: HashMap<String, CollabMetadata>,
   pub dependencies: Vec<ViewDependency>,
   pub workspace_database_meta: Option<Vec<WorkspaceDatabaseMeta>>,
