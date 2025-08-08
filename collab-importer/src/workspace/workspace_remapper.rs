@@ -170,7 +170,7 @@ impl WorkspaceRemapper {
     &self,
     database_storage_id: &str,
   ) -> Result<Option<WorkspaceDatabase>> {
-    if self.relation_map.workspace_database_meta.is_none() {
+    if self.relation_map.workspace_database_meta.is_empty() {
       return Ok(None);
     }
     let workspace_database_json = serde_json::json!({
