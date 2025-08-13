@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use collab::preclude::{Any, MapExt, MapRef, YrsValue};
+use collab::preclude::{Any, Map, MapExt, MapRef, Out, YrsValue};
 use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 
@@ -152,6 +152,36 @@ impl ParentChildRelations {
     let array = self.get_or_create_children_with_txn(txn, parent_id);
     array.add_children_with_txn(txn, children, index);
   }
+
+  /*pub fn replace_view(&self, txn: &mut TransactionMut, old_view_id: &str, new_view_id: &str) {
+    /*
+      We cannot replace the view id with the parent id, because if another person would add a child
+      to the previous parent view id at the same time, it wouldn't be migrated to the new view id.
+      For that reason we'll use [RevisionMapping] to keep track of the view ids for this case.
+    */
+
+    // replace the view id in children array
+    for (parent_id) in self.container.keys(txn) {
+      if let Some(children) = self.get_children_with_txn(txn, parent_id) {
+        for (index, id) in children
+          .get_children_with_txn(txn)
+          .items
+          .into_iter()
+          .enumerate()
+        {
+          if id.id == old_view_id {
+            children.remove_child_with_txn(txn, index as u32);
+            children.insert_child_with_txn(
+              txn,
+              index as u32,
+              ViewIdentifier::new(new_view_id.to_string()),
+            );
+            return;
+          }
+        }
+      }
+    }
+  }*/
 }
 
 /// Handy wrapper around an array of children.

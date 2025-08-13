@@ -24,4 +24,5 @@ pub mod folder_diff;
 mod folder_migration;
 mod folder_observe;
 pub mod hierarchy_builder;
+mod revision;
 pub mod space_info;
