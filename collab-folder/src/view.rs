@@ -3,8 +3,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use collab::preclude::{
-  Any, AsPrelim, Map, MapExt, MapPrelim, MapRef, Out, ReadTxn, Subscription, TransactionMut,
-  YrsValue,
+  Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut,
 };
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
@@ -225,7 +224,7 @@ impl ViewsMap {
       .collect();
 
     for view_id in roots {
-      let (leaf, mappings) = self.revision_map.mappings(txn, view_id.to_string());
+      let (_, mappings) = self.revision_map.mappings(txn, view_id.to_string());
       let values = mapped
         .entry(view_id.to_string())
         .or_insert_with(HashSet::new);

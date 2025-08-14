@@ -4,7 +4,7 @@ use crate::{UserId, timestamp};
 use anyhow::bail;
 use collab::preclude::encoding::serde::{from_any, to_any};
 use collab::preclude::{
-  Any, AnyMut, Array, Map, MapRef, Out, ReadTxn, Subscription, TransactionMut, YrsValue,
+  Any, AnyMut, Array, Map, MapRef, ReadTxn, Subscription, TransactionMut, YrsValue,
 };
 use collab::preclude::{ArrayRef, MapExt, deserialize_i64_from_numeric};
 use serde::{Deserialize, Serialize};

@@ -17,7 +17,6 @@ use crate::folder_observe::ViewChangeSender;
 use crate::hierarchy_builder::{FlattedViews, ParentChildViews};
 use crate::revision::RevisionMapping;
 use crate::section::{Section, SectionItem, SectionMap};
-use crate::view::view_from_map_ref;
 use crate::{
   FolderData, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
   ViewChangeReceiver, ViewUpdate, ViewsMap, Workspace, impl_section_op,
@@ -816,7 +815,7 @@ impl FolderBody {
     new_view_id: &str,
     uid: i64,
   ) -> bool {
-    self.views.replace_view(txn, &old_view_id, new_view_id, uid)
+    self.views.replace_view(txn, old_view_id, new_view_id, uid)
   }
 }
 

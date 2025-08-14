@@ -1,5 +1,4 @@
 use collab::preclude::{Any, Map, MapRef, Out, ReadTxn, TransactionMut};
-use std::sync::Arc;
 
 pub struct RevisionMapping {
   container: MapRef,

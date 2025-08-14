@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use collab::preclude::{Any, Map, MapExt, MapRef, Out, YrsValue};
+use collab::preclude::{Any, MapExt, MapRef, YrsValue};
 use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 

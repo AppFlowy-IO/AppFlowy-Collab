@@ -1,7 +1,7 @@
-use crate::util::{FolderTest, create_folder, make_test_view};
+use crate::util::{create_folder, make_test_view};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
-use collab_folder::{Folder, FolderData, UserId};
+use collab_folder::{Folder, UserId};
 
 #[test]
 fn replace_view_get_view() {
