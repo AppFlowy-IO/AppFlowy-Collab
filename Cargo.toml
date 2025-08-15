@@ -20,7 +20,7 @@ collab-entity = { path = "collab-entity" }
 collab-document = { path = "collab-document" }
 collab-folder = { path = "collab-folder" }
 collab-importer = { path = "collab-importer" }
-yrs = { version = "0.23.5", features = ["sync"] }
+yrs = { version = "0.24", features = ["sync"] }
 anyhow = "1.0.94"
 thiserror = "1.0.39"
 serde = { version = "1.0.157", features = ["derive"] }
