@@ -3,7 +3,7 @@ use crate::fields::select_type_option::{SelectOption, SelectOptionColor};
 use std::collections::HashSet;
 
 pub(crate) const SELECT_OPTION_SEPARATOR: &str = ",";
-pub(crate) const SELECT_OPTION_COLOR_COUNT: usize = 14;
+pub(crate) const SELECT_OPTION_COLOR_COUNT: usize = 20;
 
 pub(crate) fn replace_cells_with_options_id(
   cells: Vec<String>,
