@@ -13,7 +13,7 @@ use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
 use collab_database::views::{
   FieldSettingsMap, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder,
-  GroupSettingMap, LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
+  GroupSettingMap, LayoutSetting, SortMap, SortMapBuilder,
 };
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
@@ -395,7 +395,7 @@ impl From<LayoutSetting> for TestCalendarLayoutSetting {
 
 impl From<TestCalendarLayoutSetting> for LayoutSetting {
   fn from(setting: TestCalendarLayoutSetting) -> Self {
-    LayoutSettingBuilder::from([
+    LayoutSetting::from([
       ("layout_ty".into(), setting.layout_ty.value().into()),
       (
         "first_day_of_week".into(),
