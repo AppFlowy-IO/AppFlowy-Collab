@@ -3,6 +3,7 @@ mod custom_section;
 mod favorite_test;
 mod load_disk;
 // mod recent_views_test;
+mod replace_view_test;
 mod serde_test;
 mod space_info_test;
 mod trash_test;

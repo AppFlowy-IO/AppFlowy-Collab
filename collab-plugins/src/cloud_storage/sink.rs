@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use collab::lock::Mutex;
-use futures_util::SinkExt;
+use futures::SinkExt;
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::{Instant, Interval};

@@ -1,11 +1,10 @@
+use crate::cloud_storage::error::SyncError;
+use futures::Sink;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-
-use futures_util::{Sink, Stream};
 use tokio::sync::mpsc::UnboundedSender;
-
-use crate::cloud_storage::error::SyncError;
+use tokio_stream::Stream;
 
 #[allow(dead_code)]
 pub trait CollabConnect<Item>: Sink<Item> + Stream {}
