@@ -9,7 +9,7 @@ use tokio::sync::broadcast;
 use crate::revision::RevisionMapping;
 use crate::section::SectionMap;
 use crate::view::FOLDER_VIEW_ID;
-use crate::{ParentChildRelations, ViewId, View, view_from_map_ref};
+use crate::{ParentChildRelations, View, ViewId, view_from_map_ref};
 
 #[derive(Debug, Clone)]
 pub enum ViewChange {
