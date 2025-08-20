@@ -610,6 +610,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "assert-json-diff",
+ "async-trait",
  "chrono",
  "collab",
  "collab-entity",

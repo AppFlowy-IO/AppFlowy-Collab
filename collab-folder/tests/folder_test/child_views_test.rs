@@ -180,11 +180,7 @@ fn move_child_views_test() {
   let v_1_1 = make_test_view("1_1", "1", vec![]);
   let v_1_2 = make_test_view("1_2", "1", vec![]);
   let v_1_3 = make_test_view("1_3", "1", vec![]);
-  let v_1 = make_test_view(
-    "1",
-    "w1",
-    vec!["1_1".to_string(), "1_2".to_string(), "1_3".to_string()],
-  );
+  let v_1 = make_test_view("1", "w1", vec!["1_1".into(), "1_2".into(), "1_3".into()]);
 
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
@@ -210,9 +206,9 @@ fn move_child_views_test() {
     .body
     .views
     .get_views_belong_to(&txn, &v_1.id, uid.as_i64());
-  assert_eq!(v_1_child_views[0].id, "1_1");
-  assert_eq!(v_1_child_views[1].id, "1_2");
-  assert_eq!(v_1_child_views[2].id, "1_3");
+  assert_eq!(&*v_1_child_views[0].id, "1_1");
+  assert_eq!(&*v_1_child_views[1].id, "1_2");
+  assert_eq!(&*v_1_child_views[2].id, "1_3");
 
   folder.body.views.move_child(&mut txn, &v_1.id, 2, 0);
   folder.body.views.move_child(&mut txn, &v_1.id, 0, 1);
@@ -222,9 +218,9 @@ fn move_child_views_test() {
     .views
     .get_view(&txn, &v_1.id, uid.as_i64())
     .unwrap();
-  assert_eq!(v_1_child_views.children[0].id, "1_1");
-  assert_eq!(v_1_child_views.children[1].id, "1_3");
-  assert_eq!(v_1_child_views.children[2].id, "1_2");
+  assert_eq!(&*v_1_child_views.children[0].id, "1_1");
+  assert_eq!(&*v_1_child_views.children[1].id, "1_3");
+  assert_eq!(&*v_1_child_views.children[2].id, "1_2");
 }
 
 #[test]
@@ -256,8 +252,8 @@ fn delete_view_test() {
     .body
     .views
     .get_views_belong_to(&txn, "w1", uid.as_i64());
-  assert_eq!(w_1_child_views[0].id, "1_1");
-  assert_eq!(w_1_child_views[1].id, "1_3");
+  assert_eq!(&*w_1_child_views[0].id, "1_1");
+  assert_eq!(&*w_1_child_views[1].id, "1_3");
 }
 
 #[test]

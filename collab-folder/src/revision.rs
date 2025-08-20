@@ -1,3 +1,4 @@
+use crate::ViewId;
 use collab::preclude::{Any, Map, MapRef, Out, ReadTxn, TransactionMut};
 
 pub struct RevisionMapping {
@@ -28,7 +29,7 @@ impl RevisionMapping {
     self.container.insert(txn, old_view_id, new_view_id);
   }
 
-  pub fn mappings(&self, txn: &impl ReadTxn, view_id: String) -> (String, Vec<String>) {
+  pub fn mappings(&self, txn: &impl ReadTxn, view_id: ViewId) -> (ViewId, Vec<ViewId>) {
     let mut buf = Vec::new();
     let last_view_id = self.iter_mapping(txn, view_id, |view_id| {
       buf.push(view_id);
@@ -36,20 +37,19 @@ impl RevisionMapping {
     (last_view_id, buf)
   }
 
-  pub fn map<T: ReadTxn>(&self, txn: &T, view_id: String) -> String {
+  pub fn map<T: ReadTxn>(&self, txn: &T, view_id: ViewId) -> ViewId {
     self.iter_mapping(txn, view_id, |_| {})
   }
 
-  fn iter_mapping<T, F>(&self, txn: &T, view_id: String, mut f: F) -> String
+  fn iter_mapping<T, F>(&self, txn: &T, view_id: ViewId, mut f: F) -> ViewId
   where
     T: ReadTxn,
-    F: FnMut(String),
+    F: FnMut(ViewId),
   {
     let mut current_view_id = view_id;
     let mut i = Self::REVISION_MAP_JUMP_LIMIT;
     while i > 0 {
       if let Some(Out::Any(Any::String(next_view_id))) = self.container.get(txn, &current_view_id) {
-        let next_view_id = next_view_id.to_string();
         let old_view_id = std::mem::replace(&mut current_view_id, next_view_id);
         f(old_view_id);
         i -= 1;

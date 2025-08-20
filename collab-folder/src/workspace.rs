@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{RepeatedViewIdentifier, View, ViewLayout, timestamp};
+use crate::{RepeatedViewIdentifier, View, ViewId, ViewLayout, timestamp};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Workspace {
-  pub id: String,
+  pub id: ViewId,
   pub name: String,
   pub child_views: RepeatedViewIdentifier,
   pub created_at: i64,
@@ -14,7 +14,7 @@ pub struct Workspace {
 }
 
 impl Workspace {
-  pub fn new(id: String, name: String, uid: i64) -> Self {
+  pub fn new(id: ViewId, name: String, uid: i64) -> Self {
     debug_assert!(!id.is_empty());
     let time = timestamp();
     Self {
@@ -46,7 +46,7 @@ impl From<Workspace> for View {
   fn from(value: Workspace) -> Self {
     Self {
       id: value.id,
-      parent_view_id: "".to_string(),
+      parent_view_id: "".into(),
       name: value.name,
       children: value.child_views,
       created_at: value.created_at,

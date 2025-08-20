@@ -19,7 +19,7 @@ fn verify_view(
   let view = folder.get_view(new_id, uid).unwrap();
 
   assert_eq!(view.name, expected_name);
-  assert_eq!(view.parent_view_id, expected_parent_id);
+  assert_eq!(&*view.parent_view_id, expected_parent_id);
   assert_eq!(view.children.len(), expected_children_len);
   assert_eq!(view.layout, expected_layout);
 }
@@ -55,7 +55,7 @@ async fn test_folder_collab_remapper() {
 
   let workspace_info = folder.get_workspace_info(&workspace_id, uid).unwrap();
   assert_eq!(workspace_info.name, "My Custom Workspace");
-  assert_eq!(workspace_info.id, workspace_id);
+  assert_eq!(&*workspace_info.id, workspace_id);
 
   let top_level_views_count = relation_map
     .views
@@ -74,14 +74,14 @@ async fn test_folder_collab_remapper() {
   assert_eq!(all_views.len(), relation_map.views.len() + 1);
 
   for view in &all_views {
-    if view.id == workspace_id {
+    if *view.id == workspace_id {
       continue;
     }
 
     let old_view_id = relation_map
       .views
       .keys()
-      .find(|old_id| id_mapper.get_new_id(old_id) == Some(&view.id))
+      .find(|old_id| id_mapper.get_new_id(old_id) == Some(&*view.id))
       .expect("mapped view should exist in original relation map");
 
     let original_view = &relation_map.views[old_view_id];
@@ -96,15 +96,15 @@ async fn test_folder_collab_remapper() {
 
     if let Some(original_parent_id) = &original_view.parent_id {
       let expected_parent_id = id_mapper.get_new_id(original_parent_id).unwrap();
-      assert_eq!(view.parent_view_id, *expected_parent_id);
+      assert_eq!(&*view.parent_view_id, expected_parent_id);
     } else {
-      assert_eq!(view.parent_view_id, workspace_id);
+      assert_eq!(&*view.parent_view_id, workspace_id);
     }
 
     assert_eq!(view.children.len(), original_view.children.len());
     for (i, child) in view.children.iter().enumerate() {
       let expected_child_id = id_mapper.get_new_id(&original_view.children[i]).unwrap();
-      assert_eq!(child.id, *expected_child_id);
+      assert_eq!(&*child.id, expected_child_id);
     }
   }
 }

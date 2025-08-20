@@ -8,7 +8,7 @@ fn test_workspace_is_ready() {
   let uid = UserId::from(1);
   let object_id = "1";
 
-  let workspace = Workspace::new("w1".to_string(), "".to_string(), uid.as_i64());
+  let workspace = Workspace::new("w1".into(), "".to_string(), uid.as_i64());
   let folder_data = FolderData::new(uid.as_i64(), workspace);
   let options = CollabOptions::new(object_id.to_string(), default_client_id());
   let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();

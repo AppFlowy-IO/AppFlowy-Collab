@@ -1,8 +1,8 @@
 use crate::space_info::SpacePermission;
 use crate::{
   IconType, RepeatedViewIdentifier, SPACE_CREATED_AT_KEY, SPACE_ICON_COLOR_KEY, SPACE_ICON_KEY,
-  SPACE_IS_SPACE_KEY, SPACE_PERMISSION_KEY, SpaceInfo, View, ViewIcon, ViewIdentifier, ViewLayout,
-  timestamp,
+  SPACE_IS_SPACE_KEY, SPACE_PERMISSION_KEY, SpaceInfo, View, ViewIcon, ViewId, ViewIdentifier,
+  ViewLayout, timestamp,
 };
 
 use serde_json::json;
@@ -14,12 +14,12 @@ use std::ops::{Deref, DerefMut};
 /// The views created by this builder will be the first level views of the workspace.
 pub struct NestedViewBuilder {
   pub uid: i64,
-  pub workspace_id: String,
+  pub workspace_id: ViewId,
   pub views: Vec<ParentChildViews>,
 }
 
 impl NestedViewBuilder {
-  pub fn new(workspace_id: String, uid: i64) -> Self {
+  pub fn new(workspace_id: ViewId, uid: i64) -> Self {
     Self {
       uid,
       workspace_id,
@@ -67,7 +67,7 @@ impl NestedViews {
   pub fn remove_view(&mut self, view_id: &str) {
     // recursively remove the view and its children views.
     self.views.retain_mut(|view| {
-      if view.view.id == view_id {
+      if view.view.id.as_ref() == view_id {
         return false;
       }
       view.remove_view(view_id);
@@ -108,8 +108,8 @@ impl DerefMut for NestedViews {
 /// The default layout of the view is [ViewLayout::Document]
 pub struct NestedChildViewBuilder {
   uid: i64,
-  parent_view_id: String,
-  view_id: String,
+  parent_view_id: ViewId,
+  view_id: ViewId,
   name: String,
   desc: String,
   layout: ViewLayout,
@@ -123,11 +123,11 @@ pub struct NestedChildViewBuilder {
 impl NestedChildViewBuilder {
   /// Create a new view builder.
   /// It generates a new view id for the view. If you want to specify the view id, you can use [with_view_id] method.
-  pub fn new(uid: i64, parent_view_id: String) -> Self {
+  pub fn new(uid: i64, parent_view_id: ViewId) -> Self {
     Self {
       uid,
       parent_view_id,
-      view_id: uuid::Uuid::new_v4().to_string(),
+      view_id: uuid::Uuid::new_v4().to_string().into(),
       name: Default::default(),
       desc: Default::default(),
       layout: ViewLayout::Document,
@@ -153,8 +153,8 @@ impl NestedChildViewBuilder {
     self
   }
 
-  pub fn with_view_id<T: ToString>(mut self, view_id: T) -> Self {
-    self.view_id = view_id.to_string();
+  pub fn with_view_id<T: Into<ViewId>>(mut self, view_id: T) -> Self {
+    self.view_id = view_id.into();
     self
   }
 
@@ -321,7 +321,7 @@ impl Display for ParentChildViews {
 impl ParentChildViews {
   pub fn remove_view(&mut self, view_id: &str) {
     self.children.retain_mut(|child_view| {
-      if child_view.view.id == view_id {
+      if child_view.view.id.as_ref() == view_id {
         return false;
       }
       child_view.remove_view(view_id);
@@ -330,7 +330,7 @@ impl ParentChildViews {
   }
 
   pub fn find_view(&self, view_id: &str) -> Option<&View> {
-    if self.view.id == view_id {
+    if self.view.id.as_ref() == view_id {
       return Some(&self.view);
     }
     for child_view in &self.children {
@@ -358,11 +358,12 @@ impl FlattedViews {
 
 #[cfg(test)]
 mod tests {
+  use crate::ViewId;
   use crate::hierarchy_builder::{FlattedViews, NestedViewBuilder};
 
   #[tokio::test]
   async fn create_first_level_views_test() {
-    let workspace_id = "w1".to_string();
+    let workspace_id: ViewId = "w1".into();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
     builder
       .with_view_builder(|view_builder| async { view_builder.with_name("1").build() })
@@ -382,7 +383,7 @@ mod tests {
 
   #[tokio::test]
   async fn create_view_with_children_test() {
-    let workspace_id = "w1".to_string();
+    let workspace_id: ViewId = "w1".into();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
     builder
       .with_view_builder(|view_builder| async {
@@ -441,7 +442,7 @@ mod tests {
 
   #[tokio::test]
   async fn create_three_level_view_test() {
-    let workspace_id = "w1".to_string();
+    let workspace_id: ViewId = "w1".into();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
     builder
       .with_view_builder(|view_builder| async {
@@ -515,7 +516,7 @@ mod tests {
 
   #[tokio::test]
   async fn delete_multiple_views_in_sequence_test() {
-    let workspace_id = "w1".to_string();
+    let workspace_id: ViewId = "w1".into();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
 
     // Create a 3-level nested view hierarchy

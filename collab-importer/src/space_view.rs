@@ -26,7 +26,7 @@ pub fn create_space_view(
   let collab = Collab::new_with_options(CollabOrigin::Empty, options)
     .map_err(|err| ImporterError::Internal(err.into()))?;
 
-  let view = NestedChildViewBuilder::new(uid, workspace_id.to_string())
+  let view = NestedChildViewBuilder::new(uid, workspace_id.into())
     .with_view_id(view_id)
     .with_layout(ViewLayout::Document)
     .with_name(name)

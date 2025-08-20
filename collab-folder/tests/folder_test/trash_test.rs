@@ -26,9 +26,9 @@ fn create_trash_test() {
 
   let trash = folder.get_my_trash_sections(uid.as_i64());
   assert_eq!(trash.len(), 3);
-  assert_eq!(trash[0].id, "v1");
-  assert_eq!(trash[1].id, "v2");
-  assert_eq!(trash[2].id, "v3");
+  assert_eq!(&*trash[0].id, "v1");
+  assert_eq!(&*trash[1].id, "v2");
+  assert_eq!(&*trash[2].id, "v3");
 }
 
 #[test]
@@ -46,12 +46,12 @@ fn delete_trash_view_ids_test() {
   folder.add_trash_view_ids(vec!["v1".to_string(), "v2".to_string()], uid.as_i64());
 
   let trash = folder.get_my_trash_sections(uid.as_i64());
-  assert_eq!(trash[0].id, "v1");
-  assert_eq!(trash[1].id, "v2");
+  assert_eq!(&*trash[0].id, "v1");
+  assert_eq!(&*trash[1].id, "v2");
 
   folder.delete_trash_view_ids(vec!["v1".to_string()], uid.as_i64());
   let trash = folder.get_my_trash_sections(uid.as_i64());
-  assert_eq!(trash[0].id, "v2");
+  assert_eq!(&*trash[0].id, "v2");
 }
 
 #[tokio::test]
@@ -68,7 +68,7 @@ async fn create_trash_callback_test() {
   timeout(poll_tx(section_rx, |change| match change {
     SectionChange::Trash(change) => match change {
       TrashSectionChange::TrashItemAdded { ids } => {
-        assert_eq!(ids, vec!["1", "2"]);
+        assert_eq!(ids, vec!["1".into(), "2".into()]);
       },
       TrashSectionChange::TrashItemRemoved { .. } => {},
     },
@@ -89,10 +89,10 @@ async fn delete_trash_view_ids_callback_test() {
   timeout(poll_tx(trash_rx, |change| match change {
     SectionChange::Trash(change) => match change {
       TrashSectionChange::TrashItemAdded { ids } => {
-        assert_eq!(ids, vec!["1", "2"]);
+        assert_eq!(ids, vec!["1".into(), "2".into()]);
       },
       TrashSectionChange::TrashItemRemoved { ids } => {
-        assert_eq!(ids, vec!["1", "2"]);
+        assert_eq!(ids, vec!["1".into(), "2".into()]);
       },
     },
   }))
