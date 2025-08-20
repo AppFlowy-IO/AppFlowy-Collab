@@ -343,7 +343,7 @@ impl Folder {
     }
   }
 
-  pub fn replace_view(&mut self, from: &str, to: &str, uid: i64) -> bool {
+  pub fn replace_view(&mut self, from: &ViewId, to: &ViewId, uid: i64) -> bool {
     let mut txn = self.collab.transact_mut();
     self.body.replace_view(&mut txn, from, to, uid)
   }
@@ -811,8 +811,8 @@ impl FolderBody {
   pub fn replace_view(
     &self,
     txn: &mut TransactionMut,
-    old_view_id: &str,
-    new_view_id: &str,
+    old_view_id: &ViewId,
+    new_view_id: &ViewId,
     uid: i64,
   ) -> bool {
     self.views.replace_view(txn, old_view_id, new_view_id, uid)

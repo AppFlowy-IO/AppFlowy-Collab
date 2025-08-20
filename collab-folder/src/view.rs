@@ -224,7 +224,7 @@ impl ViewsMap {
       .collect();
 
     for view_id in roots {
-      let (_, mappings) = self.revision_map.mappings(txn, view_id.to_string());
+      let (_, mappings) = self.revision_map.mappings(txn, view_id.into());
       let values = mapped
         .entry(view_id.to_string())
         .or_insert_with(HashSet::new);
@@ -468,13 +468,13 @@ impl ViewsMap {
   pub fn replace_view(
     &self,
     txn: &mut TransactionMut,
-    old_view_id: &str,
-    new_view_id: &str,
+    old_view_id: &ViewId,
+    new_view_id: &ViewId,
     uid: i64,
   ) -> bool {
     if let Some(old_view) = self.get_view(txn, old_view_id, uid) {
       let mut new_view = (*old_view).clone();
-      new_view.id = new_view_id.to_string();
+      new_view.id = new_view_id.clone();
       new_view.last_edited_by = Some(uid);
       new_view.last_edited_time = timestamp();
 
@@ -497,7 +497,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   view_relations: &Arc<ParentChildRelations>,
   section_map: &SectionMap,
   uid: i64,
-  mappings: impl IntoIterator<Item = String>,
+  mappings: impl IntoIterator<Item = ViewId>,
 ) -> Option<View> {
   let parent_view_id: ViewId = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
   let id: ViewId = map_ref.get_with_txn(txn, FOLDER_VIEW_ID)?;
