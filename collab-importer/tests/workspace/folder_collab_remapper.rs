@@ -74,7 +74,7 @@ async fn test_folder_collab_remapper() {
   assert_eq!(all_views.len(), relation_map.views.len() + 1);
 
   for view in &all_views {
-    if &*view.id == workspace_id {
+    if *view.id == workspace_id {
       continue;
     }
 

@@ -48,7 +48,7 @@ impl From<AnyMut> for Any {
       AnyMut::Bool(bool) => Any::Bool(bool),
       AnyMut::Number(num) => Any::Number(num),
       AnyMut::BigInt(num) => Any::BigInt(num),
-      AnyMut::String(str) => Any::String(str.into()),
+      AnyMut::String(str) => Any::String(str),
       AnyMut::Bytes(bytes) => Any::Buffer(bytes.freeze().to_vec().into()),
       AnyMut::Array(array) => Any::Array(array.into_iter().map(Any::from).collect()),
       AnyMut::Map(map) => {
