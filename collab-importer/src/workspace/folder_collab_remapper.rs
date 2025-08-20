@@ -63,8 +63,8 @@ impl FolderCollabRemapper {
         .collect();
 
       let mut view = View::new(
-        new_view_id.clone(),
-        new_parent_id,
+        new_view_id.into(),
+        new_parent_id.into(),
         view_metadata.name.clone(),
         view_metadata.layout.clone(),
         Some(uid),
@@ -80,7 +80,7 @@ impl FolderCollabRemapper {
 
     folder_data.views = views;
     folder_data.workspace = Workspace {
-      id: new_workspace_id.clone(),
+      id: new_workspace_id.into(),
       name: workspace_name.to_string(),
       child_views: RepeatedViewIdentifier::new(top_level_view_ids),
       created_at: current_time,
@@ -89,7 +89,7 @@ impl FolderCollabRemapper {
       last_edited_by: Some(uid),
     };
 
-    let options = CollabOptions::new(new_workspace_id.clone(), default_client_id());
+    let options = CollabOptions::new(new_workspace_id.into(), default_client_id());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let folder = Folder::create(collab, None, folder_data);
     Ok(folder)

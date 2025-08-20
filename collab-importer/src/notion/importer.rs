@@ -184,11 +184,11 @@ impl ImportedInfo {
     !self.views.iter().any(|view| !view.is_dir)
   }
 
-  fn space_ids(&self) -> Vec<String> {
-    let mut space_ids = Vec::new();
+  fn space_ids(&self) -> HashSet<String> {
+    let mut space_ids = HashSet::new();
     for view in &self.views {
       if view.is_dir {
-        space_ids.push(view.view_id.clone());
+        space_ids.insert(view.view_id.clone());
       }
     }
     space_ids
@@ -239,7 +239,7 @@ impl ImportedInfo {
   pub async fn build_nested_views(&self) -> NestedViews {
     let space_ids = self.space_ids();
     let parent_id = if space_ids.is_empty() {
-      self.space_view.view.id.clone()
+      self.space_view.view.id.to_string()
     } else {
       self.workspace_id.clone()
     };
@@ -255,7 +255,7 @@ impl ImportedInfo {
       vec![space_view]
     } else {
       views.iter_mut().for_each(|view| {
-        if space_ids.contains(&view.view.id) {
+        if space_ids.contains(view.view.id.as_ref()) {
           view.view.extra = serde_json::to_string(
             &ViewExtraBuilder::new()
               .is_space(true)
@@ -300,10 +300,10 @@ async fn convert_notion_page_to_parent_child(
     NotionFile::CSVPart { .. } => ViewLayout::Grid,
     NotionFile::Markdown { .. } => ViewLayout::Document,
   };
-  let mut view_builder = NestedChildViewBuilder::new(uid, parent_id.to_string())
+  let mut view_builder = NestedChildViewBuilder::new(uid, parent_id.into())
     .with_name(&notion_page.notion_name)
     .with_layout(view_layout)
-    .with_view_id(&notion_page.view_id);
+    .with_view_id(notion_page.view_id.as_str());
 
   for child_notion_page in &notion_page.children {
     view_builder = view_builder

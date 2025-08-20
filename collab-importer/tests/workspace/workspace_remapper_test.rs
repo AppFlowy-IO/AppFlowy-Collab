@@ -44,7 +44,7 @@ async fn test_workspace_remapper_folder_structure() {
   let workspace_info = folder.get_workspace_info(&workspace_id, uid).unwrap();
 
   assert_eq!(workspace_info.name, workspace_name);
-  assert_eq!(workspace_info.id, workspace_id);
+  assert_eq!(&*workspace_info.id, workspace_id);
 
   let all_views = folder.get_all_views(uid);
   assert_eq!(all_views.len(), 8);
