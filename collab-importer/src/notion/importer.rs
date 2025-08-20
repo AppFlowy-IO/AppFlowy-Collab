@@ -209,7 +209,7 @@ impl ImportedInfo {
       Box::pin(combined_stream) as ImportedCollabInfoStream
     } else {
       let imported_space_collab = ImportedCollab {
-        object_id: self.space_view.view.id.clone(),
+        object_id: self.space_view.view.id.to_string(),
         collab_type: CollabType::Document,
         encoded_collab: self
           .space_collab
@@ -221,7 +221,7 @@ impl ImportedInfo {
         name: self.name.clone(),
         imported_collabs: vec![imported_space_collab],
         resources: vec![CollabResource {
-          object_id: self.space_view.view.id,
+          object_id: self.space_view.view.id.to_string(),
           files: vec![],
         }],
         import_type: ImportType::Document,

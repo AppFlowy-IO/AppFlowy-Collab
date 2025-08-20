@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
+use crate::ViewId;
 use collab::preclude::{Any, MapExt, MapRef, YrsValue};
 use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
@@ -46,15 +47,13 @@ impl ParentChildRelations {
     parent_id: &str,
     view_id: &str,
   ) -> Option<ViewIdentifier> {
-    let child = ViewIdentifier {
-      id: view_id.to_string(),
-    };
+    let child = ViewIdentifier { id: view_id.into() };
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let index = children
         .get_children_with_txn(txn)
         .items
         .iter()
-        .position(|i| i.id == view_id);
+        .position(|i| i.id.as_ref() == view_id);
       match index {
         None => {
           tracing::warn!("🟡 The view {} is not in parent {}.", view_id, parent_id);
@@ -86,7 +85,7 @@ impl ParentChildRelations {
     txn: &mut TransactionMut,
     parent_id: &str,
     view_id: &str,
-    prev_view_id: Option<String>,
+    prev_view_id: Option<ViewId>,
   ) {
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let prev_index = match prev_view_id {
@@ -101,9 +100,7 @@ impl ParentChildRelations {
         None => 0,
         Some(index) => (index + 1) as u32,
       };
-      let child = ViewIdentifier {
-        id: view_id.to_string(),
-      };
+      let child = ViewIdentifier { id: view_id.into() };
       children.insert_child_with_txn(txn, index, child);
     }
   }
@@ -229,7 +226,7 @@ impl ChildrenArray {
     children: Vec<ViewIdentifier>,
     index: Option<u32>,
   ) {
-    let mut existing_children_ids: Vec<String> = self
+    let mut existing_children_ids: Vec<ViewId> = self
       .get_children_with_txn(txn)
       .into_inner()
       .into_iter()
@@ -318,13 +315,14 @@ impl From<RepeatedViewIdentifier> for Vec<Any> {
   }
 }
 
+#[repr(transparent)]
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
 pub struct ViewIdentifier {
-  pub id: String,
+  pub id: ViewId,
 }
 
 impl Deref for ViewIdentifier {
-  type Target = String;
+  type Target = str;
 
   fn deref(&self) -> &Self::Target {
     &self.id
@@ -332,12 +330,12 @@ impl Deref for ViewIdentifier {
 }
 
 impl ViewIdentifier {
-  pub fn new(id: String) -> Self {
-    Self { id }
+  pub fn new<S: Into<Arc<str>>>(id: S) -> Self {
+    Self { id: id.into() }
   }
   pub fn from_map(map: &HashMap<String, Any>) -> Option<Self> {
     if let Any::String(id) = map.get("id")? {
-      return Some(Self { id: id.to_string() });
+      return Some(Self { id: id.clone() });
     }
 
     None
@@ -347,7 +345,7 @@ impl ViewIdentifier {
 impl From<ViewIdentifier> for Any {
   fn from(value: ViewIdentifier) -> Self {
     let mut map = HashMap::new();
-    map.insert("id".to_string(), Any::String(Arc::from(value.id)));
+    map.insert("id".to_string(), Any::String(value.id.clone()));
     Any::Map(Arc::new(map))
   }
 }

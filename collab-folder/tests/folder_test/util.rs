@@ -31,7 +31,7 @@ pub struct FolderTest {
 }
 
 pub fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
-  let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string(), uid.as_i64());
+  let mut workspace = Workspace::new(workspace_id.into(), "".to_string(), uid.as_i64());
   workspace.created_at = 0;
   let folder_data = FolderData::new(uid.as_i64(), workspace);
   create_folder_with_data(uid, workspace_id, folder_data)
@@ -83,14 +83,14 @@ pub fn create_folder_with_workspace(uid: UserId, workspace_id: &str) -> FolderTe
   create_folder(uid, workspace_id)
 }
 
-pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<String>) -> View {
+pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<ViewId>) -> View {
   let belongings = belongings
     .into_iter()
     .map(ViewIdentifier::new)
     .collect::<Vec<ViewIdentifier>>();
   View {
-    id: view_id.to_string(),
-    parent_view_id: parent_view_id.to_string(),
+    id: view_id.into(),
+    parent_view_id: parent_view_id.into(),
     name: "".to_string(),
     children: RepeatedViewIdentifier::new(belongings),
     created_at: 0,

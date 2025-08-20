@@ -1,7 +1,7 @@
 use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, ReadTxn};
-use collab_folder::{Folder, FolderData, UserId, timestamp};
+use collab_folder::{Folder, FolderData, UserId, ViewId, timestamp};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -249,14 +249,14 @@ async fn deserialize_folder_data() {
         .get_all_trash_sections(clone_uid.as_i64())
         .into_iter()
         .map(|trash| trash.id)
-        .collect::<Vec<String>>();
+        .collect::<Vec<_>>();
 
       // get the private view ids
       let _private_view_ids = folder
         .get_all_private_sections(clone_uid.as_i64())
         .into_iter()
         .map(|view| view.id)
-        .collect::<Vec<String>>();
+        .collect::<Vec<_>>();
 
       get_view_ids_should_be_filtered(&folder, clone_uid.as_i64());
       let elapsed = start.elapsed();
@@ -272,24 +272,24 @@ async fn deserialize_folder_data() {
   }
 }
 
-fn get_view_ids_should_be_filtered(folder: &Folder, uid: i64) -> Vec<String> {
+fn get_view_ids_should_be_filtered(folder: &Folder, uid: i64) -> Vec<ViewId> {
   let trash_ids = get_all_trash_ids(folder, uid);
   let other_private_view_ids = get_other_private_view_ids(folder, uid);
   [trash_ids, other_private_view_ids].concat()
 }
 
-fn get_other_private_view_ids(folder: &Folder, uid: i64) -> Vec<String> {
+fn get_other_private_view_ids(folder: &Folder, uid: i64) -> Vec<ViewId> {
   let my_private_view_ids = folder
     .get_my_private_sections(uid)
     .into_iter()
     .map(|view| view.id)
-    .collect::<Vec<String>>();
+    .collect::<Vec<_>>();
 
   let all_private_view_ids = folder
     .get_all_private_sections(uid)
     .into_iter()
     .map(|view| view.id)
-    .collect::<Vec<String>>();
+    .collect::<Vec<_>>();
 
   all_private_view_ids
     .into_iter()
@@ -297,12 +297,12 @@ fn get_other_private_view_ids(folder: &Folder, uid: i64) -> Vec<String> {
     .collect()
 }
 
-fn get_all_trash_ids(folder: &Folder, uid: i64) -> Vec<String> {
+fn get_all_trash_ids(folder: &Folder, uid: i64) -> Vec<ViewId> {
   let trash_ids = folder
     .get_all_trash_sections(uid)
     .into_iter()
     .map(|trash| trash.id)
-    .collect::<Vec<String>>();
+    .collect::<Vec<_>>();
   let mut all_trash_ids = trash_ids.clone();
   let txn = folder.collab.transact();
   for trash_id in trash_ids {
@@ -316,14 +316,14 @@ fn get_all_child_view_ids<T: ReadTxn>(
   txn: &T,
   view_id: &str,
   uid: i64,
-) -> Vec<String> {
+) -> Vec<ViewId> {
   let child_view_ids = folder
     .body
     .views
     .get_views_belong_to(txn, view_id, uid)
     .into_iter()
     .map(|view| view.id.clone())
-    .collect::<Vec<String>>();
+    .collect::<Vec<_>>();
   let mut all_child_view_ids = child_view_ids.clone();
   for child_view_id in child_view_ids {
     all_child_view_ids.extend(get_all_child_view_ids(folder, txn, &child_view_id, uid));

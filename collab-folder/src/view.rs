@@ -43,7 +43,7 @@ pub struct ViewsMap {
   pub(crate) section_map: Arc<SectionMap>,
   pub(crate) revision_map: Arc<RevisionMapping>,
   // Minimal cache only for deletion notifications - stores basic view info
-  deletion_cache: Arc<DashMap<String, Arc<View>>>,
+  deletion_cache: Arc<DashMap<ViewId, Arc<View>>>,
   subscription: Mutex<Option<Subscription>>,
   change_tx: Option<ViewChangeSender>,
 }
@@ -69,7 +69,7 @@ impl ViewsMap {
     }
   }
 
-  pub async fn observe_view_change(&self, uid: i64, views: HashMap<String, Arc<View>>) {
+  pub async fn observe_view_change(&self, uid: i64, views: HashMap<ViewId, Arc<View>>) {
     for (k, v) in views {
       self.deletion_cache.insert(k, v);
     }
@@ -110,7 +110,7 @@ impl ViewsMap {
     txn: &mut TransactionMut,
     parent_id: &str,
     view_id: &str,
-    prev_id: Option<String>,
+    prev_id: Option<ViewId>,
   ) {
     self.associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
   }
@@ -131,7 +131,7 @@ impl ViewsMap {
     txn: &mut TransactionMut,
     parent_id: &str,
     view_id: &str,
-    prev_view_id: Option<String>,
+    prev_view_id: Option<ViewId>,
   ) {
     self
       .parent_children_relation
@@ -188,7 +188,7 @@ impl ViewsMap {
               .into_inner()
               .into_iter()
               .map(|identifier| identifier.id)
-              .collect::<Vec<String>>()
+              .collect::<Vec<_>>()
           })
           .unwrap_or_default();
 
@@ -499,8 +499,8 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   uid: i64,
   mappings: impl IntoIterator<Item = String>,
 ) -> Option<View> {
-  let parent_view_id: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
-  let id: String = map_ref.get_with_txn(txn, FOLDER_VIEW_ID)?;
+  let parent_view_id: ViewId = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
+  let id: ViewId = map_ref.get_with_txn(txn, FOLDER_VIEW_ID)?;
   let name: String = map_ref
     .get_with_txn(txn, FOLDER_VIEW_NAME)
     .unwrap_or_default();
@@ -687,8 +687,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         .section_op(self.txn, Section::Private, self.uid.as_i64())
     {
       if is_private {
-        private_section
-          .add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+        private_section.add_sections_item(self.txn, vec![SectionItem::new(self.view_id.into())]);
       } else {
         private_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -704,7 +703,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         .section_op(self.txn, Section::Favorite, self.uid.as_i64())
     {
       if is_favorite {
-        fav_section.add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+        fav_section.add_sections_item(self.txn, vec![SectionItem::new(self.view_id.into())]);
       } else {
         fav_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -728,7 +727,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         .section_op(self.txn, Section::Trash, self.uid.as_i64())
     {
       if is_trash {
-        trash_section.add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+        trash_section.add_sections_item(self.txn, vec![SectionItem::new(self.view_id.into())]);
       } else {
         trash_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -761,12 +760,14 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 }
 
+pub type ViewId = Arc<str>;
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct View {
   /// The id of the view
-  pub id: String,
+  pub id: ViewId,
   /// The id for given parent view
-  pub parent_view_id: String,
+  pub parent_view_id: ViewId,
   /// The name that display on the left sidebar
   pub name: String,
   /// A list of ids, each of them is the id of other view
@@ -796,8 +797,8 @@ pub struct View {
 
 impl View {
   pub fn new(
-    view_id: String,
-    parent_view_id: String,
+    view_id: ViewId,
+    parent_view_id: ViewId,
     name: String,
     layout: ViewLayout,
     created_by: Option<i64>,
@@ -819,23 +820,6 @@ impl View {
     }
   }
 
-  pub fn orphan_view(view_id: &str, layout: ViewLayout, uid: Option<i64>) -> Self {
-    View {
-      id: view_id.to_string(),
-      parent_view_id: view_id.to_string(),
-      name: "".to_string(),
-      children: Default::default(),
-      created_at: timestamp(),
-      is_favorite: false,
-      layout,
-      icon: None,
-      created_by: uid,
-      last_edited_time: 0,
-      last_edited_by: None,
-      is_locked: None,
-      extra: None,
-    }
-  }
   pub fn space_info(&self) -> Option<SpaceInfo> {
     let extra = self.extra.as_ref()?;
     serde_json::from_str::<SpaceInfo>(extra).ok()
