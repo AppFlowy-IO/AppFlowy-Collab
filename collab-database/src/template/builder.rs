@@ -5,7 +5,7 @@ use crate::template::entity::{
 
 use crate::entity::FieldType;
 use crate::fields::checkbox_type_option::CheckboxTypeOption;
-use crate::fields::date_type_option::DateTypeOption;
+use crate::fields::date_type_option::{DateFormat, DateTypeOption};
 use crate::fields::media_type_option::MediaTypeOption;
 use crate::fields::number_type_option::NumberTypeOption;
 use crate::fields::select_type_option::SelectTypeOption;
@@ -217,7 +217,8 @@ impl FieldTemplateBuilder {
           })
           .collect::<Vec<CellTemplateData>>();
 
-        let type_option = DateTypeOption::new();
+        let mut type_option = DateTypeOption::new();
+        type_option.date_format = Some(DateFormat::FriendlyFull);
 
         field_template
           .type_options
