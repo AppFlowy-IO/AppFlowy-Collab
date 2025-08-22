@@ -65,8 +65,10 @@ impl From<TimeTypeOption> for TypeOptionData {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DateTypeOption {
-  pub date_format: DateFormat,
-  pub time_format: TimeFormat,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub date_format: Option<DateFormat>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub time_format: Option<TimeFormat>,
   pub timezone_id: String,
 }
 
@@ -203,17 +205,17 @@ impl DateTypeOption {
       "Etc/UTC".to_owned()
     });
     Self {
-      date_format: DateFormat::default(),
-      time_format: TimeFormat::default(),
       timezone_id,
+      date_format: None,
+      time_format: None,
     }
   }
 
   pub fn default_utc() -> Self {
     Self {
-      date_format: DateFormat::default(),
-      time_format: TimeFormat::default(),
       timezone_id: "Etc/UTC".to_owned(),
+      date_format: None,
+      time_format: None,
     }
   }
 
@@ -230,9 +232,9 @@ impl DateTypeOption {
           let offset = self.get_timezone_offset(naive);
           let date_time = chrono::DateTime::<Local>::from_naive_utc_and_offset(naive, offset);
 
-          let fmt = self.date_format.format_str();
+          let fmt = self.date_format.unwrap_or_default().format_str();
           let date = format!("{}", date_time.format(fmt));
-          let fmt = self.time_format.format_str();
+          let fmt = self.time_format.unwrap_or_default().format_str();
           let time = format!("{}", date_time.format(fmt));
           (date, time)
         },
@@ -249,7 +251,8 @@ impl DateTypeOption {
   ) -> Result<Option<NaiveTime>, DatabaseError> {
     match (include_time, time_str) {
       (true, Some(time_str)) => {
-        let result = NaiveTime::parse_from_str(time_str, self.time_format.format_str());
+        let result =
+          NaiveTime::parse_from_str(time_str, self.time_format.unwrap_or_default().format_str());
         match result {
           Ok(time) => Ok(Some(time)),
           Err(_e) => {
@@ -313,14 +316,8 @@ impl DateTypeOption {
 
 impl From<TypeOptionData> for DateTypeOption {
   fn from(data: TypeOptionData) -> Self {
-    let date_format = data
-      .get_as::<i64>("date_format")
-      .map(DateFormat::from)
-      .unwrap_or_default();
-    let time_format = data
-      .get_as::<i64>("time_format")
-      .map(TimeFormat::from)
-      .unwrap_or_default();
+    let date_format = data.get_as::<i64>("date_format_v2").map(DateFormat::from);
+    let time_format = data.get_as::<i64>("time_format_v2").map(TimeFormat::from);
     let timezone_id: String = data.get_as("timezone_id").unwrap_or_default();
     Self {
       date_format,
@@ -332,11 +329,20 @@ impl From<TypeOptionData> for DateTypeOption {
 
 impl From<DateTypeOption> for TypeOptionData {
   fn from(data: DateTypeOption) -> Self {
-    TypeOptionDataBuilder::from([
-      ("date_format".into(), Any::BigInt(data.date_format.value())),
-      ("time_format".into(), Any::BigInt(data.time_format.value())),
-      ("timezone_id".into(), data.timezone_id.into()),
-    ])
+    let mut result = TypeOptionDataBuilder::from([("timezone_id".into(), data.timezone_id.into())]);
+    if let Some(date_format) = data.date_format {
+      result.insert(
+        "date_format_v2".to_string(),
+        Any::BigInt(date_format.value()),
+      );
+    }
+    if let Some(time_format) = data.time_format {
+      result.insert(
+        "time_format_v2".to_string(),
+        Any::BigInt(time_format.value()),
+      );
+    }
+    result
   }
 }
 

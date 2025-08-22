@@ -15,8 +15,10 @@ use yrs::Any;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TimestampTypeOption {
-  pub date_format: DateFormat,
-  pub time_format: TimeFormat,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub date_format: Option<DateFormat>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub time_format: Option<TimeFormat>,
   pub include_time: bool,
   pub field_type: i64,
   #[serde(default)]
@@ -89,9 +91,9 @@ impl TimestampTypeOption {
         .unwrap_or_else(|| Local::now().offset().fix());
 
       let date_time = DateTime::<Local>::from_naive_utc_and_offset(naive, offset);
-      let fmt = self.date_format.format_str();
+      let fmt = self.date_format.unwrap_or_default().format_str();
       let date = format!("{}", date_time.format(fmt));
-      let fmt = self.time_format.format_str();
+      let fmt = self.time_format.unwrap_or_default().format_str();
       let time = format!("{}", date_time.format(fmt));
       (date, time)
     } else {
@@ -114,14 +116,8 @@ impl Default for TimestampTypeOption {
 
 impl From<TypeOptionData> for TimestampTypeOption {
   fn from(data: TypeOptionData) -> Self {
-    let date_format = data
-      .get_as::<i64>("date_format")
-      .map(DateFormat::from)
-      .unwrap_or_default();
-    let time_format = data
-      .get_as::<i64>("time_format")
-      .map(TimeFormat::from)
-      .unwrap_or_default();
+    let date_format = data.get_as::<i64>("date_format_v2").map(DateFormat::from);
+    let time_format = data.get_as::<i64>("time_format_v2").map(TimeFormat::from);
     let include_time = data.get_as::<bool>("include_time").unwrap_or_default();
     let field_type = data
       .get_as::<i64>("field_type")
@@ -140,19 +136,25 @@ impl From<TypeOptionData> for TimestampTypeOption {
 }
 
 impl From<TimestampTypeOption> for TypeOptionData {
-  fn from(option: TimestampTypeOption) -> Self {
-    TypeOptionDataBuilder::from([
-      (
-        "date_format".into(),
-        Any::BigInt(option.date_format.value()),
-      ),
-      (
-        "time_format".into(),
-        Any::BigInt(option.time_format.value()),
-      ),
-      ("include_time".into(), Any::Bool(option.include_time)),
-      ("field_type".into(), Any::BigInt(option.field_type)),
-    ])
+  fn from(data: TimestampTypeOption) -> Self {
+    let mut result = TypeOptionDataBuilder::from([
+      ("include_time".into(), Any::Bool(data.include_time)),
+      ("field_type".into(), Any::BigInt(data.field_type)),
+    ]);
+
+    if let Some(date_format) = data.date_format {
+      result.insert(
+        "date_format_v2".to_string(),
+        Any::BigInt(date_format.value()),
+      );
+    }
+    if let Some(time_format) = data.time_format {
+      result.insert(
+        "time_format_v2".to_string(),
+        Any::BigInt(time_format.value()),
+      );
+    }
+    result
   }
 }
 
@@ -175,8 +177,8 @@ mod tests {
   #[test]
   fn test_from_type_option_data() {
     let data = TypeOptionDataBuilder::from([
-      ("date_format".into(), Any::BigInt(2)),
-      ("time_format".into(), Any::BigInt(1)),
+      ("date_format_v2".into(), Any::BigInt(2)),
+      ("time_format_v2".into(), Any::BigInt(1)),
       ("include_time".into(), Any::Bool(false)),
       (
         "field_type".into(),
@@ -185,8 +187,8 @@ mod tests {
     ]);
 
     let option = TimestampTypeOption::from(data);
-    assert_eq!(option.date_format, DateFormat::ISO);
-    assert_eq!(option.time_format, TimeFormat::TwentyFourHour);
+    assert_eq!(option.date_format, Some(DateFormat::ISO));
+    assert_eq!(option.time_format, Some(TimeFormat::TwentyFourHour));
     assert!(!option.include_time);
     assert_eq!(option.field_type, i64::from(FieldType::CreatedTime));
   }
@@ -194,16 +196,16 @@ mod tests {
   #[test]
   fn test_into_type_option_data() {
     let option = TimestampTypeOption {
-      date_format: DateFormat::Friendly,
-      time_format: TimeFormat::TwelveHour,
+      date_format: Some(DateFormat::Friendly),
+      time_format: Some(TimeFormat::TwelveHour),
       include_time: true,
       field_type: FieldType::CreatedTime.into(),
       timezone: None,
     };
 
     let data: TypeOptionData = option.into();
-    assert_eq!(data.get_as::<i64>("date_format"), Some(3)); // Friendly format
-    assert_eq!(data.get_as::<i64>("time_format"), Some(0)); // TwelveHour format
+    assert_eq!(data.get_as::<i64>("date_format_v2"), Some(3)); // Friendly format
+    assert_eq!(data.get_as::<i64>("time_format_v2"), Some(0)); // TwelveHour format
     assert_eq!(data.get_as::<bool>("include_time"), Some(true));
     assert_eq!(
       data.get_as::<i64>("field_type"),
@@ -214,8 +216,8 @@ mod tests {
   #[test]
   fn test_formatted_date_time_from_timestamp() {
     let option = TimestampTypeOption {
-      date_format: DateFormat::Friendly,
-      time_format: TimeFormat::TwentyFourHour,
+      date_format: Some(DateFormat::Friendly),
+      time_format: Some(TimeFormat::TwentyFourHour),
       include_time: true,
       field_type: FieldType::CreatedTime.into(),
       timezone: Some("Etc/UTC".to_string()),
@@ -231,8 +233,8 @@ mod tests {
   #[test]
   fn test_json_cell() {
     let option = TimestampTypeOption {
-      date_format: DateFormat::US,
-      time_format: TimeFormat::TwentyFourHour,
+      date_format: Some(DateFormat::US),
+      time_format: Some(TimeFormat::TwentyFourHour),
       include_time: true,
       field_type: FieldType::CreatedTime.into(),
       timezone: Some("Etc/UTC".to_string()),
@@ -248,8 +250,8 @@ mod tests {
   #[test]
   fn test_convert_raw_cell_data() {
     let option = TimestampTypeOption {
-      date_format: DateFormat::ISO,
-      time_format: TimeFormat::TwentyFourHour,
+      date_format: Some(DateFormat::ISO),
+      time_format: Some(TimeFormat::TwentyFourHour),
       include_time: false,
       field_type: FieldType::CreatedTime.into(),
       timezone: None,
