@@ -264,7 +264,7 @@ impl CollabOptions {
       object_id,
       data_source: None,
       client_id,
-      skip_gc: true,
+      skip_gc: false,
     }
   }
 
