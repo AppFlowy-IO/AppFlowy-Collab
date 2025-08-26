@@ -63,7 +63,7 @@ impl SectionMap {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum Section {
   Favorite,
   Recent,
