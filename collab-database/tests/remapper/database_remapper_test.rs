@@ -1,8 +1,8 @@
 use collab_database::database::DatabaseData;
 use collab_database::database_remapper::DatabaseCollabRemapper;
-use collab_database::rows::RowId;
 use std::collections::HashMap;
 use std::fs;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn test_remap_database_with_database_id() {
@@ -70,17 +70,20 @@ async fn test_remap_database_with_database_id() {
     .unwrap();
 
   assert_eq!(
-    remapped_data.database_id, "00000000-0000-0000-0000-000000000000",
+    remapped_data.database_id.to_string(),
+    "00000000-0000-0000-0000-000000000000",
     "Database ID should be remapped"
   );
 
   for view in &remapped_data.views {
     assert_eq!(
-      view.id, "11111111-1111-1111-1111-111111111111",
+      view.id.to_string(),
+      "11111111-1111-1111-1111-111111111111",
       "View ID should be remapped"
     );
     assert_eq!(
-      view.database_id, "00000000-0000-0000-0000-000000000000",
+      view.database_id.to_string(),
+      "00000000-0000-0000-0000-000000000000",
       "View database ID should be remapped"
     );
 
@@ -118,7 +121,8 @@ async fn test_remap_database_with_database_id() {
       row_id_str
     );
     assert_eq!(
-      row.database_id, "00000000-0000-0000-0000-000000000000",
+      row.database_id.to_string(),
+      "00000000-0000-0000-0000-000000000000",
       "Row database ID should be remapped"
     );
   }
@@ -159,18 +163,18 @@ async fn test_database_remapper_with_row_meta() {
   let remapped_data = remapper.remap_database_data(database_data).unwrap();
   assert_eq!(remapped_data.rows.len(), 3);
   assert_eq!(
-    remapped_data.database_id,
+    remapped_data.database_id.to_string(),
     "00000000-0000-0000-0000-000000000000"
   );
   assert_eq!(remapped_data.row_metas.len(), 3);
 
-  let remapped_row_id = RowId::from("22222222-2222-2222-2222-222222222222".to_string());
+  let remapped_row_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
   let remapped_meta = remapped_data.row_metas.get(&remapped_row_id).unwrap();
 
   assert_eq!(remapped_meta.icon_url, Some("🥀".to_string()));
   assert!(remapped_meta.cover.is_some());
   assert!(!remapped_meta.is_document_empty);
 
-  let old_row_id = RowId::from("be970ba6-9576-4e5f-a15d-c9a04d589a57".to_string());
+  let old_row_id = Uuid::parse_str("be970ba6-9576-4e5f-a15d-c9a04d589a57").unwrap();
   assert!(!remapped_data.row_metas.contains_key(&old_row_id));
 }

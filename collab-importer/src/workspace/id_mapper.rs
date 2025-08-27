@@ -1,5 +1,5 @@
 use crate::workspace::entities::{DependencyType, WorkspaceRelationMap};
-use collab_database::{database::get_row_document_id, rows::RowId};
+use collab_database::database::get_row_document_id;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -47,7 +47,7 @@ impl IdMapper {
 
       // if the dependency is database row document, we need to handle it differently
       if dependency.dependency_type == DependencyType::DatabaseRowDocument {
-        let row_id = RowId::from(mapped_source_view_id.clone());
+        let row_id = Uuid::parse_str(&mapped_source_view_id).unwrap();
         let new_id = get_row_document_id(&row_id);
         if let Ok(new_id) = new_id {
           Self::overwrite_id(&mut id_map, &dependency.target_view_id, &new_id);

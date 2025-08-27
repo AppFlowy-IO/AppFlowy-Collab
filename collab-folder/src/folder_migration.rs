@@ -76,7 +76,8 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
     .unwrap_or_default();
 
   Some(Workspace {
-    id,
+    id: uuid::Uuid::parse_str(&id)
+      .unwrap_or_else(|_| collab_entity::uuid_validation::generate_workspace_id()),
     name,
     child_views,
     created_at,

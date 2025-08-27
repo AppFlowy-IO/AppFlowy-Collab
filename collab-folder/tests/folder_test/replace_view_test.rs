@@ -2,6 +2,7 @@ use crate::util::{create_folder, make_test_view};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
 use collab_folder::{Folder, UserId};
+use uuid::Uuid;
 
 #[test]
 fn replace_view_get_view() {
@@ -20,13 +21,19 @@ fn replace_view_get_view() {
   folder.insert_view(v2, None, uid);
 
   let old = folder.get_view("v2", uid).unwrap();
-  assert_eq!(old.id, "v2");
+  assert_eq!(
+    old.id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
+  );
 
   folder.replace_view("v2", "v3", uid);
 
   // getting old view id should return new one
   let new = folder.get_view("v2", uid).unwrap();
-  assert_eq!(new.id, "v3");
+  assert_eq!(
+    new.id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string()
+  );
   assert_eq!(new.name, old.name);
   assert_eq!(new.parent_view_id, old.parent_view_id);
   assert_eq!(new.children, old.children);
@@ -51,7 +58,7 @@ fn replace_view_get_view_concurrent_update() {
   f1.insert_view(v22, None, uid1);
   f1.insert_view(v2, None, uid1);
 
-  let mut collab = Collab::new(uid2, "fake_workspace_id", "device-2", 2);
+  let mut collab = Collab::new(uid2, Uuid::new_v4(), "device-2", 2);
 
   // sync initial state between f1 and f2
   collab
@@ -65,7 +72,7 @@ fn replace_view_get_view_concurrent_update() {
   f1.replace_view("v2", "v3", uid1);
 
   let mut v23 = make_test_view("v2.3", &workspace_id, vec![]);
-  v23.parent_view_id = "v2".to_string();
+  v23.parent_view_id = collab_entity::uuid_validation::view_id_from_any_string("v2");
   f2.insert_view(v23, None, uid2);
 
   // cross-sync state between f1 and f2
@@ -75,10 +82,17 @@ fn replace_view_get_view_concurrent_update() {
     .unwrap();
 
   let v1 = f1.get_view("v2", uid2).unwrap();
-  assert_eq!(v1.id, "v3");
+  assert_eq!(v1.id.to_string(), uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string());
   assert_eq!(
-    v1.children.iter().map(|c| c.id.clone()).collect::<Vec<_>>(),
-    vec!["v2.1", "v2.2", "v2.3"]
+    v1.children
+      .iter()
+      .map(|c| c.id.to_string())
+      .collect::<Vec<_>>(),
+    vec![
+      uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2.1".as_bytes()).to_string(),
+      uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2.2".as_bytes()).to_string(),
+      uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2.3".as_bytes()).to_string()
+    ]
   );
 
   let v2 = f2.get_view("v2", uid1).unwrap();
@@ -102,7 +116,7 @@ fn replace_view_all_views_concurrent_update() {
   f1.insert_view(v22, None, uid1);
   f1.insert_view(v2, None, uid1);
 
-  let mut collab = Collab::new(uid2, "fake_workspace_id", "device-2", 2);
+  let mut collab = Collab::new(uid2, Uuid::new_v4(), "device-2", 2);
 
   // sync initial state between f1 and f2
   collab
@@ -116,7 +130,7 @@ fn replace_view_all_views_concurrent_update() {
   f1.replace_view("v2", "v3", uid1);
 
   let mut v23 = make_test_view("v2.3", &workspace_id, vec![]);
-  v23.parent_view_id = "v2".to_string();
+  v23.parent_view_id = collab_entity::uuid_validation::view_id_from_any_string("v2");
   f2.insert_view(v23, None, uid2);
 
   // cross-sync state between f1 and f2
@@ -131,8 +145,8 @@ fn replace_view_all_views_concurrent_update() {
   let mut v1 = f1.get_all_views(uid1);
   let mut v2 = f2.get_all_views(uid2);
 
-  v1.sort_by_key(|v| v.id.clone());
-  v2.sort_by_key(|v| v.id.clone());
+  v1.sort_by_key(|v| v.id.to_string());
+  v2.sort_by_key(|v| v.id.to_string());
 
   assert_eq!(v1, v2);
 }

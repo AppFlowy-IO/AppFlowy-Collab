@@ -8,6 +8,7 @@ use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::WorkspaceDatabase;
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use crate::user_test::helper::TEST_VIEW_ID_V1;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
@@ -181,6 +182,7 @@ pub async fn run_script(
 }
 
 pub(crate) fn create_database(database_id: &str) -> CreateDatabaseParams {
+  let database_uuid = uuid::Uuid::parse_str(database_id).unwrap();
   let row_1 = CreateRowParams {
     id: 1.into(),
     cells: CellsBuilder::new()
@@ -222,11 +224,11 @@ pub(crate) fn create_database(database_id: &str) -> CreateDatabaseParams {
   let field_settings_map = field_settings_for_default_database();
 
   CreateDatabaseParams {
-    database_id: database_id.to_string(),
-    inline_view_id: "v1".to_string(),
+    database_id: database_uuid,
+    inline_view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
     views: vec![CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v1".to_string(),
+      database_id: database_uuid,
+      view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
       name: "my first database view".to_string(),
       field_settings: field_settings_map,
       ..Default::default()

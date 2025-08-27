@@ -8,7 +8,8 @@ async fn test_space_view_edge_case_handler() {
     .unwrap();
   let test_assets_path = unzip_path;
 
-  let custom_workspace_id = "custom_workspace_123".to_string();
+  // Use a valid UUID for workspace ID
+  let custom_workspace_id = uuid::Uuid::new_v4().to_string();
   let remapper =
     WorkspaceRemapper::new(test_assets_path.as_ref(), Some(custom_workspace_id.clone()))
       .await
@@ -81,8 +82,10 @@ async fn test_space_view_edge_case_handler() {
   let folder = remapper.build_folder_collab(uid, workspace_name).unwrap();
 
   let folder_workspace_id = folder.get_workspace_id().unwrap();
+  let expected_workspace_id = uuid::Uuid::parse_str(&custom_workspace_id).unwrap();
   assert_eq!(
-    folder_workspace_id, custom_workspace_id,
+    folder_workspace_id,
+    expected_workspace_id.to_string(),
     "folder should use custom workspace id"
   );
 

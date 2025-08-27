@@ -144,7 +144,7 @@ impl ViewsMap {
       .get_children_with_txn(txn, parent_id)
     {
       if let Some(identifier) = parent.remove_child_with_txn(txn, child_index) {
-        self.delete_views(txn, vec![identifier.id]);
+        self.delete_views(txn, vec![identifier.id.to_string()]);
       }
     }
   }
@@ -161,7 +161,7 @@ impl ViewsMap {
         .iter()
         .flat_map(|child| {
           // Always load fresh from storage
-          let (child_id, mappings) = self.revision_map.mappings(txn, child.id.clone());
+          let (child_id, mappings) = self.revision_map.mappings(txn, child.id.to_string());
           self
             .container
             .get_with_txn(txn, &child_id)
@@ -187,7 +187,7 @@ impl ViewsMap {
               .get_children_with_txn(txn)
               .into_inner()
               .into_iter()
-              .map(|identifier| identifier.id)
+              .map(|identifier| identifier.id.to_string())
               .collect::<Vec<String>>()
           })
           .unwrap_or_default();
@@ -271,7 +271,9 @@ impl ViewsMap {
     view_id: &str,
     uid: i64,
   ) -> Option<Arc<View>> {
-    let (view_id, mappings) = self.revision_map.mappings(txn, view_id.into());
+    // Convert view_id to deterministic UUID for lookup
+    let uuid_view_id = collab_entity::uuid_validation::view_id_from_any_string(view_id).to_string();
+    let (view_id, mappings) = self.revision_map.mappings(txn, uuid_view_id);
     let map_ref = self.container.get_with_txn(txn, &view_id)?;
     view_from_map_ref(
       &map_ref,
@@ -297,14 +299,15 @@ impl ViewsMap {
   }
 
   pub fn get_view_name_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<String> {
-    let map_ref: MapRef = self.container.get_with_txn(txn, view_id)?;
+    let uuid_view_id = collab_entity::uuid_validation::view_id_from_any_string(view_id).to_string();
+    let map_ref: MapRef = self.container.get_with_txn(txn, &uuid_view_id)?;
     map_ref.get_with_txn(txn, FOLDER_VIEW_NAME)
   }
 
   /// Updates the deletion cache - only used for deletion notifications
   fn update_deletion_cache(&self, view: Option<Arc<View>>) {
     if let Some(view) = view {
-      self.deletion_cache.insert(view.id.clone(), view);
+      self.deletion_cache.insert(view.id.to_string(), view);
     }
   }
 
@@ -331,14 +334,12 @@ impl ViewsMap {
 
     if let Some(parent_map_ref) = self
       .container
-      .get_with_txn::<_, MapRef>(txn, &view.parent_view_id)
+      .get_with_txn::<_, MapRef>(txn, &view.parent_view_id.to_string())
     {
-      let view_identifier = ViewIdentifier {
-        id: view.id.clone(),
-      };
+      let view_identifier = ViewIdentifier { id: view.id };
       let updated_view = ViewUpdate::new(
         UserId::from(uid),
-        &view.parent_view_id,
+        &view.parent_view_id.to_string(),
         txn,
         &parent_map_ref,
         self.parent_children_relation.clone(),
@@ -353,9 +354,11 @@ impl ViewsMap {
       self.update_deletion_cache(updated_view);
     }
 
-    let map_ref = self.container.insert(txn, &*view.id, MapPrelim::default());
+    let map_ref = self
+      .container
+      .insert(txn, view.id.to_string(), MapPrelim::default());
     let created_view = ViewBuilder::new(
-      &view.id,
+      &view.id.to_string(),
       txn,
       map_ref,
       self.parent_children_relation.clone(),
@@ -368,7 +371,7 @@ impl ViewsMap {
       let last_edited_time = self.normalize_timestamp(view.last_edited_time);
       update
         .set_name(view.name)
-        .set_bid(view.parent_view_id)
+        .set_bid(view.parent_view_id.to_string())
         .set_layout(view.layout)
         .set_created_at(created_at)
         .set_children(view.children)
@@ -387,9 +390,11 @@ impl ViewsMap {
   pub fn delete_views<T: AsRef<str>>(&self, txn: &mut TransactionMut, view_ids: Vec<T>) {
     for view_id in view_ids {
       let view_id = view_id.as_ref();
-      self.container.remove(txn, view_id);
+      let uuid_view_id =
+        collab_entity::uuid_validation::view_id_from_any_string(view_id).to_string();
+      self.container.remove(txn, &uuid_view_id);
       // Remove from deletion cache when explicitly deleted
-      self.remove_from_deletion_cache(view_id);
+      self.remove_from_deletion_cache(&uuid_view_id);
     }
   }
 
@@ -440,10 +445,11 @@ impl ViewsMap {
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
-    let map_ref = self.container.get_with_txn(txn, view_id)?;
+    let uuid_view_id = collab_entity::uuid_validation::view_id_from_any_string(view_id).to_string();
+    let map_ref = self.container.get_with_txn(txn, &uuid_view_id)?;
     let update = ViewUpdate::new(
       uid.clone(),
-      view_id,
+      &uuid_view_id,
       txn,
       &map_ref,
       self.parent_children_relation.clone(),
@@ -474,7 +480,7 @@ impl ViewsMap {
   ) -> bool {
     if let Some(old_view) = self.get_view(txn, old_view_id, uid) {
       let mut new_view = (*old_view).clone();
-      new_view.id = new_view_id.to_string();
+      new_view.id = collab_entity::uuid_validation::view_id_from_any_string(new_view_id);
       new_view.last_edited_by = Some(uid);
       new_view.last_edited_time = timestamp();
 
@@ -543,8 +549,8 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   let extra = map_ref.get_with_txn(txn, VIEW_EXTRA);
 
   Some(View {
-    id,
-    parent_view_id,
+    id: collab_entity::uuid_validation::view_id_from_any_string(&id),
+    parent_view_id: collab_entity::uuid_validation::view_id_from_any_string(&parent_view_id),
     name,
     children,
     created_at,
@@ -764,9 +770,9 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct View {
   /// The id of the view
-  pub id: String,
+  pub id: collab_entity::uuid_validation::ViewId,
   /// The id for given parent view
-  pub parent_view_id: String,
+  pub parent_view_id: collab_entity::uuid_validation::ViewId,
   /// The name that display on the left sidebar
   pub name: String,
   /// A list of ids, each of them is the id of other view
@@ -803,8 +809,8 @@ impl View {
     created_by: Option<i64>,
   ) -> Self {
     Self {
-      id: view_id,
-      parent_view_id,
+      id: collab_entity::uuid_validation::view_id_from_any_string(&view_id),
+      parent_view_id: collab_entity::uuid_validation::view_id_from_any_string(&parent_view_id),
       name,
       children: Default::default(),
       created_at: timestamp(),
@@ -821,8 +827,8 @@ impl View {
 
   pub fn orphan_view(view_id: &str, layout: ViewLayout, uid: Option<i64>) -> Self {
     View {
-      id: view_id.to_string(),
-      parent_view_id: view_id.to_string(),
+      id: collab_entity::uuid_validation::view_id_from_any_string(view_id),
+      parent_view_id: collab_entity::uuid_validation::view_id_from_any_string(view_id),
       name: "".to_string(),
       children: Default::default(),
       created_at: timestamp(),

@@ -1,5 +1,6 @@
 use crate::disk::script::{CollabPersistenceTest, disk_plugin_with_db};
 use assert_json_diff::assert_json_eq;
+use uuid::Uuid;
 
 use anyhow::Error;
 use collab::core::collab::{CollabOptions, default_client_id};
@@ -36,11 +37,13 @@ async fn insert_single_change_and_restore_from_disk() {
 async fn flush_test() {
   let doc_id = "1".to_string();
   let test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
+  let object_id = Uuid::parse_str(&doc_id).unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, doc_id.as_bytes()));
+  let object_id_str = object_id.to_string();
   let disk_plugin = disk_plugin_with_db(
     test.uid,
     test.workspace_id.clone(),
     test.db.clone(),
-    &doc_id,
+    &object_id_str,
     CollabType::Unknown,
   );
   let data_source = KVDBCollabPersistenceImpl {
@@ -49,8 +52,8 @@ async fn flush_test() {
     workspace_id: test.workspace_id.clone(),
   };
 
-  let options = CollabOptions::new(doc_id.to_string(), default_client_id())
-    .with_data_source(data_source.into());
+  let options = CollabOptions::new(object_id, default_client_id())
+  .with_data_source(data_source.into());
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   collab.add_plugin(Box::new(disk_plugin));
   collab.initialize();
@@ -62,7 +65,7 @@ async fn flush_test() {
 
   let read = test.db.read_txn();
   let before_flush_updates = read
-    .get_all_updates(test.uid, &test.workspace_id, &doc_id)
+    .get_all_updates(test.uid, &test.workspace_id, &object_id_str)
     .unwrap();
   let write_txn = test.db.write_txn();
   let encode_collab = collab.encode_collab_v1(|_| Ok::<(), Error>(())).unwrap();
@@ -70,7 +73,7 @@ async fn flush_test() {
     .flush_doc(
       test.uid,
       &test.workspace_id,
-      &doc_id,
+      &object_id_str,
       encode_collab.state_vector.to_vec(),
       encode_collab.doc_state.to_vec(),
     )
@@ -78,7 +81,7 @@ async fn flush_test() {
   write_txn.commit_transaction().unwrap();
 
   let after_flush_updates = read
-    .get_all_updates(test.uid, &test.workspace_id, &doc_id)
+    .get_all_updates(test.uid, &test.workspace_id, &object_id_str)
     .unwrap();
 
   let after_flush_value = collab.to_json_value();

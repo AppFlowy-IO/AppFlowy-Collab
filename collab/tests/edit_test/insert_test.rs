@@ -1,5 +1,6 @@
 use assert_matches2::assert_matches;
 use collab::preclude::{Collab, MapExt};
+use uuid::Uuid;
 
 use crate::util::{Person, Position};
 use collab::core::collab::default_client_id;
@@ -8,7 +9,8 @@ use yrs::{Map, MapRef, Observable};
 
 #[tokio::test]
 async fn insert_text() {
-  let mut c = Collab::new(1, "1", "1", default_client_id());
+  let object_id = Uuid::new_v4();
+  let mut c = Collab::new(1, object_id, "1", default_client_id());
   let _sub = c.observe_data(|txn, event| {
     event.target().iter(txn).for_each(|(a, b)| {
       println!("{}: {}", a, b);
@@ -22,7 +24,8 @@ async fn insert_text() {
 
 #[tokio::test]
 async fn insert_json_attrs() {
-  let mut collab = Collab::new(1, "1", "1", default_client_id());
+  let object_id = Uuid::new_v4();
+  let mut collab = Collab::new(1, object_id, "1", default_client_id());
   let object = Person {
     name: "nathan".to_string(),
     position: Position {
@@ -54,7 +57,8 @@ async fn insert_json_attrs() {
 
 #[tokio::test]
 async fn observer_attr_mut() {
-  let mut collab = Collab::new(1, "1", "1", default_client_id());
+  let object_id = Uuid::new_v4();
+  let mut collab = Collab::new(1, object_id, "1", default_client_id());
   let object = Person {
     name: "nathan".to_string(),
     position: Position {
@@ -82,7 +86,8 @@ async fn observer_attr_mut() {
 
 #[tokio::test]
 async fn remove_value() {
-  let mut collab = Collab::new(1, "1", "1", default_client_id());
+  let object_id = Uuid::new_v4();
+  let mut collab = Collab::new(1, object_id, "1", default_client_id());
   let object = Person {
     name: "nathan".to_string(),
     position: Position {
@@ -112,7 +117,8 @@ async fn remove_value() {
 
 #[tokio::test]
 async fn undo_single_insert_text() {
-  let mut collab = Collab::new(1, "1", "1", default_client_id());
+  let object_id = Uuid::new_v4();
+  let mut collab = Collab::new(1, object_id, "1", default_client_id());
   collab.enable_undo_redo();
   collab.insert("text", "hello world");
 
@@ -132,7 +138,8 @@ async fn undo_single_insert_text() {
 
 #[tokio::test]
 async fn redo_single_insert_text() {
-  let mut collab = Collab::new(1, "1", "1", default_client_id());
+  let object_id = Uuid::new_v4();
+  let mut collab = Collab::new(1, object_id, "1", default_client_id());
   collab.enable_undo_redo();
   collab.insert("text", "hello world");
 
@@ -154,7 +161,8 @@ async fn redo_single_insert_text() {
 
 #[tokio::test]
 async fn undo_manager_not_enable_test() {
-  let mut collab = Collab::new(1, "1", "1", default_client_id());
+  let object_id = Uuid::new_v4();
+  let mut collab = Collab::new(1, object_id, "1", default_client_id());
   collab.insert("text", "hello world");
   let result = collab.undo();
   assert_matches!(result, Err(CollabError::UndoManagerNotEnabled));
@@ -162,7 +170,8 @@ async fn undo_manager_not_enable_test() {
 
 #[tokio::test]
 async fn undo_second_insert_text() {
-  let mut collab = Collab::new(1, "1", "1", default_client_id());
+  let object_id = Uuid::new_v4();
+  let mut collab = Collab::new(1, object_id, "1", default_client_id());
   collab.insert("1", "a");
 
   collab.enable_undo_redo();

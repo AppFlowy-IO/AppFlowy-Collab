@@ -4,7 +4,7 @@ use crate::{RepeatedViewIdentifier, View, ViewLayout, timestamp};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Workspace {
-  pub id: String,
+  pub id: collab_entity::uuid_validation::WorkspaceId,
   pub name: String,
   pub child_views: RepeatedViewIdentifier,
   pub created_at: i64,
@@ -14,8 +14,7 @@ pub struct Workspace {
 }
 
 impl Workspace {
-  pub fn new(id: String, name: String, uid: i64) -> Self {
-    debug_assert!(!id.is_empty());
+  pub fn new(id: collab_entity::uuid_validation::WorkspaceId, name: String, uid: i64) -> Self {
     let time = timestamp();
     Self {
       id,
@@ -32,7 +31,8 @@ impl Workspace {
 impl From<&View> for Workspace {
   fn from(value: &View) -> Self {
     Self {
-      id: value.id.clone(),
+      // View.id is already a ViewId (UUID), so we can use it directly as WorkspaceId
+      id: value.id,
       name: value.name.clone(),
       child_views: value.children.clone(),
       created_at: value.created_at,
@@ -45,8 +45,8 @@ impl From<&View> for Workspace {
 impl From<Workspace> for View {
   fn from(value: Workspace) -> Self {
     Self {
-      id: value.id,
-      parent_view_id: "".to_string(),
+      id: collab_entity::uuid_validation::view_id_from_any_string(&value.id.to_string()),
+      parent_view_id: collab_entity::uuid_validation::view_id_from_any_string(""),
       name: value.name,
       children: value.child_views,
       created_at: value.created_at,

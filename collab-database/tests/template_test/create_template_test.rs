@@ -26,10 +26,10 @@ async fn create_template_test() {
   let expected_cell_len = [6, 6, 6, 4, 2, 2];
   let expected_field_name = ["name", "status", "user", "time", "tasks", "last modified"];
 
-  let template = DatabaseTemplateBuilder::new(database_id.clone(), gen_database_view_id(), None)
+  let template = DatabaseTemplateBuilder::new(database_id, gen_database_view_id(), None)
     .create_field(
       &None,
-      &database_id,
+      &database_id.to_string(),
       "name",
       FieldType::RichText,
       true,
@@ -43,7 +43,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id,
+      &database_id.to_string(),
       "status",
       FieldType::SingleSelect,
       false,
@@ -59,7 +59,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id,
+      &database_id.to_string(),
       "user",
       FieldType::MultiSelect,
       false,
@@ -75,7 +75,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id,
+      &database_id.to_string(),
       "time",
       FieldType::DateTime,
       false,
@@ -90,7 +90,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id,
+      &database_id.to_string(),
       "tasks",
       FieldType::Checklist,
       false,
@@ -104,7 +104,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id,
+      &database_id.to_string(),
       "last modified",
       FieldType::LastEditedTime,
       false,

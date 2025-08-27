@@ -5,11 +5,15 @@ use collab_document::document::Document;
 use collab_document::document_remapper::DocumentCollabRemapper;
 use std::collections::HashMap;
 use std::fs;
+use uuid::Uuid;
 
 fn doc_state_to_document(doc_state: &[u8], doc_id: &str, user_id: &str) -> Document {
   let client_id = user_id.parse::<u64>().unwrap_or(0);
-  let options = CollabOptions::new(doc_id.to_string(), client_id)
-    .with_data_source(DataSource::DocStateV1(doc_state.to_owned()));
+  let options = CollabOptions::new(
+    Uuid::parse_str(doc_id).unwrap_or_else(|_| Uuid::new_v4()),
+    client_id,
+  )
+  .with_data_source(DataSource::DocStateV1(doc_state.to_owned()));
   let collab =
     Collab::new_with_options(CollabOrigin::Empty, options).expect("Failed to create collab");
   Document::open(collab).expect("Failed to open document")

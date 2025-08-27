@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::database_test::helper::{
   DatabaseTest, create_database_with_params, default_field_settings_by_layout,
+  TEST_VIEW_ID_V1,
 };
 
 #[tokio::test]
@@ -65,10 +66,10 @@ async fn insert_multi_type_options_test() {
 async fn user_database_with_default_field() -> (DatabaseTest, String) {
   let database_id = Uuid::new_v4();
   let mut database = create_database_with_params(CreateDatabaseParams {
-    database_id: database_id.to_string(),
+    database_id,
     views: vec![CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v1".to_string(),
+      database_id,
+      view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
       ..Default::default()
     }],
     ..Default::default()

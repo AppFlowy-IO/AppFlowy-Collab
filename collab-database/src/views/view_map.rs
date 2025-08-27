@@ -4,7 +4,6 @@ use collab::preclude::{
 
 use crate::database::timestamp;
 use crate::entity::{DatabaseView, DatabaseViewMeta};
-use crate::rows::RowId;
 use crate::views::define::*;
 use crate::views::{
   CalculationMap, DatabaseLayout, DatabaseViewUpdate, FieldOrder, FieldOrderArray,
@@ -15,6 +14,7 @@ use crate::views::{
   view_meta_from_value,
 };
 use collab::core::origin::CollabOrigin;
+use collab_entity::uuid_validation::RowId;
 use std::ops::Deref;
 
 use super::{calculations_from_map_ref, view_id_from_map_ref};
@@ -67,11 +67,11 @@ impl DatabaseViews {
   pub fn insert_view(&self, txn: &mut TransactionMut, view: DatabaseView) {
     let map_ref = self
       .container
-      .insert(txn, view.id.as_str(), MapPrelim::default());
+      .insert(txn, view.id.to_string(), MapPrelim::default());
     ViewBuilder::new(txn, map_ref).update(|update| {
       update
-        .set_view_id(&view.id)
-        .set_database_id(view.database_id)
+        .set_view_id(&view.id.to_string())
+        .set_database_id(view.database_id.to_string())
         .set_name(view.name)
         .set_created_at(view.created_at)
         .set_modified_at(view.modified_at)
@@ -88,7 +88,14 @@ impl DatabaseViews {
   }
 
   pub fn get_view_group_setting<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<GroupSettingMap> {
-    if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return vec![];
+      }
+    };
+    if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       group_setting_from_map_ref(txn, &map_ref)
     } else {
       vec![]
@@ -96,7 +103,14 @@ impl DatabaseViews {
   }
 
   pub fn get_view_sorts<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<SortMap> {
-    if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return vec![];
+      }
+    };
+    if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       sorts_from_map_ref(txn, &map_ref)
     } else {
       vec![]
@@ -104,7 +118,14 @@ impl DatabaseViews {
   }
 
   pub fn get_view_calculations<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<CalculationMap> {
-    if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return vec![];
+      }
+    };
+    if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       calculations_from_map_ref(txn, &map_ref)
     } else {
       vec![]
@@ -112,7 +133,14 @@ impl DatabaseViews {
   }
 
   pub fn get_view_filters<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FilterMap> {
-    if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return vec![];
+      }
+    };
+    if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       filters_from_map_ref(txn, &map_ref)
     } else {
       vec![]
@@ -125,7 +153,14 @@ impl DatabaseViews {
     view_id: &str,
     layout_ty: &DatabaseLayout,
   ) -> Option<V> {
-    if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return None;
+      }
+    };
+    if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       layout_setting_from_map_ref(txn, &map_ref)
         .get(layout_ty)
         .map(|value| V::from(value.clone()))
@@ -139,15 +174,31 @@ impl DatabaseViews {
     txn: &T,
     view_id: &str,
   ) -> FieldSettingsByFieldIdMap {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return FieldSettingsByFieldIdMap::default();
+      }
+    };
     self
       .container
-      .get_with_txn(txn, view_id)
+      .get_with_txn(txn, &uuid_view_id.to_string())
       .map(|map_ref| field_settings_from_map_ref(txn, &map_ref))
       .unwrap_or_default()
   }
 
   pub fn get_view<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<DatabaseView> {
-    let map_ref = self.container.get_with_txn(txn, view_id)?;
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return None;
+      }
+    };
+    let map_ref = self
+      .container
+      .get_with_txn(txn, &uuid_view_id.to_string())?;
     view_from_map_ref(&map_ref, txn)
   }
 
@@ -168,9 +219,16 @@ impl DatabaseViews {
   }
 
   pub fn get_database_view_layout<T: ReadTxn>(&self, txn: &T, view_id: &str) -> DatabaseLayout {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return DatabaseLayout::Grid;
+      }
+    };
     let layout_type = self
       .container
-      .get_with_txn::<_, MapRef>(txn, view_id)
+      .get_with_txn::<_, MapRef>(txn, &uuid_view_id.to_string())
       .map(|map_ref| {
         map_ref
           .get_with_txn::<_, i64>(txn, DATABASE_VIEW_LAYOUT)
@@ -189,9 +247,16 @@ impl DatabaseViews {
     view_id: &str,
     index: u32,
   ) -> Option<RowOrder> {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return None;
+      }
+    };
     self
       .container
-      .get_with_txn::<_, MapRef>(txn, view_id)
+      .get_with_txn::<_, MapRef>(txn, &uuid_view_id.to_string())
       .and_then(|map_ref| {
         map_ref
           .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_ROW_ORDERS)
@@ -200,9 +265,16 @@ impl DatabaseViews {
   }
 
   pub fn get_row_orders<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return vec![];
+      }
+    };
     self
       .container
-      .get_with_txn::<_, MapRef>(txn, view_id)
+      .get_with_txn::<_, MapRef>(txn, &uuid_view_id.to_string())
       .map(|map_ref| {
         map_ref
           .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_ROW_ORDERS)
@@ -216,14 +288,21 @@ impl DatabaseViews {
   where
     F: FnMut(&mut RowOrder),
   {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return;
+      }
+    };
     if let Some(row_order_map) = self
       .container
-      .get_with_txn::<_, MapRef>(txn, view_id)
+      .get_with_txn::<_, MapRef>(txn, &uuid_view_id.to_string())
       .and_then(|map_ref| map_ref.get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_ROW_ORDERS))
     {
       let row_order_array = RowOrderArray::new(row_order_map);
       for mut row_order in row_order_array.get_objects_with_txn(txn) {
-        row_order_array.remove_with_txn(txn, row_order.id.as_str());
+        row_order_array.remove_with_txn(txn, &row_order.id.to_string());
         f(&mut row_order);
         row_order_array.push_back(txn, row_order);
       }
@@ -231,15 +310,31 @@ impl DatabaseViews {
   }
 
   pub fn get_row_index<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> Option<u32> {
-    let map: MapRef = self.container.get_with_txn(txn, view_id)?;
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return None;
+      }
+    };
+    let map: MapRef = self
+      .container
+      .get_with_txn(txn, &uuid_view_id.to_string())?;
     let row_order_array: ArrayRef = map.get_with_txn(txn, DATABASE_VIEW_ROW_ORDERS)?;
-    RowOrderArray::new(row_order_array).get_position_with_txn(txn, row_id.as_str())
+    RowOrderArray::new(row_order_array).get_position_with_txn(txn, &row_id.to_string())
   }
 
   pub fn get_field_orders<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return vec![];
+      }
+    };
     self
       .container
-      .get_with_txn::<_, MapRef>(txn, view_id)
+      .get_with_txn::<_, MapRef>(txn, &uuid_view_id.to_string())
       .map(|map_ref| {
         map_ref
           .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_FIELD_ORDERS)
@@ -253,7 +348,17 @@ impl DatabaseViews {
   where
     F: FnOnce(DatabaseViewUpdate),
   {
-    if let Some(map_ref) = self.container.get_with_txn::<_, MapRef>(txn, view_id) {
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return;
+      }
+    };
+    if let Some(map_ref) = self
+      .container
+      .get_with_txn::<_, MapRef>(txn, &uuid_view_id.to_string())
+    {
       let mut update = DatabaseViewUpdate::new(txn, &map_ref);
       update = update.set_modified_at(timestamp());
       f(update)
@@ -288,6 +393,13 @@ impl DatabaseViews {
   }
 
   pub fn delete_view(&self, txn: &mut TransactionMut, view_id: &str) {
-    self.container.remove(txn, view_id);
+    let uuid_view_id = match uuid::Uuid::parse_str(view_id) {
+      Ok(id) => id,
+      Err(_) => {
+        tracing::warn!("Invalid UUID format for view_id: {}", view_id);
+        return;
+      }
+    };
+    self.container.remove(txn, &uuid_view_id.to_string());
   }
 }

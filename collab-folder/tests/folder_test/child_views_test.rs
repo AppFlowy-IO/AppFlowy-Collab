@@ -45,23 +45,33 @@ fn create_child_views_test() {
     .views
     .insert(&mut txn, v_1_3, None, uid.as_i64());
 
-  let v_1_child_views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &v_1.id, uid.as_i64());
+  let v_1_child_views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &v_1.id.to_string(), uid.as_i64());
   assert_eq!(v_1_child_views.len(), 3);
 
-  let v_1_2_child_views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &v_1_2.id, uid.as_i64());
+  let v_1_2_child_views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &v_1_2.id.to_string(), uid.as_i64());
   assert_eq!(v_1_2_child_views.len(), 2);
 
+  let workspace_uuid_str = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
   let folder_data = folder
     .body
-    .get_folder_data(&txn, &workspace_id, uid.as_i64())
+    .get_folder_data(&txn, &workspace_uuid_str, uid.as_i64())
     .unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
+  let fake_w_1_uuid = workspace_uuid_str.clone();
+  let id_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1".as_bytes()).to_string();
+  let id_1_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_1".as_bytes()).to_string();
+  let id_1_2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2".as_bytes()).to_string();
+  let id_1_2_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2_1".as_bytes()).to_string();
+  let id_1_2_2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2_2".as_bytes()).to_string();
+  let id_1_3_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_3".as_bytes()).to_string();
   assert_json_include!(
     actual: value,
     expected: json!({
@@ -72,23 +82,23 @@ fn create_child_views_test() {
           "children": {
             "items": [
               {
-                "id": "1_1"
+                "id": &id_1_1_uuid
               },
               {
-                "id": "1_2"
+                "id": &id_1_2_uuid
               },
               {
-                "id": "1_3"
+                "id": &id_1_3_uuid
               }
             ]
           },
           "created_at": time,
           "icon": null,
-          "id": "1",
+          "id": &id_1_uuid,
           "is_favorite": false,
           "layout": 0,
           "name": "",
-          "parent_view_id": "fake_w_1"
+          "parent_view_id": &fake_w_1_uuid
         },
         {
           "children": {
@@ -96,30 +106,30 @@ fn create_child_views_test() {
           },
           "created_at": time,
           "icon": null,
-          "id": "1_1",
+          "id": &id_1_1_uuid,
           "is_favorite": false,
           "layout": 0,
           "name": "",
-          "parent_view_id": "1"
+          "parent_view_id": &id_1_uuid
         },
         {
           "children": {
             "items": [
               {
-                "id": "1_2_1"
+                "id": &id_1_2_1_uuid
               },
               {
-                "id": "1_2_2"
+                "id": &id_1_2_2_uuid
               }
             ]
           },
           "created_at": time,
           "icon": null,
-          "id": "1_2",
+          "id": &id_1_2_uuid,
           "is_favorite": false,
           "layout": 0,
           "name": "",
-          "parent_view_id": "1"
+          "parent_view_id": &id_1_uuid
         },
         {
           "children": {
@@ -127,11 +137,11 @@ fn create_child_views_test() {
           },
           "created_at": time,
           "icon": null,
-          "id": "1_2_1",
+          "id": &id_1_2_1_uuid,
           "is_favorite": false,
           "layout": 0,
           "name": "",
-          "parent_view_id": "1_2"
+          "parent_view_id": &id_1_2_uuid
         },
         {
           "children": {
@@ -139,11 +149,11 @@ fn create_child_views_test() {
           },
           "created_at": time,
           "icon": null,
-          "id": "1_2_2",
+          "id": &id_1_2_2_uuid,
           "is_favorite": false,
           "layout": 0,
           "name": "",
-          "parent_view_id": "1_2"
+          "parent_view_id": &id_1_2_uuid
         },
         {
           "children": {
@@ -151,22 +161,22 @@ fn create_child_views_test() {
           },
           "created_at": time,
           "icon": null,
-          "id": "1_3",
+          "id": &id_1_3_uuid,
           "is_favorite": false,
           "layout": 0,
           "name": "",
-          "parent_view_id": "1"
+          "parent_view_id": &id_1_uuid
         }
       ],
       "workspace": {
         "child_views": {
           "items": [
             {
-              "id": "1"
+              "id": &id_1_uuid
             }
           ]
         },
-        "id": "fake_w_1",
+        "id": &fake_w_1_uuid,
         "name": ""
       }
     })
@@ -206,25 +216,50 @@ fn move_child_views_test() {
     .views
     .insert(&mut txn, v_1_3, None, uid.as_i64());
 
+  let v_1_child_views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &v_1.id.to_string(), uid.as_i64());
+  assert_eq!(
+    v_1_child_views[0].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_1".as_bytes()).to_string()
+  );
+  assert_eq!(
+    v_1_child_views[1].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2".as_bytes()).to_string()
+  );
+  assert_eq!(
+    v_1_child_views[2].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_3".as_bytes()).to_string()
+  );
+
+  folder
+    .body
+    .views
+    .move_child(&mut txn, &v_1.id.to_string(), 2, 0);
+  folder
+    .body
+    .views
+    .move_child(&mut txn, &v_1.id.to_string(), 0, 1);
+
   let v_1_child_views = folder
     .body
     .views
-    .get_views_belong_to(&txn, &v_1.id, uid.as_i64());
-  assert_eq!(v_1_child_views[0].id, "1_1");
-  assert_eq!(v_1_child_views[1].id, "1_2");
-  assert_eq!(v_1_child_views[2].id, "1_3");
-
-  folder.body.views.move_child(&mut txn, &v_1.id, 2, 0);
-  folder.body.views.move_child(&mut txn, &v_1.id, 0, 1);
-
-  let v_1_child_views = folder
-    .body
-    .views
-    .get_view(&txn, &v_1.id, uid.as_i64())
+    .get_view(&txn, &v_1.id.to_string(), uid.as_i64())
     .unwrap();
-  assert_eq!(v_1_child_views.children[0].id, "1_1");
-  assert_eq!(v_1_child_views.children[1].id, "1_3");
-  assert_eq!(v_1_child_views.children[2].id, "1_2");
+  assert_eq!(
+    v_1_child_views.children[0].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_1".as_bytes()).to_string()
+  );
+  assert_eq!(
+    v_1_child_views.children[1].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_3".as_bytes()).to_string()
+  );
+  assert_eq!(
+    v_1_child_views.children[2].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2".as_bytes()).to_string()
+  );
 }
 
 #[test]
@@ -256,8 +291,14 @@ fn delete_view_test() {
     .body
     .views
     .get_views_belong_to(&txn, "w1", uid.as_i64());
-  assert_eq!(w_1_child_views[0].id, "1_1");
-  assert_eq!(w_1_child_views[1].id, "1_3");
+  assert_eq!(
+    w_1_child_views[0].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_1".as_bytes()).to_string()
+  );
+  assert_eq!(
+    w_1_child_views[1].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_3".as_bytes()).to_string()
+  );
 }
 
 #[test]
@@ -336,10 +377,14 @@ fn create_orphan_child_views_test() {
   assert_eq!(orphan_views.len(), 1);
 
   // The folder data should contains the orphan view
+  let workspace_uuid_str = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
   let folder_data = folder
     .body
-    .get_folder_data(&txn, &workspace_id, uid.as_i64())
+    .get_folder_data(&txn, &workspace_uuid_str, uid.as_i64())
     .unwrap();
+  let fake_w_1_uuid = workspace_uuid_str.clone();
+  let id_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1".as_bytes()).to_string();
+  let id_2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "2".as_bytes()).to_string();
   assert_json_include!(
     actual: json!(folder_data),
     expected: json!({
@@ -354,12 +399,12 @@ fn create_orphan_child_views_test() {
               },
               "created_by": 1,
               "icon": null,
-              "id": "1",
+              "id": &id_1_uuid,
               "is_favorite": false,
               "last_edited_by": 1,
               "layout": 0,
               "name": "",
-              "parent_view_id": "fake_w_1"
+              "parent_view_id": &fake_w_1_uuid
             },
             {
               "children": {
@@ -367,24 +412,24 @@ fn create_orphan_child_views_test() {
               },
               "created_by": 1,
               "icon": null,
-              "id": "2",
+              "id": &id_2_uuid,
               "is_favorite": false,
               "last_edited_by": 1,
               "layout": 0,
               "name": "",
-              "parent_view_id": "2"
+              "parent_view_id": &id_2_uuid
             }
           ],
           "workspace": {
             "child_views": {
               "items": [
                 {
-                  "id": "1"
+                  "id": &id_1_uuid
                 }
               ]
             },
             "created_by": 1,
-            "id": "fake_w_1",
+            "id": &fake_w_1_uuid,
             "last_edited_by": 1,
             "name": ""
           }

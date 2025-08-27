@@ -3,11 +3,12 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
-use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, Row, RowId};
+use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, Row};
 use collab_database::views::{
   DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting, LayoutSettings,
   OrderObjectPosition,
 };
+use collab_entity::uuid_validation::RowId;
 use futures::StreamExt;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -87,12 +88,39 @@ pub async fn create_database_with_params(params: CreateDatabaseParams) -> Databa
 }
 
 /// Create a database with a single view.
+// Use fixed UUIDs for test views so tests can reference them consistently
+pub const TEST_VIEW_ID_V1: &str = "00000000-0000-0000-0000-000000000001";
+pub const TEST_VIEW_ID_V2: &str = "00000000-0000-0000-0000-000000000002";
+
 pub fn create_database(_uid: i64, database_id: &str) -> DatabaseTest {
+  let database_uuid = if let Ok(uuid) = Uuid::parse_str(database_id) {
+    uuid
+  } else {
+    Uuid::new_v4()
+  };
+  let view_id = Uuid::parse_str(TEST_VIEW_ID_V1).unwrap();
   let params = CreateDatabaseParams {
-    database_id: database_id.to_string(),
+    database_id: database_uuid,
     views: vec![CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v1".to_string(),
+      database_id: database_uuid,
+      view_id,
+      name: "my first database view".to_string(),
+      ..Default::default()
+    }],
+    ..Default::default()
+  };
+
+  futures::executor::block_on(async { create_database_with_params(params).await })
+}
+
+/// Create a database with a random UUID - more efficient than string conversion
+pub fn create_database_with_random_id(_uid: i64) -> DatabaseTest {
+  let database_id = Uuid::new_v4();
+  let params = CreateDatabaseParams {
+    database_id,
+    views: vec![CreateViewParams {
+      database_id,
+      view_id: Uuid::new_v4(),
       name: "my first database view".to_string(),
       ..Default::default()
     }],
@@ -108,16 +136,16 @@ pub fn create_row(
   row_id: RowId,
   client_id: ClientID,
 ) -> DatabaseRow {
-  let options = CollabOptions::new(row_id.to_string(), client_id);
+  let options = CollabOptions::new(row_id, client_id);
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   collab.initialize();
-  let database_id = Uuid::new_v4().to_string();
+  let database_uuid = Uuid::new_v4();
   let row_change_tx = tokio::sync::broadcast::channel(1).0;
   DatabaseRow::create(
-    row_id.clone(),
+    row_id,
     collab,
     Some(row_change_tx),
-    Row::new(row_id, &database_id),
+    Row::new(row_id, database_uuid),
   )
 }
 
@@ -136,11 +164,16 @@ pub async fn create_database_with_db(
     client_id,
   ));
   let context = DatabaseContext::new(collab_service.clone(), collab_service);
+  let database_uuid = if let Ok(uuid) = Uuid::parse_str(database_id) {
+    uuid
+  } else {
+    Uuid::new_v4()
+  };
   let params = CreateDatabaseParams {
-    database_id: database_id.to_string(),
+    database_id: database_uuid,
     views: vec![CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v1".to_string(),
+      database_id: database_uuid,
+      view_id: Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
       name: "my first grid".to_string(),
       ..Default::default()
     }],
@@ -200,7 +233,7 @@ impl DatabaseTestBuilder {
     Self {
       uid,
       database_id: database_id.to_string(),
-      view_id: "v1".to_string(),
+      view_id: TEST_VIEW_ID_V1.to_string(),
       rows: vec![],
       layout_settings: Default::default(),
       fields: vec![],
@@ -242,11 +275,13 @@ impl DatabaseTestBuilder {
       client_id,
     ));
     let context = DatabaseContext::new(collab_service.clone(), collab_service);
+    let database_uuid = Uuid::parse_str(&self.database_id).unwrap_or_else(|_| Uuid::new_v4());
+    let view_uuid = Uuid::parse_str(&self.view_id).unwrap_or_else(|_| Uuid::new_v4());
     let params = CreateDatabaseParams {
-      database_id: self.database_id.clone(),
+      database_id: database_uuid,
       views: vec![CreateViewParams {
-        database_id: self.database_id,
-        view_id: self.view_id,
+        database_id: database_uuid,
+        view_id: view_uuid,
         name: "my first database view".to_string(),
         layout: self.layout,
         layout_settings: self.layout_settings,
@@ -274,22 +309,24 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
   let row_2_id = Uuid::new_v4();
   let row_3_id = Uuid::new_v4();
 
-  let row_1 = CreateRowParams::new(row_1_id, database_id.to_string()).with_cells(Cells::from([
+  let database_uuid = Uuid::parse_str(database_id).unwrap_or_else(|_| Uuid::new_v4());
+
+  let row_1 = CreateRowParams::new(row_1_id, database_uuid).with_cells(Cells::from([
     ("f1".into(), TestTextCell::from("1f1cell").into()),
     ("f2".into(), TestTextCell::from("1f2cell").into()),
     ("f3".into(), TestTextCell::from("1f3cell").into()),
   ]));
-  let row_2 = CreateRowParams::new(row_2_id, database_id.to_string()).with_cells(Cells::from([
+  let row_2 = CreateRowParams::new(row_2_id, database_uuid).with_cells(Cells::from([
     ("f1".into(), TestTextCell::from("2f1cell").into()),
     ("f2".into(), TestTextCell::from("2f2cell").into()),
   ]));
-  let row_3 = CreateRowParams::new(row_3_id, database_id.to_string()).with_cells(Cells::from([
+  let row_3 = CreateRowParams::new(row_3_id, database_uuid).with_cells(Cells::from([
     ("f1".into(), TestTextCell::from("3f1cell").into()),
     ("f3".into(), TestTextCell::from("3f3cell").into()),
   ]));
 
   let mut database_test = create_database(uid, database_id);
-  database_test.pre_define_row_ids = vec![row_1.id.clone(), row_2.id.clone(), row_3.id.clone()];
+  database_test.pre_define_row_ids = vec![row_1.id, row_2.id, row_3.id];
   database_test.create_row(row_1).await.unwrap();
   database_test.create_row(row_2).await.unwrap();
   database_test.create_row(row_3).await.unwrap();
@@ -319,7 +356,7 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
     field_settings_by_layout,
   );
 
-  database_test.set_field_settings("v1", field_settings_for_default_database());
+  database_test.set_field_settings(TEST_VIEW_ID_V1, field_settings_for_default_database());
 
   database_test
 }

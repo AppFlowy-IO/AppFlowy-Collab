@@ -26,9 +26,18 @@ fn create_trash_test() {
 
   let trash = folder.get_my_trash_sections(uid.as_i64());
   assert_eq!(trash.len(), 3);
-  assert_eq!(trash[0].id, "v1");
-  assert_eq!(trash[1].id, "v2");
-  assert_eq!(trash[2].id, "v3");
+  assert_eq!(
+    trash[0].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string()
+  );
+  assert_eq!(
+    trash[1].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
+  );
+  assert_eq!(
+    trash[2].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string()
+  );
 }
 
 #[test]
@@ -46,12 +55,21 @@ fn delete_trash_view_ids_test() {
   folder.add_trash_view_ids(vec!["v1".to_string(), "v2".to_string()], uid.as_i64());
 
   let trash = folder.get_my_trash_sections(uid.as_i64());
-  assert_eq!(trash[0].id, "v1");
-  assert_eq!(trash[1].id, "v2");
+  assert_eq!(
+    trash[0].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string()
+  );
+  assert_eq!(
+    trash[1].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
+  );
 
   folder.delete_trash_view_ids(vec!["v1".to_string()], uid.as_i64());
   let trash = folder.get_my_trash_sections(uid.as_i64());
-  assert_eq!(trash[0].id, "v2");
+  assert_eq!(
+    trash[0].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
+  );
 }
 
 #[tokio::test]

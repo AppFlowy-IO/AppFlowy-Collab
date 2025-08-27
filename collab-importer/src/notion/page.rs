@@ -16,9 +16,9 @@ use crate::notion::{CSVRelation, ImportedCollabInfoStream};
 use crate::util::{FileId, upload_file_url};
 use collab::core::collab::default_client_id;
 use collab_database::database_trait::NoPersistenceDatabaseCollabService;
-use collab_database::rows::RowId;
 use collab_database::template::builder::FileUrlBuilder;
 use collab_document::document_data::default_document_data;
+use collab_entity::uuid_validation::RowId;
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
 use serde_json::json;
@@ -513,8 +513,10 @@ impl NotionPage {
         // create csv template, we need to set the view id as csv template view id
         let mut csv_template =
           CSVTemplate::try_from_reader(content.as_bytes(), true, Some(csv_resource))?;
-        csv_template.reset_view_id(self.view_id.clone());
-        let database_id = csv_template.database_id.clone();
+        let view_uuid = uuid::Uuid::parse_str(&self.view_id)
+          .unwrap_or_else(|_| uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, self.view_id.as_bytes()));
+        csv_template.reset_view_id(view_uuid);
+        let database_id = csv_template.database_id;
 
         let file_url_builder = FileUrlBuilderImpl {
           host: self.host.clone(),
@@ -552,7 +554,7 @@ impl NotionPage {
         }
 
         let resource = CollabResource {
-          object_id: database_id,
+          object_id: database_id.to_string(),
           files,
         };
 
@@ -625,8 +627,8 @@ impl NotionPage {
           imported_collabs,
           resources,
           import_type: ImportType::Database {
-            database_id,
-            view_ids,
+            database_id: database_id.to_string(),
+            view_ids: view_ids.into_iter().map(|id| id.to_string()).collect(),
             row_document_ids,
           },
         }))

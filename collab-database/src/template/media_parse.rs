@@ -5,7 +5,7 @@ use futures::stream::{FuturesOrdered, StreamExt};
 
 use std::path::PathBuf;
 
-use tokio::fs::metadata;
+use std::fs::metadata;
 
 pub(crate) async fn replace_cells_with_files(
   cells: Vec<String>,
@@ -32,7 +32,7 @@ pub(crate) async fn replace_cells_with_files(
 
                 async move {
                   let path = path?;
-                  if metadata(&path).await.is_ok() {
+                  if metadata(&path).is_ok() {
                     let file_name = path
                       .file_name()
                       .unwrap_or_default()

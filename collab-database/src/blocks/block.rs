@@ -1,9 +1,10 @@
 use crate::error::DatabaseError;
 use crate::rows::{
-  Cell, CreateRowParams, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta, RowMetaKey,
+  Cell, CreateRowParams, DatabaseRow, Row, RowChangeSender, RowDetail, RowMeta, RowMetaKey,
   RowMetaUpdate, RowUpdate, meta_id_from_row_id,
 };
 use crate::views::RowOrder;
+use collab_entity::uuid_validation::{DatabaseId, RowId};
 
 use collab::lock::RwLock;
 use std::sync::Arc;
@@ -12,7 +13,6 @@ use tokio::sync::broadcast::Sender;
 
 use crate::database_trait::{DatabaseRowCollabService, DatabaseRowDataVariant};
 use tracing::{instrument, trace};
-use uuid::Uuid;
 use yrs::block::ClientID;
 
 #[derive(Clone, Debug)]
@@ -29,7 +29,7 @@ pub type InitRowChan =
 /// might want to split the rows into multiple [Block]s to improve performance.
 #[derive(Clone)]
 pub struct Block {
-  database_id: String,
+  database_id: DatabaseId,
   collab_service: Arc<dyn DatabaseRowCollabService>,
   pub notifier: Arc<Sender<BlockEvent>>,
   row_change_tx: Option<RowChangeSender>,
@@ -37,7 +37,7 @@ pub struct Block {
 
 impl Block {
   pub fn new(
-    database_id: String,
+    database_id: DatabaseId,
     collab_service: Arc<dyn DatabaseRowCollabService>,
     row_change_tx: Option<RowChangeSender>,
   ) -> Block {
@@ -96,9 +96,9 @@ impl Block {
   ) -> Result<RowOrder, DatabaseError> {
     let params = row_params.into();
     let row: Row = params.clone().into();
-    let row_id = row.id.clone();
+    let row_id = row.id;
     let row_order = RowOrder {
-      id: row.id.clone(),
+      id: row.id,
       height: row.height,
     };
 
@@ -144,8 +144,7 @@ impl Block {
   }
 
   pub fn get_row_document_id(&self, row_id: &RowId) -> Option<String> {
-    let row_id = Uuid::parse_str(row_id).ok()?;
-    Some(meta_id_from_row_id(&row_id, RowMetaKey::DocumentId))
+    Some(meta_id_from_row_id(row_id, RowMetaKey::DocumentId))
   }
 
   /// If the row with given id not exist. It will return an empty row with given id.
@@ -159,14 +158,14 @@ impl Block {
   ) -> Vec<Row> {
     let mut rows = Vec::new();
 
-    let row_ids: Vec<RowId> = row_orders.iter().map(|order| order.id.clone()).collect();
+    let row_ids: Vec<RowId> = row_orders.iter().map(|order| order.id).collect();
     if let Ok(database_rows) = self.init_database_rows(row_ids, auto_fetch).await {
       for database_row in database_rows {
         let read_guard = database_row.read().await;
-        let row_id = read_guard.row_id.clone();
+        let row_id = read_guard.row_id;
         let row = read_guard
           .get_row()
-          .unwrap_or_else(|| Row::empty(row_id, &self.database_id));
+          .unwrap_or_else(|| Row::empty(row_id, self.database_id));
         rows.push(row);
       }
     }
@@ -195,7 +194,7 @@ impl Block {
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
   pub fn init_database_row(&self, row_id: &RowId, ret: Option<InitRowChan>) {
-    let row_id = row_id.clone();
+    let row_id = *row_id;
     let row_change_tx = self.row_change_tx.clone();
     let collab_service = self.collab_service.clone();
     tokio::task::spawn(async move {
@@ -225,10 +224,9 @@ impl Block {
     auto_fetch: bool,
   ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
     // Retain only rows that are not in the cache
-    let uncached_row_ids: Vec<String> = row_ids.iter().map(|id| id.to_string()).collect();
     let uncached_rows = self
       .collab_service
-      .batch_build_arc_database_row(&uncached_row_ids, self.row_change_tx.clone(), auto_fetch)
+      .batch_build_arc_database_row(&row_ids, self.row_change_tx.clone(), auto_fetch)
       .await?;
 
     // Initialize final database rows by combining cached and newly fetched rows

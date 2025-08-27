@@ -53,7 +53,7 @@ pub(crate) fn subscribe_view_change(
                         uid,
                         mappings,
                       ) {
-                        deletion_cache.insert(view.id.clone(), Arc::new(view.clone()));
+                        deletion_cache.insert(view.id.to_string(), Arc::new(view.clone()));
 
                         // Send indexing view
                         let _ = change_tx.send(ViewChange::DidCreateView { view });
@@ -70,7 +70,7 @@ pub(crate) fn subscribe_view_change(
                       view_from_map_ref(&map_ref, txn, &view_relations, &section_map, uid, mappings)
                     {
                       // Update deletion cache with the updated view
-                      deletion_cache.insert(view.id.clone(), Arc::new(view.clone()));
+                      deletion_cache.insert(view.id.to_string(), Arc::new(view.clone()));
                       let _ = change_tx.send(ViewChange::DidUpdate { view });
                     }
                   }

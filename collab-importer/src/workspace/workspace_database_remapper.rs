@@ -7,6 +7,7 @@ use collab_database::workspace_database::WorkspaceDatabase;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use crate::workspace::id_remapper::JsonIdRemapper;
 
@@ -58,7 +59,8 @@ impl WorkspaceDatabaseRemapper {
 
   pub fn build_workspace_database(&self, database_storage_id: &str) -> Result<WorkspaceDatabase> {
     let workspace_database_data = self.build_workspace_database_data()?;
-    let options = CollabOptions::new(database_storage_id.to_string(), default_client_id());
+    let storage_uuid = Uuid::parse_str(database_storage_id).unwrap_or_else(|_| Uuid::new_v4());
+    let options = CollabOptions::new(storage_uuid, default_client_id());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)?;
     let mut workspace_database = WorkspaceDatabase::create(collab);
 

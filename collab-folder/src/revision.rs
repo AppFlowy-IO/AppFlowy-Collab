@@ -17,7 +17,12 @@ impl RevisionMapping {
   }
 
   pub fn replace_view(&self, txn: &mut TransactionMut, old_view_id: &str, new_view_id: &str) {
-    if self.container.contains_key(txn, new_view_id) {
+    let uuid_old_view_id =
+      collab_entity::uuid_validation::view_id_from_any_string(old_view_id).to_string();
+    let uuid_new_view_id =
+      collab_entity::uuid_validation::view_id_from_any_string(new_view_id).to_string();
+
+    if self.container.contains_key(txn, &uuid_new_view_id) {
       // new view id should not already exist in the revision map, otherwise it could create a cycle
       panic!(
         "new view_id {} already exists in the revision map",
@@ -25,7 +30,9 @@ impl RevisionMapping {
       );
     }
 
-    self.container.insert(txn, old_view_id, new_view_id);
+    self
+      .container
+      .insert(txn, uuid_old_view_id, uuid_new_view_id);
   }
 
   pub fn mappings(&self, txn: &impl ReadTxn, view_id: String) -> (String, Vec<String>) {

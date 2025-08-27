@@ -1,5 +1,5 @@
-use crate::rows::RowId;
 use collab_entity::CollabValidateError;
+use collab_entity::uuid_validation::RowId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {

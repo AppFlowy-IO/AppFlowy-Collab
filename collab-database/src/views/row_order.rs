@@ -4,8 +4,9 @@ use collab::preclude::{Any, ArrayRef, ReadTxn, YrsValue};
 use collab::util::deserialize_i32_from_numeric;
 use serde::{Deserialize, Serialize};
 
-use crate::rows::{Row, RowId};
+use crate::rows::Row;
 use crate::views::{OrderArray, OrderIdentifiable};
+use collab_entity::uuid_validation::RowId;
 
 pub struct RowOrderArray {
   array_ref: ArrayRef,
@@ -81,7 +82,7 @@ impl From<RowOrder> for Any {
 impl From<&Row> for RowOrder {
   fn from(row: &Row) -> Self {
     Self {
-      id: row.id.clone(),
+      id: row.id,
       height: row.height,
     }
   }

@@ -33,7 +33,7 @@ fn create_view_with_sub_view_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
   let child_view = make_test_view("v1_1", "v1", vec![]);
-  let view = make_test_view("v1", "w1", vec![child_view.id.clone()]);
+  let view = make_test_view("v1", "w1", vec![child_view.id.to_string()]);
 
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
@@ -59,7 +59,7 @@ fn create_view_with_sub_view_test() {
   let r_sub_view = folder
     .body
     .views
-    .get_view(&txn, &r_view.children[0].id, uid.as_i64())
+    .get_view(&txn, &r_view.children[0].id.to_string(), uid.as_i64())
     .unwrap();
   assert_eq!(child_view.name, r_sub_view.name);
   assert_eq!(child_view.parent_view_id, r_sub_view.parent_view_id);
@@ -96,9 +96,18 @@ fn delete_view_test() {
     .body
     .views
     .get_views(&txn, &["v1", "v2", "v3"], uid.as_i64());
-  assert_eq!(views[0].id, "v1");
-  assert_eq!(views[1].id, "v2");
-  assert_eq!(views[2].id, "v3");
+  assert_eq!(
+    views[0].id.to_string(),
+    collab_entity::uuid_validation::view_id_from_any_string("v1").to_string()
+  );
+  assert_eq!(
+    views[1].id.to_string(),
+    collab_entity::uuid_validation::view_id_from_any_string("v2").to_string()
+  );
+  assert_eq!(
+    views[2].id.to_string(),
+    collab_entity::uuid_validation::view_id_from_any_string("v3").to_string()
+  );
 
   folder
     .body
@@ -379,8 +388,14 @@ fn dissociate_and_associate_view_test() {
     .get_view(&txn, view_1_id, uid.as_i64())
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
-  assert_eq!(r_view.children.items.first().unwrap().id, view_2_id);
-  assert_eq!(r_view.children.items.get(1).unwrap().id, view_1_child_id);
+  assert_eq!(
+    r_view.children.items.first().unwrap().id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_2_id.as_bytes()).to_string()
+  );
+  assert_eq!(
+    r_view.children.items.get(1).unwrap().id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_1_child_id.as_bytes()).to_string()
+  );
 
   folder
     .body
@@ -406,8 +421,14 @@ fn dissociate_and_associate_view_test() {
     .get_view(&txn, view_1_id, uid.as_i64())
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
-  assert_eq!(r_view.children.items.first().unwrap().id, view_1_child_id);
-  assert_eq!(r_view.children.items.get(1).unwrap().id, view_2_id);
+  assert_eq!(
+    r_view.children.items.first().unwrap().id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_1_child_id.as_bytes()).to_string()
+  );
+  assert_eq!(
+    r_view.children.items.get(1).unwrap().id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_2_id.as_bytes()).to_string()
+  );
 }
 
 #[test]
@@ -438,23 +459,30 @@ fn move_view_across_parent_test() {
   let view_1_child = folder.get_view(view_1_child_id, uid.as_i64()).unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 1);
-  assert_eq!(view_1_child.parent_view_id, view_2_id);
+  assert_eq!(
+    view_1_child.parent_view_id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_2_id.as_bytes()).to_string()
+  );
 
   // Move view_1_child from view_2 to current workspace
   folder.move_nested_view(view_1_child_id, workspace_id, None, uid.as_i64());
   let view_1 = folder.get_view(view_1_id, uid.as_i64()).unwrap();
   let view_2 = folder.get_view(view_2_id, uid.as_i64()).unwrap();
   let view_1_child = folder.get_view(view_1_child_id, uid.as_i64()).unwrap();
+  let workspace_uuid_str = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
   let workspace = folder
-    .get_workspace_info(workspace_id, uid.as_i64())
+    .get_workspace_info(&workspace_uuid_str, uid.as_i64())
     .unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 0);
-  assert_eq!(view_1_child.parent_view_id, workspace_id);
+  assert_eq!(
+    view_1_child.parent_view_id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string()
+  );
   assert_eq!(workspace.child_views.items.len(), 3);
   assert_eq!(
-    workspace.child_views.items.first().unwrap().id,
-    view_1_child_id
+    workspace.child_views.items.first().unwrap().id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_1_child_id.as_bytes()).to_string()
   );
 
   // Move view_1_child from position 0 to position 1 in the current workspace.
@@ -468,17 +496,23 @@ fn move_view_across_parent_test() {
   let view_2 = folder.get_view(view_2_id, uid.as_i64()).unwrap();
   let view_1_child = folder.get_view(view_1_child_id, uid.as_i64()).unwrap();
   let workspace = folder
-    .get_workspace_info(workspace_id, uid.as_i64())
+    .get_workspace_info(&workspace_uuid_str, uid.as_i64())
     .unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 0);
-  assert_eq!(view_1_child.parent_view_id, workspace_id);
+  assert_eq!(
+    view_1_child.parent_view_id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string()
+  );
   assert_eq!(workspace.child_views.items.len(), 3);
   assert_eq!(
-    workspace.child_views.items.get(1).unwrap().id,
-    view_1_child_id
+    workspace.child_views.items.get(1).unwrap().id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_1_child_id.as_bytes()).to_string()
   );
-  assert_eq!(workspace.child_views.items.first().unwrap().id, view_1_id);
+  assert_eq!(
+    workspace.child_views.items.first().unwrap().id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_1_id.as_bytes()).to_string()
+  );
 
   // move view_1_child from current workspace to view_1
   folder.move_nested_view(view_1_child_id, view_1_id, None, uid.as_i64());
@@ -486,11 +520,17 @@ fn move_view_across_parent_test() {
   let view_2 = folder.get_view(view_2_id, uid.as_i64()).unwrap();
   let view_1_child = folder.get_view(view_1_child_id, uid.as_i64()).unwrap();
   let workspace = folder
-    .get_workspace_info(workspace_id, uid.as_i64())
+    .get_workspace_info(&workspace_uuid_str, uid.as_i64())
     .unwrap();
   assert_eq!(view_1.children.items.iter().len(), 1);
-  assert_eq!(view_1.children.items.first().unwrap().id, view_1_child_id);
-  assert_eq!(view_1_child.parent_view_id, view_1_id);
+  assert_eq!(
+    view_1.children.items.first().unwrap().id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_1_child_id.as_bytes()).to_string()
+  );
+  assert_eq!(
+    view_1_child.parent_view_id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_1_id.as_bytes()).to_string()
+  );
   assert_eq!(view_2.children.items.iter().len(), 0);
   assert_eq!(workspace.child_views.items.len(), 2);
 }
@@ -546,12 +586,12 @@ fn create_view_test_with_index() {
     .body
     .views
     .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
-  assert_eq!(views.first().unwrap().id, view_2.id);
-  assert_eq!(views.get(1).unwrap().id, view_3.id);
-  assert_eq!(views.get(2).unwrap().id, view_1.id);
-  assert_eq!(views.get(3).unwrap().id, view_6.id);
-  assert_eq!(views.get(4).unwrap().id, view_4.id);
-  assert_eq!(views.get(5).unwrap().id, view_5.id);
+  assert_eq!(views.first().unwrap().id.to_string(), view_2.id.to_string());
+  assert_eq!(views.get(1).unwrap().id.to_string(), view_3.id.to_string());
+  assert_eq!(views.get(2).unwrap().id.to_string(), view_1.id.to_string());
+  assert_eq!(views.get(3).unwrap().id.to_string(), view_6.id.to_string());
+  assert_eq!(views.get(4).unwrap().id.to_string(), view_4.id.to_string());
+  assert_eq!(views.get(5).unwrap().id.to_string(), view_5.id.to_string());
 }
 
 #[test]
@@ -663,10 +703,10 @@ fn compare_diff_view_test() {
     .calculate_view_changes(encode_collab, default_client_id())
     .unwrap();
   assert!(changes.contains(&FolderViewChange::Inserted {
-    view_id: "v1".to_string(),
+    view_id: uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string(),
   }));
   assert!(changes.contains(&FolderViewChange::Inserted {
-    view_id: "v2".to_string(),
+    view_id: uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string(),
   }));
 
   // delete v1 and then update v2
@@ -691,10 +731,10 @@ fn compare_diff_view_test() {
     .calculate_view_changes(encode_collab, default_client_id())
     .unwrap();
   assert!(changes.contains(&FolderViewChange::Deleted {
-    view_ids: vec!["v1".to_string()],
+    view_ids: vec![uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string()],
   }));
 
   assert!(changes.contains(&FolderViewChange::Updated {
-    view_id: "v2".to_string(),
+    view_id: uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string(),
   }));
 }

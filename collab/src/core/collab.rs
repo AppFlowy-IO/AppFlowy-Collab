@@ -32,6 +32,7 @@ use yrs::{
 use crate::entity::{EncodedCollab, EncoderVersion};
 use crate::error::CollabError;
 use crate::preclude::JsonValue;
+use uuid::Uuid;
 
 pub const DATA_SECTION: &str = "data";
 pub const META_SECTION: &str = "meta";
@@ -48,7 +49,7 @@ pub type MapSubscription = Subscription;
 pub struct Collab {
   /// The object id can be the document id or the database id. It must be unique for
   /// each [Collab] instance.
-  object_id: String,
+  object_id: Uuid,
   state: Arc<State>,
   update_subscription: ArcSwapOption<Subscription>,
   awareness_subscription: ArcSwapOption<Subscription>,
@@ -242,7 +243,7 @@ pub fn make_yrs_doc(object_id: &str, skip_gc: bool, client_id: ClientID) -> Doc 
 }
 
 pub struct CollabOptions {
-  pub object_id: String,
+  pub object_id: Uuid,
   pub data_source: Option<DataSource>,
   pub client_id: ClientID,
   pub skip_gc: bool,
@@ -259,7 +260,7 @@ impl Display for CollabOptions {
 }
 
 impl CollabOptions {
-  pub fn new(object_id: String, client_id: ClientID) -> Self {
+  pub fn new(object_id: Uuid, client_id: ClientID) -> Self {
     Self {
       object_id,
       data_source: None,
@@ -280,14 +281,9 @@ impl CollabOptions {
 }
 
 impl Collab {
-  pub fn new<T: AsRef<str>>(
-    uid: i64,
-    object_id: T,
-    device_id: impl ToString,
-    client_id: ClientID,
-  ) -> Collab {
+  pub fn new(uid: i64, object_id: Uuid, device_id: impl ToString, client_id: ClientID) -> Collab {
     let origin = CollabClient::new(uid, device_id);
-    let options = CollabOptions::new(object_id.as_ref().to_string(), client_id);
+    let options = CollabOptions::new(object_id, client_id);
     Self::new_with_options(CollabOrigin::Client(origin), options).unwrap()
   }
 
@@ -296,12 +292,12 @@ impl Collab {
     options: CollabOptions,
   ) -> Result<Self, CollabError> {
     let object_id = options.object_id;
-    let doc = make_yrs_doc(&object_id, options.skip_gc, options.client_id);
+    let doc = make_yrs_doc(&object_id.to_string(), options.skip_gc, options.client_id);
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
     let revisions = Revisions::new(doc.get_or_insert_array(REVISIONS_SECTION));
     let plugins = Plugins::new(vec![]);
-    let state = Arc::new(State::new(&object_id));
+    let state = Arc::new(State::new(&object_id.to_string()));
     let awareness = Awareness::new(doc);
     let mut this = Self {
       object_id,
@@ -452,11 +448,12 @@ impl Collab {
 
   pub fn from_doc(doc: Doc, origin: CollabOrigin) -> Self {
     // doc guid is by default a UUID v4, we can inherit it
-    let object_id = doc.guid().to_string();
+    let object_id_str = doc.guid().to_string();
+    let object_id = Uuid::parse_str(&object_id_str).unwrap_or_else(|_| Uuid::new_v4());
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
     let revisions = Revisions::new(doc.get_or_insert_array(REVISIONS_SECTION));
-    let state = Arc::new(State::new(&object_id));
+    let state = Arc::new(State::new(&object_id_str));
     let awareness = Awareness::new(doc);
     Self {
       object_id,
@@ -474,7 +471,7 @@ impl Collab {
     }
   }
 
-  pub fn object_id(&self) -> &str {
+  pub fn object_id(&self) -> &Uuid {
     &self.object_id
   }
 
@@ -494,13 +491,13 @@ impl Collab {
       let origin = self.origin();
       self
         .plugins
-        .each(|plugin| plugin.init(&self.object_id, origin, doc));
+        .each(|plugin| plugin.init(&self.object_id.to_string(), origin, doc));
     }
     self.observe_update();
     {
       self
         .plugins
-        .each(|plugin| plugin.did_init(self, &self.object_id));
+        .each(|plugin| plugin.did_init(self, &self.object_id.to_string()));
     }
   }
 
@@ -512,7 +509,7 @@ impl Collab {
     let doc = self.context.doc();
     let (update_subscription, after_txn_subscription) = observe_doc(
       doc,
-      self.object_id.clone(),
+      self.object_id.to_string(),
       self.plugins.clone(),
       self.origin().clone(),
     );
@@ -520,7 +517,7 @@ impl Collab {
     let awareness_subscription = observe_awareness(
       self.context.get_awareness(),
       self.plugins.clone(),
-      self.object_id.clone(),
+      self.object_id.to_string(),
       self.origin().clone(),
     );
 

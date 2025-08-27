@@ -13,7 +13,7 @@ use crate::fields::{
 use crate::meta::MetaMap;
 use crate::rows::{
   CreateRowParams, CreateRowParamsValidator, DatabaseRow, Row, RowCell, RowChangeReceiver,
-  RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate, meta_id_from_row_id,
+  RowDetail, RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate, meta_id_from_row_id,
 };
 use crate::util::encoded_collab;
 use crate::views::define::DATABASE_VIEW_ROW_ORDERS;
@@ -23,6 +23,7 @@ use crate::views::{
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
 use crate::workspace_database::DatabaseMeta;
+use collab_entity::uuid_validation::RowId;
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -39,6 +40,7 @@ use collab::preclude::{
 use collab::util::{AnyExt, ArrayExt};
 use collab_entity::CollabType;
 use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
+use collab_entity::uuid_validation::{DatabaseId, DatabaseViewId};
 
 use futures::stream::StreamExt;
 use futures::{Stream, stream};
@@ -91,32 +93,22 @@ impl DatabaseContext {
 }
 
 pub async fn default_database_collab(
-  database_id: &str,
+  database_id: &DatabaseId,
   client_id: ClientID,
   params: Option<CreateDatabaseParams>,
   context: DatabaseContext,
 ) -> Result<(DatabaseBody, Collab), DatabaseError> {
   let collab = Collab::new_with_options(
     CollabOrigin::Empty,
-    CollabOptions::new(database_id.to_string(), client_id),
+    CollabOptions::new(*database_id, client_id),
   )
   .map_err(|e| DatabaseError::Internal(e.into()))?;
   let collab = match params {
-    None => {
-      DatabaseBody::create(
-        collab,
-        database_id.to_string(),
-        context,
-        vec![],
-        vec![],
-        vec![],
-      )
-      .await?
-    },
+    None => DatabaseBody::create(collab, *database_id, context, vec![], vec![], vec![]).await?,
     Some(params) => {
       DatabaseBody::create(
         collab,
-        database_id.to_string(),
+        params.database_id,
         context,
         params.rows,
         params.fields,
@@ -140,10 +132,11 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
+    let object_id = Uuid::parse_str(database_id).unwrap_or_else(|_| Uuid::new_v4());
     let collab = context
       .database_collab_service
       .clone()
-      .build_arc_database(database_id, false, None, context)
+      .build_arc_database(&object_id, false, None, context)
       .await?;
 
     Ok(collab)
@@ -154,10 +147,11 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
+    let object_id = Uuid::parse_str(database_id).unwrap_or_else(|_| Uuid::new_v4());
     let database = context
       .database_collab_service
       .clone()
-      .build_database(database_id, false, None, context)
+      .build_database(&object_id, false, None, context)
       .await?;
 
     Ok(database)
@@ -167,20 +161,18 @@ impl Database {
     context: DatabaseContext,
     params: CreateDatabaseParams,
   ) -> Result<Self, DatabaseError> {
-    if params.database_id.is_empty() {
-      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
-    }
     trace!(
       "[Database] create {}, client_id: {}",
       params.database_id,
       context.database_collab_service.database_client_id().await
     );
-    let database_id = params.database_id.clone();
+    let database_id = params.database_id;
+    let object_id = database_id;
     let database = context
       .database_collab_service
       .clone()
       .build_database(
-        &database_id,
+        &object_id,
         true,
         Some(DatabaseDataVariant::Params(params)),
         context,
@@ -194,21 +186,18 @@ impl Database {
     context: DatabaseContext,
     params: CreateDatabaseParams,
   ) -> Result<Arc<RwLock<Self>>, DatabaseError> {
-    if params.database_id.is_empty() {
-      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
-    }
-
     trace!(
       "[Database] create {}, client_id: {}",
       params.database_id,
       context.database_collab_service.database_client_id().await
     );
-    let database_id = params.database_id.clone();
+    let database_id = params.database_id;
+    let object_id = database_id;
     let database = context
       .database_collab_service
       .clone()
       .build_arc_database(
-        &database_id,
+        &object_id,
         true,
         Some(DatabaseDataVariant::Params(params)),
         context,
@@ -233,7 +222,7 @@ impl Database {
     })
     .await
     .map_err(|e| DatabaseError::Internal(e.into()))??
-    .into_params();
+    .into_params()?;
 
     let context = DatabaseContext {
       database_collab_service,
@@ -263,7 +252,7 @@ impl Database {
   }
 
   pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, DatabaseError> {
-    let database_id = Uuid::parse_str(self.collab.object_id())?;
+    let database_id = *self.collab.object_id();
     let encoded_database_collab = EncodedCollabInfo {
       object_id: database_id,
       collab_type: CollabType::Database,
@@ -287,7 +276,7 @@ impl Database {
             .ok()?;
           let read_guard = database_row.read().await;
           let row_collab = &read_guard.collab;
-          let object_id = Uuid::parse_str(row_collab.object_id()).ok()?;
+          let object_id = *row_collab.object_id();
           let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
           Some(EncodedCollabInfo {
             object_id,
@@ -374,7 +363,7 @@ impl Database {
   }
 
   /// Return the database id with a transaction
-  pub fn get_database_id(&self) -> String {
+  pub fn get_database_id(&self) -> DatabaseId {
     let txn = self.collab.transact();
     self.body.get_database_id(&txn)
   }
@@ -410,7 +399,7 @@ impl Database {
     if let Some(YrsValue::YMap(view)) = self.body.views.get(&txn, view_id) {
       if let Some(YrsValue::YArray(row_orders)) = view.get(&txn, DATABASE_VIEW_ROW_ORDERS) {
         return RowOrderArray::new(row_orders)
-          .get_position_with_txn(&txn, row_id)
+          .get_position_with_txn(&txn, &row_id.to_string())
           .is_some();
       }
     }
@@ -449,7 +438,7 @@ impl Database {
     {
       let mut txn = self.collab.transact_mut();
       self.body.views.update_all_views(&mut txn, |_, update| {
-        update.remove_row_order(row_id);
+        update.remove_row_order(&row_id.to_string());
       });
     };
   }
@@ -466,7 +455,7 @@ impl Database {
       let mut txn = self.collab.transact_mut();
       self.body.views.update_all_views(&mut txn, |_, mut update| {
         for row_id in row_ids {
-          update = update.remove_row_order(row_id);
+          update = update.remove_row_order(&row_id.to_string());
         }
       });
     };
@@ -499,12 +488,12 @@ impl Database {
   pub async fn get_row(&self, row_id: &RowId) -> Row {
     let row = self.body.block.get_database_row(row_id).await;
     match row {
-      None => Row::empty(row_id.clone(), &self.get_database_id()),
+      None => Row::empty(*row_id, self.get_database_id()),
       Some(row) => row
         .read()
         .await
         .get_row()
-        .unwrap_or_else(|| Row::empty(row_id.clone(), &self.get_database_id())),
+        .unwrap_or_else(|| Row::empty(*row_id, self.get_database_id())),
     }
   }
 
@@ -644,18 +633,18 @@ impl Database {
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
   ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
-    let row_ids = row_orders.iter().map(|order| order.id.clone()).collect();
+    let row_ids = row_orders.iter().map(|order| order.id).collect();
     let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token, auto_fetch);
     let database_id = self.get_database_id();
     rows_stream.then(move |result| {
-      let database_id = database_id.clone();
+      let database_id = database_id;
       async move {
         let row = result?;
         let read_guard = row.read().await;
-        let row_id = read_guard.row_id.clone();
+        let row_id = read_guard.row_id;
         let row = read_guard
           .get_row()
-          .unwrap_or_else(|| Row::empty(row_id, &database_id));
+          .unwrap_or_else(|| Row::empty(row_id, database_id));
         Ok(row)
       }
     })
@@ -678,7 +667,7 @@ impl Database {
   /// Return the [RowCell] with the given row id and field id.
   pub async fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
     let cell = self.body.block.get_cell(row_id, field_id).await;
-    RowCell::new(row_id.clone(), cell)
+    RowCell::new(*row_id, cell)
   }
 
   pub fn index_of_field(&self, view_id: &str, field_id: &str) -> Option<usize> {
@@ -1323,7 +1312,7 @@ impl Database {
       cells: row.cells,
       height: row.height,
       visibility: row.visibility,
-      row_position: OrderObjectPosition::After(row.id.into()),
+      row_position: OrderObjectPosition::after_row(&row.id),
       created_at: timestamp,
       modified_at: timestamp,
       row_meta: None,
@@ -1379,7 +1368,7 @@ impl Database {
     let mut row_metas = HashMap::with_capacity(rows.len());
     for row in &rows {
       if let Some(row_meta) = self.get_row_meta(&row.id).await {
-        row_metas.insert(row.id.clone(), row_meta);
+        row_metas.insert(row.id, row_meta);
       }
     }
 
@@ -1439,7 +1428,7 @@ impl Database {
       .views
       .get_all_views(&txn)
       .first()
-      .map(|result| result.id.clone())
+      .map(|result| result.id.to_string())
   }
 
   /// Delete a view from the database. If the view is the inline view it will clear all
@@ -1449,7 +1438,7 @@ impl Database {
     if self.body.get_inline_view_id(&txn) == view_id {
       let views = self.body.views.get_all_views_meta(&txn);
       self.body.views.clear(&mut txn);
-      views.into_iter().map(|view| view.id).collect()
+      views.into_iter().map(|view| view.id.to_string()).collect()
     } else {
       self.body.views.delete_view(&mut txn, view_id);
       vec![view_id.to_string()]
@@ -1502,12 +1491,12 @@ impl BorrowMut<Collab> for Database {
   }
 }
 
-pub fn gen_database_id() -> String {
-  uuid::Uuid::new_v4().to_string()
+pub fn gen_database_id() -> DatabaseId {
+  uuid::Uuid::new_v4()
 }
 
-pub fn gen_database_view_id() -> String {
-  uuid::Uuid::new_v4().to_string()
+pub fn gen_database_view_id() -> DatabaseViewId {
+  uuid::Uuid::new_v4()
 }
 
 pub fn gen_field_id() -> String {
@@ -1517,14 +1506,14 @@ pub fn gen_database_file_id() -> String {
   uuid::Uuid::new_v4().to_string()
 }
 
-pub fn gen_row_id() -> RowId {
-  RowId::from(uuid::Uuid::new_v4().to_string())
+pub fn gen_row_id() -> collab_entity::uuid_validation::RowId {
+  uuid::Uuid::new_v4()
 }
 
-pub fn get_row_document_id(row_id: &RowId) -> Result<String, DatabaseError> {
-  let row_id = Uuid::parse_str(row_id)
-    .map_err(|_err| DatabaseError::InvalidRowID("Failed to parse row id"))?;
-  Ok(meta_id_from_row_id(&row_id, RowMetaKey::DocumentId))
+pub fn get_row_document_id(
+  row_id: &collab_entity::uuid_validation::RowId,
+) -> Result<String, DatabaseError> {
+  Ok(meta_id_from_row_id(row_id, RowMetaKey::DocumentId))
 }
 
 pub fn gen_database_calculation_id() -> String {
@@ -1555,7 +1544,7 @@ pub fn timestamp() -> i64 {
 /// It's used when duplicating a database, or during import and export.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DatabaseData {
-  pub database_id: String,
+  pub database_id: DatabaseId,
   pub views: Vec<DatabaseView>,
   pub fields: Vec<Field>,
   pub rows: Vec<Row>,
@@ -1697,7 +1686,7 @@ impl DatabaseBody {
 
   async fn create(
     mut collab: Collab,
-    database_id: String,
+    database_id: DatabaseId,
     context: DatabaseContext,
     new_rows: Vec<CreateRowParams>,
     new_fields: Vec<Field>,
@@ -1706,7 +1695,7 @@ impl DatabaseBody {
     let origin = collab.origin().clone();
     let mut txn = collab.context.transact_mut();
     let root: MapRef = collab.data.get_or_init(&mut txn, DATABASE);
-    root.insert(&mut txn, DATABASE_ID, &*database_id);
+    root.insert(&mut txn, DATABASE_ID, database_id.to_string());
     let fields: MapRef = root.get_or_init(&mut txn, FIELDS); // { DATABASE: { FIELDS: {:} } }
     let views: MapRef = root.get_or_init(&mut txn, VIEWS); // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
     let metas: MapRef = root.get_or_init(&mut txn, DATABASE_METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
@@ -1714,14 +1703,12 @@ impl DatabaseBody {
     let fields = FieldMap::new(fields, Some(context.notifier.field_change_tx.clone()));
     let views = DatabaseViews::new(origin, views, Some(context.notifier.view_change_tx.clone()));
     let block = Block::new(
-      database_id.clone(),
+      database_id,
       context.database_row_collab_service.clone(),
       Some(context.notifier.row_change_tx.clone()),
     );
 
-    let database_id_uuid = Uuid::parse_str(&database_id)
-      .map_err(|_| DatabaseError::InvalidDatabaseID("database_id is not a valid UUID"))?;
-    let inline_view_id = database_inline_view_id(&database_id_uuid);
+    let inline_view_id = database_inline_view_id(&database_id);
 
     // create rows
     let row_orders = block
@@ -1741,7 +1728,7 @@ impl DatabaseBody {
 
     let mut inline_view = DatabaseView::new(
       database_id,
-      inline_view_id.to_string(),
+      inline_view_id,
       "".to_string(),
       DatabaseLayout::Grid,
     );
@@ -1788,7 +1775,8 @@ impl DatabaseBody {
       CollabOrigin::Empty
     };
     let root: MapRef = collab.data.get_with_txn(&txn, DATABASE)?;
-    let database_id = root.get_with_txn(&txn, DATABASE_ID)?;
+    let database_id_str: String = root.get_with_txn(&txn, DATABASE_ID)?;
+    let database_id = collab_entity::uuid_validation::try_parse_database_id(&database_id_str)?;
     let fields: MapRef = root.get_with_txn(&txn, FIELDS)?; // { DATABASE: { FIELDS: {:} } }
     let views: MapRef = root.get_with_txn(&txn, VIEWS)?; // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
     let metas: MapRef = root.get_with_txn(&txn, DATABASE_METAS)?; // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
@@ -1840,7 +1828,7 @@ impl DatabaseBody {
         database_id,
       );
       let view_metas = views.get_all_views_meta(&txn);
-      inline_view_id = view_metas.first().map(|view| view.id.clone());
+      inline_view_id = view_metas.first().map(|view| view.id.to_string());
       if view_metas.is_empty() {
         error!(
           "Can't find any database views when inline view id is empty. current root map:{}",
@@ -1857,8 +1845,10 @@ impl DatabaseBody {
     inline_view_id
   }
 
-  pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> String {
-    self.root.get_with_txn(txn, DATABASE_ID).unwrap()
+  pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> DatabaseId {
+    let database_id_str: String = self.root.get_with_txn(txn, DATABASE_ID).unwrap();
+    collab_entity::uuid_validation::try_parse_database_id(&database_id_str)
+      .unwrap_or_else(collab_entity::uuid_validation::generate_database_id)
   }
 
   /// Create a new row from the given view.
@@ -1892,7 +1882,7 @@ impl DatabaseBody {
         self.get_database_id(txn)
       );
       let view_metas = self.views.get_all_views_meta(txn);
-      inline_view_id = view_metas.first().map(|view| view.id.clone());
+      inline_view_id = view_metas.first().map(|view| view.id.to_string());
       if view_metas.is_empty() {
         let root = self.root.to_json(txn);
         error!(
@@ -1995,9 +1985,18 @@ impl DatabaseBody {
     position: &OrderObjectPosition,
     field_settings_by_layout: &HashMap<DatabaseLayout, FieldSettingsMap>,
   ) {
+    let target_uuid_view_id = view_id.and_then(|v| {
+      match uuid::Uuid::parse_str(v) {
+        Ok(id) => Some(id.to_string()),
+        Err(_) => {
+          tracing::error!("Invalid view ID: {}", v);
+          None
+        }
+      }
+    });
     self.views.update_all_views(txn, |id, update| {
-      let update = match view_id {
-        Some(view_id) if id == view_id => update.insert_field_order(&field, position),
+      let update = match target_uuid_view_id.as_deref() {
+        Some(target_view_id) if id == target_view_id => update.insert_field_order(&field, position),
         Some(_) => update.insert_field_order(&field, &OrderObjectPosition::default()),
         None => update.insert_field_order(&field, position),
       };
@@ -2126,7 +2125,7 @@ pub fn try_fixing_database(
   Ok(())
 }
 
-fn database_inline_view_id(database_id: &Uuid) -> Uuid {
+fn database_inline_view_id(database_id: &DatabaseId) -> DatabaseViewId {
   let key = "inline_view_id";
   Uuid::new_v5(database_id, key.as_bytes())
 }

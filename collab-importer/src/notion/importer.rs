@@ -209,7 +209,7 @@ impl ImportedInfo {
       Box::pin(combined_stream) as ImportedCollabInfoStream
     } else {
       let imported_space_collab = ImportedCollab {
-        object_id: self.space_view.view.id.clone(),
+        object_id: self.space_view.view.id.to_string(),
         collab_type: CollabType::Document,
         encoded_collab: self
           .space_collab
@@ -221,7 +221,7 @@ impl ImportedInfo {
         name: self.name.clone(),
         imported_collabs: vec![imported_space_collab],
         resources: vec![CollabResource {
-          object_id: self.space_view.view.id,
+          object_id: self.space_view.view.id.to_string(),
           files: vec![],
         }],
         import_type: ImportType::Document,
@@ -239,7 +239,7 @@ impl ImportedInfo {
   pub async fn build_nested_views(&self) -> NestedViews {
     let space_ids = self.space_ids();
     let parent_id = if space_ids.is_empty() {
-      self.space_view.view.id.clone()
+      self.space_view.view.id.to_string()
     } else {
       self.workspace_id.clone()
     };
@@ -255,7 +255,7 @@ impl ImportedInfo {
       vec![space_view]
     } else {
       views.iter_mut().for_each(|view| {
-        if space_ids.contains(&view.view.id) {
+        if space_ids.contains(&view.view.id.to_string()) {
           view.view.extra = serde_json::to_string(
             &ViewExtraBuilder::new()
               .is_space(true)
