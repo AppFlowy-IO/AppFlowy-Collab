@@ -1,62 +1,99 @@
-use crate::v2::folder::FractionalVec;
-use crate::v2::fractional_index::FractionalIndex;
-use crate::{Section, SectionItem, ViewIcon, ViewId, ViewIdentifier, ViewLayout};
+use crate::v2::fractional_index::{FractionalIndex, FractionalVec};
+use crate::{
+  FolderData, RepeatedViewIdentifier, Section, SectionItem, SectionsByUid, View, ViewIcon, ViewId,
+  ViewIdentifier, ViewLayout, Workspace,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct Workspace {
-  pub id: ViewId,
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct FolderState {
+  pub workspace_id: ViewId,
   pub name: String,
   pub child_views: FractionalVec<ViewIdentifier>,
   pub created_at: i64,
   pub created_by: Option<i64>,
   pub last_edited_time: i64,
   pub last_edited_by: Option<i64>,
+  pub current_views: HashMap<i64, ViewId>,
+  pub views: HashMap<ViewId, ViewData>,
+  pub sections: HashMap<Section, HashMap<i64, FractionalVec<SectionItem>>>,
 }
 
-impl Workspace {
-  pub fn new(id: ViewId) -> Self {
-    Workspace {
-      id,
-      name: "".into(),
+impl FolderState {
+  pub fn new(worskspace_id: String) -> FolderState {
+    FolderState {
+      workspace_id: worskspace_id.into(),
+      name: "".to_string(),
       child_views: Default::default(),
       created_at: 0,
       created_by: None,
       last_edited_time: 0,
       last_edited_by: None,
+      current_views: Default::default(),
+      views: Default::default(),
+      sections: Default::default(),
+    }
+  }
+
+  pub fn workspace(&self) -> Workspace {
+    Workspace {
+      id: self.workspace_id.clone(),
+      name: self.name.clone(),
+      child_views: RepeatedViewIdentifier {
+        items: self.child_views.iter().cloned().collect(),
+      },
+      created_at: self.created_at,
+      created_by: self.created_by,
+      last_edited_time: self.last_edited_time,
+      last_edited_by: self.last_edited_by,
     }
   }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct FolderData {
-  pub workspace: Workspace,
-  pub current_views: HashMap<i64, ViewId>,
-  pub views: HashMap<ViewId, View>,
-  pub sections: HashMap<Section, HashMap<i64, FractionalVec<SectionItem>>>,
-}
+impl From<FolderData> for FolderState {
+  fn from(value: FolderData) -> Self {
+    fn fill(source: SectionsByUid, dest: &mut HashMap<i64, FractionalVec<SectionItem>>) {
+      for (uid, items) in source {
+        dest.insert(uid.as_i64(), FractionalVec::from_iter(items));
+      }
+    }
 
-impl FolderData {
-  pub fn new(workspace: Workspace) -> Self {
-    FolderData {
-      current_views: HashMap::new(),
-      workspace,
-      views: HashMap::new(),
-      sections: HashMap::new(),
+    let mut views = HashMap::new();
+    for v in value.views {
+      views.insert(v.id.clone(), v.into());
+    }
+
+    let sections = {
+      let mut sections = HashMap::new();
+      fill(value.trash, sections.entry(Section::Trash).or_default());
+      fill(
+        value.favorites,
+        sections.entry(Section::Favorite).or_default(),
+      );
+      fill(value.private, sections.entry(Section::Private).or_default());
+      fill(value.recent, sections.entry(Section::Recent).or_default());
+      sections
+    };
+
+    FolderState {
+      workspace_id: value.workspace.id.clone(),
+      name: value.workspace.name.clone(),
+      child_views: value.workspace.child_views.items.iter().cloned().collect(),
+      created_at: value.workspace.created_at,
+      created_by: value.workspace.created_by,
+      last_edited_time: value.workspace.last_edited_time,
+      last_edited_by: value.workspace.last_edited_by,
+      current_views: HashMap::from([(value.uid, value.current_view)]),
+      views,
+      sections,
     }
   }
-}
-
-#[derive(Debug, Clone)]
-pub struct ParentChildViews {
-  pub view: View,
-  pub children: Vec<ParentChildViews>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct View {
+pub struct ViewData {
   /// The id of the view
   pub id: ViewId,
   /// The id for given parent view
@@ -66,8 +103,6 @@ pub struct View {
   /// The name that display on the left sidebar
   pub name: String,
   pub created_at: i64,
-  #[serde(default)]
-  pub is_favorite: bool,
   pub layout: ViewLayout,
   pub icon: Option<ViewIcon>,
   pub created_by: Option<i64>, // user id
@@ -88,7 +123,7 @@ pub struct View {
   pub extra: Option<String>,
 }
 
-impl View {
+impl ViewData {
   pub fn new(
     view_id: ViewId,
     parent_view_id: ViewId,
@@ -96,13 +131,12 @@ impl View {
     layout: ViewLayout,
     created_by: Option<i64>,
   ) -> Self {
-    View {
+    ViewData {
       id: view_id,
       parent_view_id,
       parent_ordering: "".into(),
       name,
       created_at: 0,
-      is_favorite: false,
       layout,
       icon: None,
       created_by,
@@ -114,8 +148,49 @@ impl View {
   }
 }
 
-impl View {
-  pub fn create_patch(&self, other: &View) -> Option<ViewPatch> {
+impl From<ViewData> for View {
+  fn from(value: ViewData) -> Self {
+    View {
+      id: value.id,
+      parent_view_id: value.parent_view_id,
+      name: value.name,
+      created_at: value.created_at,
+      layout: value.layout,
+      icon: value.icon,
+      created_by: value.created_by,
+      last_edited_time: value.last_edited_time,
+      last_edited_by: value.last_edited_by,
+      is_locked: value.is_locked,
+      extra: value.extra,
+
+      // these need to be populated separately
+      children: Default::default(),
+      is_favorite: false,
+    }
+  }
+}
+
+impl From<View> for ViewData {
+  fn from(value: View) -> Self {
+    ViewData {
+      id: value.id,
+      parent_view_id: value.parent_view_id,
+      parent_ordering: "".into(), // needs to be set separately
+      name: value.name,
+      created_at: value.created_at,
+      layout: value.layout,
+      icon: value.icon,
+      created_by: value.created_by,
+      last_edited_time: value.last_edited_time,
+      last_edited_by: value.last_edited_by,
+      is_locked: value.is_locked,
+      extra: value.extra,
+    }
+  }
+}
+
+impl ViewData {
+  pub fn create_patch(&self, other: &ViewData) -> Option<ViewPatch> {
     if self.id != other.id {
       return None;
     }
@@ -142,12 +217,6 @@ impl View {
       name: if self.name != other.name {
         changed = true;
         Some(other.name.clone())
-      } else {
-        None
-      },
-      is_favorite: if self.is_favorite != other.is_favorite {
-        changed = true;
-        Some(other.is_favorite)
       } else {
         None
       },
@@ -186,7 +255,6 @@ pub struct ViewPatch {
   pub parent_view_id: Option<ViewId>,
   pub parent_ordering: Option<FractionalIndex>,
   pub name: Option<String>,
-  pub is_favorite: Option<bool>,
   pub layout: Option<ViewLayout>,
   pub icon: Option<Option<ViewIcon>>,
   pub is_locked: Option<Option<bool>>,
@@ -204,7 +272,6 @@ impl ViewPatch {
       parent_view_id: None,
       parent_ordering: None,
       name: None,
-      is_favorite: None,
       layout: None,
       icon: None,
       is_locked: None,

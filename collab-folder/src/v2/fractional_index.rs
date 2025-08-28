@@ -1,55 +1,144 @@
+use crate::SectionItem;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub type FractionalIndex = String;
-pub type FractionalVec<T> = BTreeMap<FractionalIndex, T>;
 
-pub fn neighbors<T>(
-  map: &FractionalVec<T>,
-  index: Option<usize>,
-) -> (Option<&FractionalIndex>, Option<&FractionalIndex>) {
-  match index {
-    None => {
-      let left = map.last_key_value().map(|(k, _)| k);
-      (left, None)
-    },
-    Some(mut i) => {
-      let mut left = None;
-      let mut right = None;
-      let mut iter = map.keys();
-      while let Some(key) = iter.next() {
-        if i == 0 {
-          right = Some(key);
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FractionalVec<T>(BTreeMap<FractionalIndex, Option<T>>);
+
+impl<T> FractionalVec<T> {
+  pub fn insert(&mut self, index: usize, value: T) {
+    assert!(index < self.0.len());
+    let new_index = self.index_at(Some(index));
+    self.0.insert(new_index, Some(value));
+  }
+
+  pub fn append(&mut self, items: impl Iterator<Item = T>) {
+    let mut last_index = self.0.keys().last().cloned();
+    for item in items {
+      let index = index_between(last_index.as_ref(), None).unwrap();
+      self.0.insert(index.clone(), Some(item));
+      last_index = Some(index);
+    }
+  }
+
+  pub fn index_at(&self, index: Option<usize>) -> FractionalIndex {
+    let (left, right) = self.neighbors(index);
+    index_between(left, right).expect("Failed to create a new index")
+  }
+
+  pub fn insert_after<F>(&mut self, value: T, predicate: F)
+  where
+    F: Fn(&T) -> bool,
+  {
+    let (left, right) = self.neighbors_after(predicate);
+    let index = index_between(left, right).expect("Failed to create a new index");
+    self.0.insert(index, Some(value));
+  }
+
+  pub fn iter(&self) -> impl Iterator<Item = &T> {
+    self.0.values().flat_map(Option::as_ref)
+  }
+
+  pub fn keys(&self) -> impl Iterator<Item = &FractionalIndex> {
+    self.0.keys()
+  }
+
+  fn neighbors(
+    &self,
+    index: Option<usize>,
+  ) -> (Option<&FractionalIndex>, Option<&FractionalIndex>) {
+    match index {
+      None => {
+        let left = self.0.last_key_value().map(|(k, _)| k);
+        (left, None)
+      },
+      Some(mut i) => {
+        let mut left = None;
+        let mut right = None;
+        let mut iter = self.0.keys();
+        while let Some(key) = iter.next() {
+          if i == 0 {
+            right = Some(key);
+            break;
+          }
+          left = Some(key);
+          i -= 1;
+        }
+        (left, right)
+      },
+    }
+  }
+
+  pub fn neighbors_after<F>(
+    &self,
+    predicate: F,
+  ) -> (Option<&FractionalIndex>, Option<&FractionalIndex>)
+  where
+    F: Fn(&T) -> bool,
+  {
+    let mut left_index = None;
+    let mut right_index = None;
+    let mut i = self.0.iter();
+    while let Some((index, item)) = i.next() {
+      if let Some(item) = item {
+        if predicate(item) {
+          left_index = Some(index);
+          right_index = i.next().map(|(index, _)| index);
           break;
         }
-        left = Some(key);
-        i -= 1;
       }
-      (left, right)
-    },
+    }
+    if left_index.is_none() {
+      right_index = self.0.first_key_value().map(|(i, _)| i);
+    }
+    (left_index, right_index)
+  }
+
+  pub fn remove_all<F>(&mut self, predicate: F)
+  where
+    F: Fn(&T) -> bool,
+  {
+    for (_, v) in self.0.iter_mut() {
+      if let Some(value) = v {
+        if predicate(value) {
+          *v = None;
+        }
+      }
+    }
   }
 }
 
-pub fn neighbors_after<T, F>(
-  map: &FractionalVec<T>,
-  predicate: F,
-) -> (Option<&FractionalIndex>, Option<&FractionalIndex>)
-where
-  F: Fn(&T) -> bool,
-{
-  let mut left_index = None;
-  let mut right_index = None;
-  let mut i = map.iter();
-  while let Some((index, item)) = i.next() {
-    if predicate(item) {
-      left_index = Some(index);
-      right_index = i.next().map(|(index, _)| index);
-      break;
+impl<T: PartialEq> FractionalVec<T> {
+  pub fn contains(&self, value: &T) -> bool {
+    self.iter().any(|v| v == value)
+  }
+}
+
+impl<T> Default for FractionalVec<T> {
+  fn default() -> Self {
+    FractionalVec(BTreeMap::new())
+  }
+}
+
+impl<T> FromIterator<T> for FractionalVec<T> {
+  fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+    let mut vec = FractionalVec::default();
+    let mut left = None;
+    for item in iter {
+      let new_index = index_between(left.as_ref(), None).expect("Failed to create a new index");
+      vec.0.insert(new_index.clone(), Some(item));
+      left = Some(new_index);
     }
+    vec
   }
-  if left_index.is_none() {
-    right_index = map.first_key_value().map(|(i, _)| i);
+}
+
+impl<T> FromIterator<(FractionalIndex, T)> for FractionalVec<T> {
+  fn from_iter<I: IntoIterator<Item = (FractionalIndex, T)>>(iter: I) -> Self {
+    FractionalVec(iter.into_iter().map(|(k, v)| (k, Some(v))).collect())
   }
-  (left_index, right_index)
 }
 
 /// Creates an index string that is alphabetically between the `left` and `right` indices.

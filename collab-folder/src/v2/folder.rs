@@ -1,17 +1,20 @@
-use super::view::{FolderData, ParentChildViews, View, ViewPatch, Workspace};
+use super::view::{FolderState, ViewData, ViewPatch};
 use crate::error::FolderError;
+use crate::hierarchy_builder::ParentChildViews;
 use crate::section::{Section, SectionItem};
-use crate::v2::fractional_index::{FractionalIndex, index_between, neighbors, neighbors_after};
+use crate::v2::fractional_index::{FractionalVec, index_between};
 use crate::v2::provider::FolderDataProvider;
-use crate::{FolderNotify, TrashInfo, ViewId};
+use crate::{
+  FolderData, FolderNotify, RepeatedViewIdentifier, SectionChange, TrashInfo, TrashSectionChange,
+  ViewChange, ViewId, ViewIdentifier, Workspace,
+};
 use anyhow::anyhow;
 use collab::core::collab::DataSource;
 pub use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashSet, VecDeque};
-
-pub type FractionalVec<T> = BTreeMap<FractionalIndex, T>;
+use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 
 /// Represents the folder hierarchy in a workspace.
 ///
@@ -35,7 +38,7 @@ pub type FractionalVec<T> = BTreeMap<FractionalIndex, T>;
 /// * `subscription`: A `DeepEventsSubscription` object, managing the subscription for folder changes, like inserting a new view.
 /// * `notifier`: An optional `FolderNotify` object for notifying about changes in the folder.
 pub struct Folder {
-  data: FolderData,
+  data: FolderState,
   provider: Box<dyn FolderDataProvider>,
   notifier: Option<FolderNotify>,
 }
@@ -47,7 +50,7 @@ impl Folder {
     notifier: Option<FolderNotify>,
   ) -> Self {
     Folder {
-      data: FolderData::new(Workspace::new(workspace_id.into())),
+      data: FolderState::new(workspace_id),
       provider,
       notifier,
     }
@@ -58,9 +61,10 @@ impl Folder {
     notifier: Option<FolderNotify>,
     data: FolderData,
   ) -> super::Result<Self> {
-    provider.init(&data).await?;
+    let state = FolderState::from(data);
+    provider.init(&state).await?;
     Ok(Folder {
-      data,
+      data: state,
       provider,
       notifier,
     })
@@ -79,7 +83,7 @@ impl Folder {
     todo!()
   }
 
-  pub fn get_current_view<T: ReadTxn>(&self, uid: i64) -> Option<ViewId> {
+  pub fn get_current_view(&self, uid: i64) -> Option<ViewId> {
     self.data.current_views.get(&uid).cloned()
   }
 
@@ -108,8 +112,8 @@ impl Folder {
   ///
   /// * `None`: If the operation is unsuccessful (though it should typically not be the case as `Some`
   ///   is returned explicitly), it returns `None`.
-  pub fn get_folder_data(&self, workspace_id: &str, uid: i64) -> Option<&FolderData> {
-    if &*self.data.workspace.id != workspace_id {
+  pub fn get_folder_data(&self, workspace_id: &str, uid: i64) -> Option<&FolderState> {
+    if &*self.data.workspace_id != workspace_id {
       return None;
     }
     Some(&self.data)
@@ -121,21 +125,21 @@ impl Folder {
   /// and uses this ID to fetch the actual workspace object.
   ///
   pub fn get_workspace_info(&self, workspace_id: &str, uid: i64) -> Option<Workspace> {
-    if &*self.data.workspace.id != workspace_id {
+    if &*self.data.workspace_id != workspace_id {
       return None;
     }
-    Some(self.data.workspace.clone())
+    Some(self.data.workspace())
   }
 
   pub fn get_workspace_id(&self) -> ViewId {
-    self.data.workspace.id.clone()
+    self.data.workspace_id.clone()
   }
 
-  pub fn get_all_views(&self, uid: i64) -> Vec<&View> {
+  pub fn get_all_views(&self, uid: i64) -> Vec<&ViewData> {
     self.data.views.values().collect()
   }
 
-  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T], uid: i64) -> Vec<&View> {
+  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T], uid: i64) -> Vec<&ViewData> {
     let view_ids: HashSet<_> = view_ids.iter().map(|id| id.as_ref()).collect();
     self
       .data
@@ -145,48 +149,50 @@ impl Folder {
       .collect()
   }
 
-  pub fn get_views_belong_to(&self, parent_id: &str, uid: i64) -> Vec<&View> {
-    let mut views: Vec<_> = self
-      .data
-      .views
-      .values()
-      .filter(|v| &*v.parent_view_id == parent_id)
+  pub fn get_views_belong_to(&self, parent_id: &str, uid: i64) -> Vec<crate::View> {
+    let children = self.child_views(parent_id);
+    let views: Vec<crate::View> = children
+      .iter()
+      .filter_map(|id| self.get_view(id, uid))
       .collect();
-    views.sort_by_key(|v| &*v.parent_ordering);
     views
   }
 
   pub async fn move_view(
     &mut self,
     view_id: &str,
-    from: u32,
+    _from: u32,
     to: u32,
     uid: i64,
-  ) -> super::Result<&View> {
+  ) -> super::Result<crate::View> {
     let view = self.data.views.get(view_id).ok_or_else(|| {
       FolderError::NoRequiredData(format!("View {} not found when moving", view_id))
     })?;
-    let children = self.child_views(&view.parent_view_id);
-    let (left, right) = neighbors(&children, Some(to as usize));
-    let frac_index = index_between(left, right).ok_or_else(|| {
-      FolderError::Internal(anyhow!(
-        "Failed to calculate new ordering for moving view {} from {} to {}",
-        view_id,
-        from,
-        to
-      ))
-    })?;
+    let frac_index = self
+      .child_views(&view.parent_view_id)
+      .index_at(Some(to as usize));
+
+    let view = self.data.views.get_mut(view_id).unwrap();
+
+    view.parent_ordering = frac_index.clone();
 
     let mut patch = ViewPatch::new(view.id.clone());
     patch.parent_view_id = Some(view.parent_view_id.clone());
     patch.parent_ordering = Some(frac_index);
-    let new_view = self.provider.update_view(patch).await?;
-    self
-      .data
-      .views
-      .insert(new_view.id.clone(), new_view.clone());
-    //TODO: notify changes
-    Ok(self.data.views.get(view_id).unwrap())
+
+    self.provider.update_view(patch).await?;
+
+    let mut result: crate::View = view.clone().into();
+    result.children = self.child_ids(view_id);
+    result.is_favorite = self.is_favorite(view_id, uid);
+
+    if let Some(notify) = &self.notifier {
+      let _ = notify.view_change_tx.send(ViewChange::DidUpdate {
+        view: result.clone(),
+      });
+    }
+
+    Ok(result)
   }
 
   /// Moves a nested view to a new location in the hierarchy.
@@ -212,29 +218,39 @@ impl Folder {
     new_parent_id: &str,
     prev_view_id: Option<String>,
     uid: i64,
-  ) -> super::Result<&View> {
+  ) -> super::Result<crate::View> {
+    let syblings = self.child_views(new_parent_id);
+    let (left, right) = syblings.neighbors_after(|v| v.as_ref() == view_id);
+    let frac_index = index_between(left, right).unwrap();
+
     let view = self.data.views.get_mut(view_id).ok_or_else(|| {
       FolderError::NoRequiredData(format!("View {} not found when moving", view_id))
     })?;
-    let frac_index = index_between(prev_view_id.as_ref(), None).ok_or_else(|| {
-      FolderError::Internal(anyhow!(
-        "Failed to calculate new ordering for moving view {}",
-        view_id
-      ))
-    })?;
+
+    view.parent_view_id = new_parent_id.into();
+    view.parent_ordering = frac_index.clone();
 
     let mut patch = ViewPatch::new(view_id.into());
     patch.parent_view_id = Some(new_parent_id.into());
     patch.parent_ordering = Some(frac_index);
-    let new_view = self.provider.update_view(patch).await?;
-    *view = new_view;
-    //TODO: notify changes
-    Ok(view)
+    self.provider.update_view(patch).await?;
+
+    let mut result: crate::View = view.clone().into();
+    result.children = self.child_ids(view_id);
+    result.is_favorite = self.is_favorite(view_id, uid);
+
+    if let Some(notify) = &self.notifier {
+      let _ = notify.view_change_tx.send(ViewChange::DidUpdate {
+        view: result.clone(),
+      });
+    }
+
+    Ok(result)
   }
 
-  pub async fn update_view<F>(&mut self, view_id: &str, f: F, uid: i64) -> Option<View>
+  pub async fn update_view<F>(&mut self, view_id: &str, f: F, uid: i64) -> Option<crate::View>
   where
-    F: FnOnce(&mut View),
+    F: FnOnce(&mut ViewData),
   {
     let view = match self.data.views.get_mut(view_id) {
       Some(view) => view,
@@ -246,30 +262,52 @@ impl Folder {
       self.provider.update_view(patch).await.ok()?;
     }
     *view = new_view.clone();
-    //TODO: notify changes
-    Some(new_view)
+
+    let mut result: crate::View = view.clone().into();
+    result.children = self.child_ids(view_id);
+    result.is_favorite = self.is_favorite(view_id, uid);
+
+    if let Some(notifier) = &self.notifier {
+      let _ = notifier.view_change_tx.send(ViewChange::DidUpdate {
+        view: result.clone(),
+      });
+    }
+
+    Some(result)
   }
 
   pub async fn delete_views(&mut self, views: &[ViewId]) -> super::Result<()> {
     self.provider.delete_views(views).await?;
+    let mut deleted = Vec::with_capacity(views.len());
     for view_id in views {
-      self.data.views.remove(view_id);
+      if let Some(view) = self.data.views.remove(view_id) {
+        deleted.push(Arc::new(crate::View::from(view)));
+      }
     }
-    //TODO: notify changes
+
+    if let Some(notifier) = &self.notifier {
+      let _ = notifier
+        .view_change_tx
+        .send(ViewChange::DidDeleteView { views: deleted });
+    }
+
     Ok(())
   }
 
   /// Add view IDs as either favorites or recents
   pub fn section_add(&mut self, section: Section, ids: &[ViewId], uid: i64) {
-    let e = self.data.sections.entry(section).or_default();
+    let e = self.data.sections.entry(section.clone()).or_default();
     let by_user = e.entry(uid).or_default();
-    let mut last_index = by_user.keys().last().cloned();
-    for id in ids {
-      let index = index_between(last_index.as_ref(), None).unwrap();
-      by_user.insert(index.clone(), SectionItem::new(id.clone()));
-      last_index = Some(index);
+
+    by_user.append(ids.into_iter().map(|id| SectionItem::new(id.clone())));
+
+    if section == Section::Trash {
+      if let Some(notifier) = &self.notifier {
+        let _ = notifier.section_change_tx.send(SectionChange::Trash(
+          TrashSectionChange::TrashItemAdded { ids: ids.to_vec() },
+        ));
+      }
     }
-    //TODO: notify changes
 
     todo!("persistence");
   }
@@ -278,10 +316,17 @@ impl Folder {
     if let Some(by_user) = self.data.sections.get_mut(section) {
       if let Some(section_items) = by_user.get_mut(&uid) {
         let id_set: HashSet<_> = ids.iter().collect();
-        section_items.retain(|_k, v| !id_set.contains(&&v.id));
+        section_items.remove_all(|v| !id_set.contains(&&v.id));
       }
     }
-    //TODO: notify changes
+
+    if section == &Section::Trash {
+      if let Some(notifier) = &self.notifier {
+        let _ = notifier.section_change_tx.send(SectionChange::Trash(
+          TrashSectionChange::TrashItemRemoved { ids: ids.to_vec() },
+        ));
+      }
+    }
 
     todo!("persistence");
   }
@@ -291,7 +336,7 @@ impl Folder {
     let mut result = Vec::new();
     if let Some(by_user) = self.data.sections.get(section) {
       if let Some(section_items) = by_user.get(&uid) {
-        result.extend(section_items.values().cloned());
+        result.extend(section_items.iter().cloned());
       }
     }
     result
@@ -302,7 +347,7 @@ impl Folder {
     let mut result = Vec::new();
     if let Some(by_user) = self.data.sections.get(section) {
       for section_items in by_user.values() {
-        result.extend(section_items.values().cloned());
+        result.extend(section_items.iter().cloned());
       }
     }
     result
@@ -323,13 +368,9 @@ impl Folder {
   pub fn section_move(&mut self, section: &Section, id: &str, prev_id: Option<&str>, uid: i64) {
     if let Some(by_user) = self.data.sections.get_mut(section) {
       if let Some(section_items) = by_user.get_mut(&uid) {
-        section_items.retain(|_, view_id| &*view_id.id != id);
-        let new_index = {
-          let (left_index, right_index) =
-            neighbors_after(&section_items, |item| Some(&*item.id) == prev_id);
-          index_between(left_index, right_index).unwrap()
-        };
-        section_items.insert(new_index, SectionItem::new(id.into()));
+        section_items.insert_after(SectionItem::new(id.into()), |i| {
+          Some(i.id.as_ref()) == prev_id
+        });
       }
     }
     //TODO: notify changes
@@ -346,7 +387,7 @@ impl Folder {
       None => return vec![],
     };
     views
-      .values()
+      .iter()
       .filter_map(|item| {
         self.data.views.get(&item.id).map(|view| TrashInfo {
           id: view.id.clone(),
@@ -376,19 +417,13 @@ impl Folder {
   ///
   pub async fn insert_view(
     &mut self,
-    mut view: View,
+    view: crate::View,
     index: Option<usize>,
     uid: i64,
   ) -> super::Result<()> {
     let syblings = self.child_views(&view.parent_view_id);
-    let (left, right) = neighbors(&syblings, index);
-    let frac_index = index_between(left, right).ok_or_else(|| {
-      FolderError::Internal(anyhow!(
-        "Failed to calculate new ordering for inserting view {} at index {:?}",
-        view.id,
-        index
-      ))
-    })?;
+    let frac_index = syblings.index_at(index);
+    let mut view: ViewData = view.into();
     view.parent_ordering = frac_index;
     self.provider.insert_views(&[view.clone()], uid).await?;
     self.data.views.insert(view.id.clone(), view);
@@ -412,35 +447,43 @@ impl Folder {
   }
 
   /// Insert a list of views at the end of its parent view
-  pub async fn insert_views(&mut self, mut views: Vec<View>, uid: i64) -> super::Result<()> {
+  pub async fn insert_views(&mut self, views: Vec<crate::View>, uid: i64) -> super::Result<()> {
     if views.is_empty() {
       return Ok(());
     }
-    let parent_id = &views[0].parent_view_id.clone();
-    let mut left_frac_index = self.child_views(parent_id).keys().last().cloned();
-    for i in 0..views.len() {
-      let view = &mut views[i];
-      if &view.parent_view_id != parent_id {
-        return Err(FolderError::Internal(anyhow!(
-          "All views should have the same parent_view_id, but got {} and {}",
-          parent_id,
-          view.parent_view_id
-        )));
-      }
-      let new_index = index_between(left_frac_index.as_ref(), None).ok_or_else(|| {
-        FolderError::Internal(anyhow!(
-          "Failed to calculate new ordering for inserting view {} at index {:?}",
-          view.id,
-          i
-        ))
-      })?;
-      view.parent_ordering = new_index.clone();
-      left_frac_index = Some(new_index);
+    let mut left_frac_index = None;
+    let mut parent_id = None;
+    let mut result = Vec::with_capacity(views.len());
+    for view in views {
+      let mut view = ViewData::from(view);
+
+      // calculate the fractional index
+
+      // get index of the left neighbor (right neighbor is always None since we are appending to the end)
+      let left = if parent_id.as_ref() == Some(&view.parent_view_id) {
+        left_frac_index // view has the same parent as the previous one
+      } else {
+        self
+          .data
+          .views
+          .iter()
+          .filter(|(_, v)| v.parent_view_id == view.parent_view_id)
+          .map(|(_, v)| v.parent_ordering.clone())
+          .max()
+      };
+      // cache left index for the next view
+      let index = index_between(left.as_ref(), None).unwrap();
+      left_frac_index = Some(index.clone());
+
+      parent_id = Some(view.parent_view_id.clone());
+      view.parent_ordering = index;
+
+      result.push(view);
     }
 
-    self.provider.insert_views(&views, uid).await?;
-    for view in views.iter() {
-      self.data.views.insert(view.id.clone(), view.clone());
+    self.provider.insert_views(&result, uid).await?;
+    for view in result {
+      self.data.views.insert(view.id.clone(), view);
     }
     //TODO: notify changes
     Ok(())
@@ -453,16 +496,15 @@ impl Folder {
     views: Vec<ParentChildViews>,
     uid: i64,
   ) -> super::Result<()> {
-    fn flatten_views(views: Vec<ParentChildViews>, flattened: &mut Vec<View>) {
-      for mut view in views {
-        flattened.push(view.view);
+    fn flatten_views(views: Vec<ParentChildViews>, flattened: &mut Vec<ViewData>) {
+      let mut left = None;
+      for view in views {
+        let mut data = ViewData::from(view.view);
+        data.parent_ordering = index_between(left.as_ref(), None).unwrap();
+        left = Some(data.parent_ordering.clone());
+        flattened.push(data);
+
         if !view.children.is_empty() {
-          let mut left = None;
-          for child in view.children.iter_mut() {
-            let index = index_between(left.as_ref(), None).unwrap();
-            left = Some(index.clone());
-            child.view.parent_ordering = index;
-          }
           flatten_views(view.children, flattened);
         }
       }
@@ -479,8 +521,33 @@ impl Folder {
     Ok(())
   }
 
-  pub fn get_view(&self, view_id: &str, uid: i64) -> Option<&View> {
-    self.data.views.get(view_id)
+  pub fn get_view(&self, view_id: &str, uid: i64) -> Option<crate::View> {
+    let view = self.data.views.get(view_id)?;
+    let mut result: crate::View = view.clone().into();
+    result.children = self.child_ids(view_id);
+    result.is_favorite = self.is_favorite(view_id, uid);
+
+    Some(result)
+  }
+
+  fn child_ids(&self, parent_id: &str) -> RepeatedViewIdentifier {
+    RepeatedViewIdentifier::new(
+      self
+        .child_views(parent_id)
+        .iter()
+        .map(|v| ViewIdentifier::new(v.clone()))
+        .collect(),
+    )
+  }
+
+  fn is_favorite(&self, view_id: &str, uid: i64) -> bool {
+    self
+      .data
+      .sections
+      .get(&Section::Favorite)
+      .and_then(|by_user| by_user.get(&uid))
+      .map(|section| section.iter().any(|item| &*item.id == view_id))
+      .unwrap_or(false)
   }
 
   pub fn is_view_in_section(&self, section: Section, view_id: &str, uid: i64) -> bool {
@@ -489,7 +556,7 @@ impl Folder {
       .sections
       .get(&section)
       .and_then(|by_user| by_user.get(&uid))
-      .map(|section| section.values().any(|item| item.id.as_ref() == view_id))
+      .map(|section| section.iter().any(|item| item.id.as_ref() == view_id))
       .unwrap_or(false)
   }
 
@@ -498,7 +565,8 @@ impl Folder {
   }
 
   pub fn to_json_value(&self) -> JsonValue {
-    serde_json::to_value(&self.data).unwrap()
+    let data = self.get_folder_data(&self.get_workspace_id(), 0).unwrap();
+    serde_json::to_value(data).unwrap()
   }
 
   /// Recursively retrieves all views associated with the provided `view_id` using a transaction.
@@ -518,7 +586,7 @@ impl Folder {
   /// # Returns
   ///
   /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
-  pub fn get_view_recursively(&self, view_id: &str, uid: i64) -> Vec<View> {
+  pub fn get_view_recursively(&self, view_id: &str, uid: i64) -> Vec<crate::View> {
     let mut result = Vec::new();
     let mut visited = HashSet::new();
     // breadth-first scan queue
@@ -526,18 +594,16 @@ impl Folder {
 
     let mut current_children = Vec::new();
 
-    let view = match self.data.views.get(view_id) {
+    let view = match self.get_view(view_id, uid) {
       Some(view) => view,
       None => return result,
     };
     queue.push_back(view);
     while let Some(view) = queue.pop_front() {
-      if !visited.insert(&view.id) {
+      if !visited.insert(view.id.clone()) {
         // deduplication check
         continue;
       }
-      current_children.clear();
-      result.push(view.clone());
 
       // collect children of the current view and sort them in order
       for (_, child) in self.data.views.iter() {
@@ -547,8 +613,15 @@ impl Folder {
       }
       current_children.sort_by_key(|v| &*v.parent_ordering);
 
+      result.push(view);
+
       // push children to the processing queue
-      queue.extend(&current_children);
+      queue.extend(current_children.drain(..).map(|v| {
+        let mut view: crate::View = v.clone().into();
+        view.children = self.child_ids(&v.id);
+        view.is_favorite = self.is_favorite(&v.id, uid);
+        view
+      }));
     }
 
     result
@@ -559,13 +632,16 @@ impl Folder {
 mod tests {
   use std::collections::HashMap;
 
-  use super::{Folder, FolderData, SectionItem, View, ViewId, Workspace};
-  use crate::{Section, SpaceInfo};
+  use super::{Folder, SectionItem, ViewId, Workspace};
+  use crate::v2::provider::NoopFolderDataProvider;
+  use crate::{
+    FolderData, RepeatedViewIdentifier, Section, SpaceInfo, UserId, View, ViewIdentifier,
+  };
   use collab::core::collab::default_client_id;
   use collab::{core::collab::CollabOptions, core::origin::CollabOrigin, preclude::Collab};
 
-  #[test]
-  pub fn test_set_and_get_current_view() {
+  #[tokio::test]
+  pub async fn test_set_and_get_current_view() {
     let current_time = chrono::Utc::now().timestamp();
     let workspace_id = "1234";
     let uid = 1;
@@ -625,7 +701,8 @@ mod tests {
       trash: Default::default(),
       private: Default::default(),
     };
-    let mut folder = Folder::create(collab, None, folder_data);
+    let provider = Box::new(NoopFolderDataProvider);
+    let mut folder = Folder::create(provider, None, folder_data).await.unwrap();
 
     folder.set_current_view(view_2_id.clone(), uid);
     assert_eq!(folder.get_current_view(uid), Some(view_2_id.clone()));
@@ -644,7 +721,7 @@ mod tests {
     let options = CollabOptions::new(workspace_id.to_string(), default_client_id());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let space_view_id: ViewId = "space_view_id".into();
-    let views: Vec<View> = (0..3)
+    let views: Vec<_> = (0..3)
       .map(|i| {
         View::new(
           format!("view_{:?}", i).into(),
@@ -684,7 +761,7 @@ mod tests {
       last_edited_time: current_time,
       last_edited_by: Some(uid),
     };
-    let all_views: Vec<View> = views
+    let all_views: Vec<_> = views
       .iter()
       .chain(std::iter::once(&space_view))
       .cloned()
@@ -705,7 +782,8 @@ mod tests {
       trash: Default::default(),
       private: Default::default(),
     };
-    let mut folder = Folder::create(collab, None, folder_data).await.unwrap();
+    let provider = Box::new(NoopFolderDataProvider);
+    let mut folder = Folder::create(provider, None, folder_data).await.unwrap();
     let favorite_sections = folder.section_get_all(&Section::Favorite, uid);
     let expected_favorites = vec![
       SectionItem::new("view_0".into()),
@@ -713,7 +791,7 @@ mod tests {
       SectionItem::new("view_2".into()),
     ];
     assert_eq!(favorite_sections, expected_favorites);
-    folder.move_favorite_view_id("view_0", Some("view_1"), uid);
+    folder.section_move(&Section::Favorite, "view_0", Some("view_1"), uid);
     let favorite_sections = folder.section_get_all(&Section::Favorite, uid);
     let expected_favorites = vec![
       SectionItem::new("view_1".into()),
@@ -721,8 +799,8 @@ mod tests {
       SectionItem::new("view_2".into()),
     ];
     assert_eq!(favorite_sections, expected_favorites);
-    folder.move_favorite_view_id("view_2", None, uid);
-    let favorite_sections = folder.get_all_favorites_sections(uid);
+    folder.section_move(&Section::Favorite, "view_2", None, uid);
+    let favorite_sections = folder.section_get_all(&Section::Favorite, uid);
     let expected_favorites = vec![
       SectionItem::new("view_2".into()),
       SectionItem::new("view_1".into()),
