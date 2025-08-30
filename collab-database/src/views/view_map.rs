@@ -93,7 +93,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return vec![];
-      }
+      },
     };
     if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       group_setting_from_map_ref(txn, &map_ref)
@@ -108,7 +108,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return vec![];
-      }
+      },
     };
     if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       sorts_from_map_ref(txn, &map_ref)
@@ -123,7 +123,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return vec![];
-      }
+      },
     };
     if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       calculations_from_map_ref(txn, &map_ref)
@@ -138,7 +138,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return vec![];
-      }
+      },
     };
     if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       filters_from_map_ref(txn, &map_ref)
@@ -158,7 +158,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return None;
-      }
+      },
     };
     if let Some(map_ref) = self.container.get_with_txn(txn, &uuid_view_id.to_string()) {
       layout_setting_from_map_ref(txn, &map_ref)
@@ -179,7 +179,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return FieldSettingsByFieldIdMap::default();
-      }
+      },
     };
     self
       .container
@@ -194,7 +194,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return None;
-      }
+      },
     };
     let map_ref = self
       .container
@@ -224,7 +224,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return DatabaseLayout::Grid;
-      }
+      },
     };
     let layout_type = self
       .container
@@ -252,7 +252,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return None;
-      }
+      },
     };
     self
       .container
@@ -270,7 +270,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return vec![];
-      }
+      },
     };
     self
       .container
@@ -293,7 +293,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return;
-      }
+      },
     };
     if let Some(row_order_map) = self
       .container
@@ -315,7 +315,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return None;
-      }
+      },
     };
     let map: MapRef = self
       .container
@@ -330,7 +330,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return vec![];
-      }
+      },
     };
     self
       .container
@@ -353,7 +353,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return;
-      }
+      },
     };
     if let Some(map_ref) = self
       .container
@@ -398,7 +398,7 @@ impl DatabaseViews {
       Err(_) => {
         tracing::warn!("Invalid UUID format for view_id: {}", view_id);
         return;
-      }
+      },
     };
     self.container.remove(txn, &uuid_view_id.to_string());
   }

@@ -1,7 +1,7 @@
 use collab_database::rows::CreateRowParams;
 use uuid::Uuid;
 
-use crate::database_test::helper::{create_database, TEST_VIEW_ID_V1};
+use crate::database_test::helper::{TEST_VIEW_ID_V1, create_database};
 
 #[tokio::test]
 async fn create_one_row_test() {

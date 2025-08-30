@@ -56,8 +56,10 @@ impl RevisionMapping {
     let mut current_view_id = view_id;
     let mut i = Self::REVISION_MAP_JUMP_LIMIT;
     while i > 0 {
-      if let Some(Out::Any(Any::String(next_view_id_str))) = self.container.get(txn, &current_view_id.to_string()) {
-        if let Ok(next_view_id) = uuid::Uuid::parse_str(&*next_view_id_str) {
+      if let Some(Out::Any(Any::String(next_view_id_str))) =
+        self.container.get(txn, &current_view_id.to_string())
+      {
+        if let Ok(next_view_id) = uuid::Uuid::parse_str(&next_view_id_str) {
           let old_view_id = std::mem::replace(&mut current_view_id, next_view_id);
           f(old_view_id);
           i -= 1;

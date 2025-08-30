@@ -2,7 +2,7 @@ use collab_database::fields::Field;
 use collab_database::views::DatabaseLayout;
 
 use crate::database_test::helper::{
-  DatabaseTest, DatabaseTestBuilder, create_database_with_default_data, TEST_VIEW_ID_V1,
+  DatabaseTest, DatabaseTestBuilder, TEST_VIEW_ID_V1, create_database_with_default_data,
 };
 use crate::helper::TestCalendarLayoutSetting;
 
@@ -48,8 +48,8 @@ async fn remove_layout_setting_test() {
     view.remove_layout_setting(&DatabaseLayout::Board);
   });
 
-  let layout_setting =
-    database_test.get_layout_setting::<TestCalendarLayoutSetting>(TEST_VIEW_ID_V1, &DatabaseLayout::Board);
+  let layout_setting = database_test
+    .get_layout_setting::<TestCalendarLayoutSetting>(TEST_VIEW_ID_V1, &DatabaseLayout::Board);
   assert!(layout_setting.is_none());
 }
 

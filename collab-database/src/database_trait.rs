@@ -187,13 +187,7 @@ where
     let client_id = self.reader_client_id().await;
     match encoded_collab {
       Some(encoded_collab) => {
-        let collab = build_collab(
-          client_id,
-          object_id,
-          collab_type,
-          encoded_collab,
-        )
-        .await?;
+        let collab = build_collab(client_id, object_id, collab_type, encoded_collab).await?;
         Ok(collab)
       },
       None => {

@@ -48,7 +48,7 @@ impl FolderCollabRemapper {
         .is_none_or(|pid| pid == &relation_map.workspace_id)
       {
         top_level_view_ids.push(ViewIdentifier::new(
-          collab_entity::uuid_validation::view_id_from_any_string(&new_view_id),
+          collab_entity::uuid_validation::view_id_from_any_string(new_view_id),
         ));
       }
 
@@ -84,7 +84,7 @@ impl FolderCollabRemapper {
 
     folder_data.views = views;
     folder_data.workspace = Workspace {
-      id: Uuid::parse_str(&new_workspace_id).map_err(|_| anyhow!("invalid workspace id"))?,
+      id: Uuid::parse_str(new_workspace_id).map_err(|_| anyhow!("invalid workspace id"))?,
       name: workspace_name.to_string(),
       child_views: RepeatedViewIdentifier::new(top_level_view_ids),
       created_at: current_time,
@@ -93,7 +93,7 @@ impl FolderCollabRemapper {
       last_edited_by: Some(uid),
     };
 
-    let workspace_uuid = Uuid::parse_str(&new_workspace_id).unwrap_or_else(|_| Uuid::new_v4());
+    let workspace_uuid = Uuid::parse_str(new_workspace_id).unwrap_or_else(|_| Uuid::new_v4());
     let options = CollabOptions::new(workspace_uuid, default_client_id());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let folder = Folder::create(collab, None, folder_data);

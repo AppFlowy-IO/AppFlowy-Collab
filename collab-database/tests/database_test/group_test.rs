@@ -4,7 +4,9 @@ use collab_database::entity::CreateViewParams;
 use collab_database::views::{DatabaseLayout, GroupMap};
 use uuid::Uuid;
 
-use crate::database_test::helper::{DatabaseTest, create_database_with_default_data, TEST_VIEW_ID_V1, TEST_VIEW_ID_V2};
+use crate::database_test::helper::{
+  DatabaseTest, TEST_VIEW_ID_V1, create_database_with_default_data,
+};
 use crate::helper::{CONTENT, GROUPS, TestGroup, TestGroupSetting};
 
 #[tokio::test]

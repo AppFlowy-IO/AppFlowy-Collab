@@ -1985,14 +1985,12 @@ impl DatabaseBody {
     position: &OrderObjectPosition,
     field_settings_by_layout: &HashMap<DatabaseLayout, FieldSettingsMap>,
   ) {
-    let target_uuid_view_id = view_id.and_then(|v| {
-      match uuid::Uuid::parse_str(v) {
-        Ok(id) => Some(id.to_string()),
-        Err(_) => {
-          tracing::error!("Invalid view ID: {}", v);
-          None
-        }
-      }
+    let target_uuid_view_id = view_id.and_then(|v| match uuid::Uuid::parse_str(v) {
+      Ok(id) => Some(id.to_string()),
+      Err(_) => {
+        tracing::error!("Invalid view ID: {}", v);
+        None
+      },
     });
     self.views.update_all_views(txn, |id, update| {
       let update = match target_uuid_view_id.as_deref() {

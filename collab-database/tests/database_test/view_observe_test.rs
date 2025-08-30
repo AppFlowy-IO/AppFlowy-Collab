@@ -1,4 +1,6 @@
-use crate::database_test::helper::{create_database, wait_for_specific_event, TEST_VIEW_ID_V1, TEST_VIEW_ID_V2};
+use crate::database_test::helper::{
+  TEST_VIEW_ID_V1, create_database, wait_for_specific_event,
+};
 use crate::helper::setup_log;
 use collab_database::database::{DatabaseBody, gen_row_id};
 use uuid::Uuid;
@@ -444,8 +446,7 @@ async fn observer_create_delete_row_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      let expected_view_id =
-        TEST_VIEW_ID_V1.to_string();
+      let expected_view_id = TEST_VIEW_ID_V1.to_string();
       if database_view_id == &expected_view_id {
         assert!(is_local_change);
         assert_eq!(delete_row_indexes.len(), 0);
@@ -481,8 +482,7 @@ async fn observer_create_delete_row_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      let expected_view_id =
-        TEST_VIEW_ID_V1.to_string();
+      let expected_view_id = TEST_VIEW_ID_V1.to_string();
       if database_view_id == &expected_view_id {
         assert!(is_local_change);
         assert_eq!(delete_row_indexes.len(), 1);
@@ -529,8 +529,7 @@ async fn observer_create_row_when_reopen_a_database_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      let expected_view_id =
-        TEST_VIEW_ID_V1.to_string();
+      let expected_view_id = TEST_VIEW_ID_V1.to_string();
       if database_view_id == &expected_view_id {
         assert_eq!(insert_row_orders.len(), 1);
         assert_eq!(insert_row_orders[0].0.id, row_id);

@@ -37,7 +37,8 @@ async fn insert_single_change_and_restore_from_disk() {
 async fn flush_test() {
   let doc_id = "1".to_string();
   let test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
-  let object_id = Uuid::parse_str(&doc_id).unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, doc_id.as_bytes()));
+  let object_id = Uuid::parse_str(&doc_id)
+    .unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, doc_id.as_bytes()));
   let object_id_str = object_id.to_string();
   let disk_plugin = disk_plugin_with_db(
     test.uid,
@@ -52,8 +53,8 @@ async fn flush_test() {
     workspace_id: test.workspace_id.clone(),
   };
 
-  let options = CollabOptions::new(object_id, default_client_id())
-  .with_data_source(data_source.into());
+  let options =
+    CollabOptions::new(object_id, default_client_id()).with_data_source(data_source.into());
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   collab.add_plugin(Box::new(disk_plugin));
   collab.initialize();

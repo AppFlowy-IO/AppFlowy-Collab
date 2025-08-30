@@ -1,5 +1,5 @@
 use crate::database_test::helper::{
-  create_database, create_database_with_default_data, create_row, TEST_VIEW_ID_V1, TEST_VIEW_ID_V2,
+  TEST_VIEW_ID_V1, TEST_VIEW_ID_V2, create_database, create_database_with_default_data, create_row,
 };
 use collab::core::collab::default_client_id;
 use collab_database::database::gen_row_id;
@@ -165,7 +165,10 @@ async fn insert_row_in_views_test() {
   let fourth_row_id = gen_row_id();
   let row = CreateRowParams::new(fourth_row_id, database_uuid)
     .with_row_position(OrderObjectPosition::After(second_row_id.to_string()));
-  database_test.create_row_in_view(TEST_VIEW_ID_V1, row).await.unwrap();
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
   let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows[0].id, first_row_id);
@@ -176,7 +179,10 @@ async fn insert_row_in_views_test() {
   let fifth_row_id = gen_row_id();
   let row = CreateRowParams::new(fifth_row_id, database_uuid)
     .with_row_position(OrderObjectPosition::Before(second_row_id.to_string()));
-  database_test.create_row_in_view(TEST_VIEW_ID_V1, row).await.unwrap();
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
   let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows[0].id, first_row_id);
@@ -188,7 +194,10 @@ async fn insert_row_in_views_test() {
   let sixth_row_id = gen_row_id();
   let row = CreateRowParams::new(sixth_row_id, database_uuid)
     .with_row_position(OrderObjectPosition::After(10.to_string()));
-  database_test.create_row_in_view(TEST_VIEW_ID_V1, row).await.unwrap();
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
   let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
 
@@ -209,7 +218,10 @@ async fn insert_row_at_front_in_views_test() {
   let new_row_id = gen_row_id();
   let row =
     CreateRowParams::new(new_row_id, database_uuid).with_row_position(OrderObjectPosition::Start);
-  database_test.create_row_in_view(TEST_VIEW_ID_V1, row).await.unwrap();
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
   let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows[0].id, new_row_id);
@@ -226,7 +238,10 @@ async fn insert_row_at_last_in_views_test() {
 
   let fourth_row_id = gen_row_id();
   let row = CreateRowParams::new(fourth_row_id, database_uuid);
-  database_test.create_row_in_view(TEST_VIEW_ID_V1, row).await.unwrap();
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
   let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   let first_row_id = database_test.pre_define_row_ids[0];

@@ -1,6 +1,8 @@
 use collab_database::rows::Cells;
 
-use crate::database_test::helper::{create_database_with_default_data, TEST_VIEW_ID_V1, TEST_VIEW_ID_V2};
+use crate::database_test::helper::{
+  TEST_VIEW_ID_V1, create_database_with_default_data,
+};
 use crate::helper::{TestNumberCell, TestTextCell};
 
 #[tokio::test]
@@ -8,13 +10,19 @@ async fn get_cells_for_field_test() {
   let database_id = uuid::Uuid::new_v4();
   let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
 
-  let cells = database_test.get_cells_for_field(TEST_VIEW_ID_V1, "f1", false).await;
+  let cells = database_test
+    .get_cells_for_field(TEST_VIEW_ID_V1, "f1", false)
+    .await;
   assert_eq!(cells.len(), 3);
 
-  let cells = database_test.get_cells_for_field(TEST_VIEW_ID_V1, "f2", false).await;
+  let cells = database_test
+    .get_cells_for_field(TEST_VIEW_ID_V1, "f2", false)
+    .await;
   assert_eq!(cells.len(), 3);
 
-  let cells = database_test.get_cells_for_field(TEST_VIEW_ID_V1, "f3", false).await;
+  let cells = database_test
+    .get_cells_for_field(TEST_VIEW_ID_V1, "f3", false)
+    .await;
   assert_eq!(cells.len(), 3);
 }
 
@@ -35,7 +43,9 @@ async fn get_cell_for_field_test() {
 async fn update_cell_for_field_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let cells = database_test.get_cells_for_field(TEST_VIEW_ID_V1, "f1", false).await;
+  let cells = database_test
+    .get_cells_for_field(TEST_VIEW_ID_V1, "f1", false)
+    .await;
   assert_eq!(cells.len(), 3);
 
   let first_row_id = database_test.pre_define_row_ids[0];
@@ -47,7 +57,9 @@ async fn update_cell_for_field_test() {
     })
     .await;
 
-  let cells = database_test.get_cells_for_field(TEST_VIEW_ID_V1, "f1", false).await;
+  let cells = database_test
+    .get_cells_for_field(TEST_VIEW_ID_V1, "f1", false)
+    .await;
   assert_eq!(
     cells[0].cell.as_ref().unwrap().get("data").unwrap(),
     &"hello world".into()
@@ -58,7 +70,9 @@ async fn update_cell_for_field_test() {
 async fn update_empty_cell_for_field_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let cells = database_test.get_cells_for_field(TEST_VIEW_ID_V1, "f2", false).await;
+  let cells = database_test
+    .get_cells_for_field(TEST_VIEW_ID_V1, "f2", false)
+    .await;
   assert_eq!(cells.len(), 3);
 
   let third_row_id = database_test.pre_define_row_ids[2];
@@ -70,7 +84,9 @@ async fn update_empty_cell_for_field_test() {
     })
     .await;
 
-  let cells = database_test.get_cells_for_field(TEST_VIEW_ID_V1, "f2", false).await;
+  let cells = database_test
+    .get_cells_for_field(TEST_VIEW_ID_V1, "f2", false)
+    .await;
   assert_eq!(cells.len(), 3);
   assert_eq!(
     cells[2].cell.as_ref().unwrap().get("data").unwrap(),

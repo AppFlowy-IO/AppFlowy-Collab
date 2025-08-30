@@ -13,7 +13,8 @@ use crate::util::{create_folder, make_test_view};
 fn folder_json_serde() {
   let folder_test = create_folder(UserId::from(1), "fake_w_1");
   let time = timestamp();
-  let fake_w_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_w_1".as_bytes()).to_string();
+  let fake_w_1_uuid =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_w_1".as_bytes()).to_string();
   assert_json_diff::assert_json_include!(
     actual: folder_test.to_json_value(),
     expected: json!({
@@ -71,7 +72,8 @@ fn view_json_serde() {
     assert_eq!(views.len(), 2);
   }
 
-  let fake_workspace_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_workspace_id".as_bytes()).to_string();
+  let fake_workspace_uuid =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_workspace_id".as_bytes()).to_string();
   let v1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string();
   let v2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string();
   assert_json_diff::assert_json_include!(
@@ -161,7 +163,8 @@ fn child_view_json_serde() {
       .insert(&mut txn, view_2_2, None, uid.as_i64());
   }
   // folder_test.workspaces.create_workspace(workspace);
-  let fake_workspace_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_workspace_id".as_bytes()).to_string();
+  let fake_workspace_uuid =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_workspace_id".as_bytes()).to_string();
   let v1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string();
   let v2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string();
   let v2_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2.1".as_bytes()).to_string();
@@ -316,7 +319,12 @@ fn get_all_trash_ids(folder: &Folder, uid: i64) -> Vec<ViewId> {
   let mut all_trash_ids = trash_ids.clone();
   let txn = folder.collab.transact();
   for trash_id in trash_ids {
-    all_trash_ids.extend(get_all_child_view_ids(folder, &txn, &trash_id.to_string(), uid));
+    all_trash_ids.extend(get_all_child_view_ids(
+      folder,
+      &txn,
+      &trash_id.to_string(),
+      uid,
+    ));
   }
   all_trash_ids
 }
@@ -327,17 +335,19 @@ fn get_all_child_view_ids<T: ReadTxn>(
   view_id: &str,
   uid: i64,
 ) -> Vec<ViewId> {
-  let child_views = folder
-    .body
-    .views
-    .get_views_belong_to(txn, view_id, uid);
+  let child_views = folder.body.views.get_views_belong_to(txn, view_id, uid);
   let child_view_ids = child_views
     .iter()
     .map(|view| view.id)
     .collect::<Vec<ViewId>>();
   let mut all_child_view_ids = child_view_ids.clone();
   for child_view in child_views {
-    all_child_view_ids.extend(get_all_child_view_ids(folder, txn, &child_view.id.to_string(), uid));
+    all_child_view_ids.extend(get_all_child_view_ids(
+      folder,
+      txn,
+      &child_view.id.to_string(),
+      uid,
+    ));
   }
   all_child_view_ids
 }

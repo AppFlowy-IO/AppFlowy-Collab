@@ -15,8 +15,8 @@ use futures::StreamExt;
 use nanoid::nanoid;
 
 use crate::database_test::helper::{
-  create_database, create_database_with_default_data, default_field_settings_by_layout,
-  TEST_VIEW_ID_V1, TEST_VIEW_ID_V2,
+  TEST_VIEW_ID_V1, create_database, create_database_with_default_data,
+  default_field_settings_by_layout,
 };
 use crate::helper::TestFilter;
 
@@ -234,7 +234,9 @@ async fn duplicate_database_view_test() {
   assert_eq!(views.len(), 1);
 
   let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
-  let duplicated_view = database_test.duplicate_linked_view(TEST_VIEW_ID_V1).unwrap();
+  let duplicated_view = database_test
+    .duplicate_linked_view(TEST_VIEW_ID_V1)
+    .unwrap();
 
   let views = database_test.get_all_views();
   assert_eq!(views.len(), 2);

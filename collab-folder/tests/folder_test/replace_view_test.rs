@@ -14,7 +14,14 @@ fn replace_view_get_view() {
   let v1 = make_test_view("v1", &workspace_id, vec![]);
   let v21 = make_test_view("v2.1", &workspace_id, vec![]);
   let v22 = make_test_view("v2.2", &workspace_id, vec![]);
-  let v2 = make_test_view("v2", &workspace_id, vec![crate::util::test_uuid("v2.1"), crate::util::test_uuid("v2.2")]);
+  let v2 = make_test_view(
+    "v2",
+    &workspace_id,
+    vec![
+      crate::util::test_uuid("v2.1"),
+      crate::util::test_uuid("v2.2"),
+    ],
+  );
   folder.insert_view(v1, None, uid);
   folder.insert_view(v21, None, uid);
   folder.insert_view(v22, None, uid);
@@ -27,7 +34,11 @@ fn replace_view_get_view() {
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
   );
 
-  folder.replace_view(&crate::util::test_uuid("v2"), &crate::util::test_uuid("v3"), uid);
+  folder.replace_view(
+    &crate::util::test_uuid("v2"),
+    &crate::util::test_uuid("v3"),
+    uid,
+  );
 
   // getting old view id should return new one
   let new = folder.get_view(&v2_id, uid).unwrap();
@@ -53,7 +64,14 @@ fn replace_view_get_view_concurrent_update() {
   let v1 = make_test_view("v1", &workspace_id, vec![]);
   let v21 = make_test_view("v2.1", &workspace_id, vec![]);
   let v22 = make_test_view("v2.2", &workspace_id, vec![]);
-  let v2 = make_test_view("v2", &workspace_id, vec![crate::util::test_uuid("v2.1"), crate::util::test_uuid("v2.2")]);
+  let v2 = make_test_view(
+    "v2",
+    &workspace_id,
+    vec![
+      crate::util::test_uuid("v2.1"),
+      crate::util::test_uuid("v2.2"),
+    ],
+  );
   f1.insert_view(v1, None, uid1);
   f1.insert_view(v21, None, uid1);
   f1.insert_view(v22, None, uid1);
@@ -70,7 +88,11 @@ fn replace_view_get_view_concurrent_update() {
   assert_eq!(f1.to_json_value(), f2.to_json_value());
 
   // concurrently replace view in f1 and add new child view in f2
-  f1.replace_view(&crate::util::test_uuid("v2"), &crate::util::test_uuid("v3"), uid1);
+  f1.replace_view(
+    &crate::util::test_uuid("v2"),
+    &crate::util::test_uuid("v3"),
+    uid1,
+  );
 
   let mut v23 = make_test_view("v2.3", &workspace_id, vec![]);
   v23.parent_view_id = collab_entity::uuid_validation::view_id_from_any_string("v2");
@@ -84,7 +106,10 @@ fn replace_view_get_view_concurrent_update() {
 
   let v2_id = crate::util::test_uuid("v2").to_string();
   let v1 = f1.get_view(&v2_id, uid2).unwrap();
-  assert_eq!(v1.id.to_string(), uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string());
+  assert_eq!(
+    v1.id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string()
+  );
   assert_eq!(
     v1.children
       .iter()
@@ -112,7 +137,14 @@ fn replace_view_all_views_concurrent_update() {
   let v1 = make_test_view("v1", &workspace_id, vec![]);
   let v21 = make_test_view("v2.1", &workspace_id, vec![]);
   let v22 = make_test_view("v2.2", &workspace_id, vec![]);
-  let v2 = make_test_view("v2", &workspace_id, vec![crate::util::test_uuid("v2.1"), crate::util::test_uuid("v2.2")]);
+  let v2 = make_test_view(
+    "v2",
+    &workspace_id,
+    vec![
+      crate::util::test_uuid("v2.1"),
+      crate::util::test_uuid("v2.2"),
+    ],
+  );
   f1.insert_view(v1, None, uid1);
   f1.insert_view(v21, None, uid1);
   f1.insert_view(v22, None, uid1);
@@ -129,7 +161,11 @@ fn replace_view_all_views_concurrent_update() {
   assert_eq!(f1.to_json_value(), f2.to_json_value());
 
   // concurrently replace view in f1 and add new child view in f2
-  f1.replace_view(&crate::util::test_uuid("v2"), &crate::util::test_uuid("v3"), uid1);
+  f1.replace_view(
+    &crate::util::test_uuid("v2"),
+    &crate::util::test_uuid("v3"),
+    uid1,
+  );
 
   let mut v23 = make_test_view("v2.3", &workspace_id, vec![]);
   v23.parent_view_id = collab_entity::uuid_validation::view_id_from_any_string("v2");

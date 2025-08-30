@@ -40,7 +40,7 @@ impl DocumentTest {
     // Parse doc_id to UUID or generate a deterministic one from the string
     let doc_uuid = Uuid::parse_str(doc_id)
       .unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, doc_id.as_bytes()));
-    
+
     let disk_plugin = RocksdbDiskPlugin::new(
       uid,
       workspace_id.clone(),
@@ -54,8 +54,8 @@ impl DocumentTest {
       workspace_id: workspace_id.clone(),
     };
 
-    let options = CollabOptions::new(doc_uuid, default_client_id())
-    .with_data_source(data_source.into());
+    let options =
+      CollabOptions::new(doc_uuid, default_client_id()).with_data_source(data_source.into());
     let client = CollabClient::new(uid, "1");
     let collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
@@ -137,7 +137,7 @@ pub fn open_document_with_db(
   // Parse doc_id to UUID or generate a deterministic one from the string
   let doc_uuid = Uuid::parse_str(doc_id)
     .unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, doc_id.as_bytes()));
-  
+
   let disk_plugin = RocksdbDiskPlugin::new(
     uid,
     workspace_id.to_string(),
@@ -151,8 +151,8 @@ pub fn open_document_with_db(
     workspace_id: workspace_id.to_string(),
   };
 
-  let options = CollabOptions::new(doc_uuid, default_client_id())
-  .with_data_source(data_source.into());
+  let options =
+    CollabOptions::new(doc_uuid, default_client_id()).with_data_source(data_source.into());
   let client = CollabClient::new(uid, "1");
   let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
   collab.add_plugin(Box::new(disk_plugin));

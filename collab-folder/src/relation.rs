@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use uuid::Uuid;
-use collab_entity::define::ViewId;
 use collab::preclude::{Any, MapExt, MapRef, YrsValue};
 use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
+use collab_entity::define::ViewId;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Used to keep track of the view hierarchy.
 /// Parent-child relationship is stored in the map and each child is stored in an array.

@@ -1,6 +1,6 @@
 use crate::database_test::helper::{
-  create_database_with_default_data, default_field_settings_by_layout,
-  field_settings_for_default_database, TEST_VIEW_ID_V1, TEST_VIEW_ID_V2,
+  TEST_VIEW_ID_V1, TEST_VIEW_ID_V2, create_database_with_default_data,
+  default_field_settings_by_layout, field_settings_for_default_database,
 };
 use crate::helper::TestFieldSetting;
 use collab_database::entity::CreateViewParams;
@@ -80,7 +80,11 @@ async fn update_field_setting_for_some_fields_test() {
   database_test.create_linked_view(params).unwrap();
 
   // Update field settings for one field
-  database_test.update_field_settings(TEST_VIEW_ID_V1, Some(vec!["f1".to_string()]), field_settings.clone());
+  database_test.update_field_settings(
+    TEST_VIEW_ID_V1,
+    Some(vec!["f1".to_string()]),
+    field_settings.clone(),
+  );
 
   // on v1, the field settings for f1 should change
   let field_settings_map: HashMap<String, TestFieldSetting> =
@@ -108,7 +112,11 @@ async fn update_field_setting_test() {
   };
 
   // Update field settings for one field
-  database_test.update_field_settings(TEST_VIEW_ID_V1, Some(vec!["f1".to_string()]), field_settings);
+  database_test.update_field_settings(
+    TEST_VIEW_ID_V1,
+    Some(vec!["f1".to_string()]),
+    field_settings,
+  );
 
   // the field settings for f1 should change
   let field_settings_map: HashMap<String, TestFieldSetting> =
@@ -128,7 +136,11 @@ async fn duplicate_view_duplicates_field_settings_test() {
   };
 
   // Update field settings for one field
-  database_test.update_field_settings(TEST_VIEW_ID_V1, Some(vec!["f1".to_string()]), field_settings);
+  database_test.update_field_settings(
+    TEST_VIEW_ID_V1,
+    Some(vec!["f1".to_string()]),
+    field_settings,
+  );
 
   // the field settings for f1 should change
   let field_settings_map: HashMap<String, TestFieldSetting> =
@@ -137,7 +149,9 @@ async fn duplicate_view_duplicates_field_settings_test() {
   assert_eq!(test_field_settings.visibility, 1);
 
   // duplicate view v1
-  let duplicate_view = database_test.duplicate_linked_view(TEST_VIEW_ID_V1).unwrap();
+  let duplicate_view = database_test
+    .duplicate_linked_view(TEST_VIEW_ID_V1)
+    .unwrap();
 
   // on the duplicate view, the field settings for f1 should be the same
   let field_settings_map: HashMap<String, TestFieldSetting> =

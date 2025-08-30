@@ -304,7 +304,9 @@ async fn convert_notion_page_to_parent_child(
   let mut view_builder = NestedChildViewBuilder::new(uid, parent_uuid)
     .with_name(&notion_page.notion_name)
     .with_layout(view_layout)
-    .with_view_id(uuid::Uuid::parse_str(&notion_page.view_id).unwrap_or_else(|_| uuid::Uuid::nil()));
+    .with_view_id(
+      uuid::Uuid::parse_str(&notion_page.view_id).unwrap_or_else(|_| uuid::Uuid::nil()),
+    );
 
   for child_notion_page in &notion_page.children {
     view_builder = view_builder

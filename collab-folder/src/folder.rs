@@ -608,7 +608,7 @@ impl FolderBody {
       Err(_) => {
         error!("Invalid workspace id format: {}", workspace_id);
         return None;
-      }
+      },
     };
     if folder_workspace_id != uuid_workspace_id {
       error!("Workspace id not match when get current workspace");
@@ -634,7 +634,7 @@ impl FolderBody {
       Err(_) => {
         error!("Invalid workspace id format: {}", workspace_id);
         return None;
-      }
+      },
     };
     if folder_workspace_id != uuid_workspace_id {
       error!(
@@ -1018,10 +1018,7 @@ mod tests {
       views: all_views,
       favorites: HashMap::from([(
         UserId::from(uid),
-        views
-          .iter()
-          .map(|view| SectionItem::new(view.id))
-          .collect(),
+        views.iter().map(|view| SectionItem::new(view.id)).collect(),
       )]),
       recent: Default::default(),
       trash: Default::default(),

@@ -5,8 +5,7 @@ use collab_database::views::OrderObjectPosition;
 use uuid::Uuid;
 
 use crate::database_test::helper::{
-  DatabaseTest, create_database_with_params, default_field_settings_by_layout,
-  TEST_VIEW_ID_V1,
+  DatabaseTest, TEST_VIEW_ID_V1, create_database_with_params, default_field_settings_by_layout,
 };
 
 #[tokio::test]

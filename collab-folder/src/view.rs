@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::bail;
-use uuid::Uuid;
 use collab::preclude::{
   Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut,
 };
@@ -11,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::*;
 use tokio::sync::Mutex;
 use tracing::{instrument, trace};
+use uuid::Uuid;
 
 use crate::folder_observe::ViewChangeSender;
 

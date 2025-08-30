@@ -1,6 +1,6 @@
 use crate::database_test::helper::{
-  create_database, create_database_with_default_data, default_field_settings_by_layout,
-  TEST_VIEW_ID_V1, TEST_VIEW_ID_V2,
+  TEST_VIEW_ID_V1, TEST_VIEW_ID_V2, create_database, create_database_with_default_data,
+  default_field_settings_by_layout,
 };
 use collab_database::entity::CreateViewParams;
 use collab_database::{fields::Field, views::OrderObjectPosition};
@@ -30,7 +30,9 @@ async fn duplicate_field_test() {
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let original_field = database_test.get_field("f1").unwrap();
   let (index, duplicated_field) = database_test
-    .duplicate_field(TEST_VIEW_ID_V1, "f1", |field| format!("{} (copy)", field.name))
+    .duplicate_field(TEST_VIEW_ID_V1, "f1", |field| {
+      format!("{} (copy)", field.name)
+    })
     .unwrap();
 
   assert_eq!(index, 1);
@@ -47,7 +49,9 @@ async fn duplicate_field_test2() {
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let original_field = database_test.get_field("f3").unwrap();
   let (index, duplicated_field) = database_test
-    .duplicate_field(TEST_VIEW_ID_V1, "f3", |field| format!("{} (copy)", field.name))
+    .duplicate_field(TEST_VIEW_ID_V1, "f3", |field| {
+      format!("{} (copy)", field.name)
+    })
     .unwrap();
 
   assert_eq!(index, 3);

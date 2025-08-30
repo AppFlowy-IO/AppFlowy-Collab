@@ -32,7 +32,7 @@ impl NestedViewBuilder {
     F: Fn(NestedChildViewBuilder) -> O,
     O: Future<Output = ParentChildViews>,
   {
-    let builder = NestedChildViewBuilder::new(self.uid, self.workspace_id.clone());
+    let builder = NestedChildViewBuilder::new(self.uid, self.workspace_id);
     let view = view_builder(builder).await;
     self.views.push(view);
     self
@@ -195,7 +195,7 @@ impl NestedChildViewBuilder {
     F: Fn(NestedChildViewBuilder) -> O,
     O: Future<Output = ParentChildViews>,
   {
-    let builder = NestedChildViewBuilder::new(self.uid, self.view_id.clone());
+    let builder = NestedChildViewBuilder::new(self.uid, self.view_id);
     self.children.push(child_view_builder(builder).await);
     self
   }
@@ -361,7 +361,8 @@ mod tests {
 
   #[tokio::test]
   async fn create_first_level_views_test() {
-    let workspace_id: ViewId = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+    let workspace_id: ViewId =
+      uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
     builder
       .with_view_builder(|view_builder| async { view_builder.with_name("1").build() })
@@ -381,7 +382,8 @@ mod tests {
 
   #[tokio::test]
   async fn create_view_with_children_test() {
-    let workspace_id: ViewId = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+    let workspace_id: ViewId =
+      uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
     builder
       .with_view_builder(|view_builder| async {
@@ -440,7 +442,8 @@ mod tests {
 
   #[tokio::test]
   async fn create_three_level_view_test() {
-    let workspace_id: ViewId = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+    let workspace_id: ViewId =
+      uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
     builder
       .with_view_builder(|view_builder| async {
@@ -514,7 +517,8 @@ mod tests {
 
   #[tokio::test]
   async fn delete_multiple_views_in_sequence_test() {
-    let workspace_id: ViewId = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+    let workspace_id: ViewId =
+      uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
 
     // Create a 3-level nested view hierarchy

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use uuid::Uuid;
 use crate::{UserId, ViewId, timestamp};
 use anyhow::bail;
 use collab::preclude::encoding::serde::{from_any, to_any};
@@ -11,6 +10,7 @@ use collab::preclude::{
 use collab::preclude::{ArrayRef, MapExt, deserialize_i64_from_numeric};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
+use uuid::Uuid;
 
 pub struct SectionMap {
   container: MapRef,
@@ -267,7 +267,7 @@ impl SectionOperation {
   }
 
   pub fn add_sections_item(&self, txn: &mut TransactionMut, items: Vec<SectionItem>) {
-    let item_ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+    let item_ids = items.iter().map(|item| item.id).collect::<Vec<_>>();
     self.add_sections_for_user_with_txn(txn, self.uid(), items);
     if let Some(change_tx) = self.change_tx.as_ref() {
       match self.section {
@@ -337,7 +337,10 @@ impl TryFrom<Any> for SectionItem {
 impl From<SectionItem> for HashMap<String, AnyMut> {
   fn from(item: SectionItem) -> Self {
     HashMap::from([
-      ("id".to_string(), AnyMut::String(Arc::from(item.id.to_string()))),
+      (
+        "id".to_string(),
+        AnyMut::String(Arc::from(item.id.to_string())),
+      ),
       (
         "timestamp".to_string(),
         AnyMut::Number(item.timestamp as f64),

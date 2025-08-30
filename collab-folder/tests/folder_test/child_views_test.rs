@@ -59,7 +59,8 @@ fn create_child_views_test() {
       .get_views_belong_to(&txn, &v_1_2.id.to_string(), uid.as_i64());
   assert_eq!(v_1_2_child_views.len(), 2);
 
-  let workspace_uuid_str = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
+  let workspace_uuid_str =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
   let folder_data = folder
     .body
     .get_folder_data(&txn, &workspace_uuid_str, uid.as_i64())
@@ -69,8 +70,10 @@ fn create_child_views_test() {
   let id_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1".as_bytes()).to_string();
   let id_1_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_1".as_bytes()).to_string();
   let id_1_2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2".as_bytes()).to_string();
-  let id_1_2_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2_1".as_bytes()).to_string();
-  let id_1_2_2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2_2".as_bytes()).to_string();
+  let id_1_2_1_uuid =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2_1".as_bytes()).to_string();
+  let id_1_2_2_uuid =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_2_2".as_bytes()).to_string();
   let id_1_3_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_3".as_bytes()).to_string();
   assert_json_include!(
     actual: value,
@@ -363,7 +366,8 @@ fn create_orphan_child_views_test() {
     .views
     .insert(&mut txn, view_2.clone(), None, uid.as_i64());
 
-  let workspace_uuid_str = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
+  let workspace_uuid_str =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
   let child_views = folder
     .body
     .views

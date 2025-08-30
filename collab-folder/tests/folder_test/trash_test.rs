@@ -86,7 +86,10 @@ async fn create_trash_callback_test() {
   timeout(poll_tx(section_rx, |change| match change {
     SectionChange::Trash(change) => match change {
       TrashSectionChange::TrashItemAdded { ids } => {
-        assert_eq!(ids, vec![crate::util::test_uuid("1"), crate::util::test_uuid("2")]);
+        assert_eq!(
+          ids,
+          vec![crate::util::test_uuid("1"), crate::util::test_uuid("2")]
+        );
       },
       TrashSectionChange::TrashItemRemoved { .. } => {},
     },
@@ -107,10 +110,16 @@ async fn delete_trash_view_ids_callback_test() {
   timeout(poll_tx(trash_rx, |change| match change {
     SectionChange::Trash(change) => match change {
       TrashSectionChange::TrashItemAdded { ids } => {
-        assert_eq!(ids, vec![crate::util::test_uuid("1"), crate::util::test_uuid("2")]);
+        assert_eq!(
+          ids,
+          vec![crate::util::test_uuid("1"), crate::util::test_uuid("2")]
+        );
       },
       TrashSectionChange::TrashItemRemoved { ids } => {
-        assert_eq!(ids, vec![crate::util::test_uuid("1"), crate::util::test_uuid("2")]);
+        assert_eq!(
+          ids,
+          vec![crate::util::test_uuid("1"), crate::util::test_uuid("2")]
+        );
       },
     },
   }))

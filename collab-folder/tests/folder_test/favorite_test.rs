@@ -115,7 +115,8 @@ fn create_multiple_user_favorite_test() {
     favorites[1].id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "2".as_bytes()).to_string()
   );
-  let workspace_uuid_str = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
+  let workspace_uuid_str =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
   let folder_data = folder_1
     .get_folder_data(&workspace_uuid_str, uid_1.as_i64())
     .unwrap();
@@ -147,7 +148,8 @@ fn favorite_data_serde_test() {
   folder.insert_view(view_2, None, uid_1.as_i64());
 
   folder.add_favorite_view_ids(vec![view_1_id, view_2_id], uid_1.as_i64());
-  let workspace_uuid_str = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
+  let workspace_uuid_str =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
   let folder_data = folder
     .get_folder_data(&workspace_uuid_str, uid_1.as_i64())
     .unwrap();

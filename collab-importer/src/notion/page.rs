@@ -513,8 +513,9 @@ impl NotionPage {
         // create csv template, we need to set the view id as csv template view id
         let mut csv_template =
           CSVTemplate::try_from_reader(content.as_bytes(), true, Some(csv_resource))?;
-        let view_uuid = uuid::Uuid::parse_str(&self.view_id)
-          .unwrap_or_else(|_| uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, self.view_id.as_bytes()));
+        let view_uuid = uuid::Uuid::parse_str(&self.view_id).unwrap_or_else(|_| {
+          uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, self.view_id.as_bytes())
+        });
         csv_template.reset_view_id(view_uuid);
         let database_id = csv_template.database_id;
 
