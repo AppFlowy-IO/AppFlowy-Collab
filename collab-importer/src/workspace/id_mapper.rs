@@ -68,8 +68,8 @@ impl IdMapper {
     Self { id_map }
   }
 
-  pub fn get_new_id(&self, old_id: &str) -> Option<&String> {
-    self.id_map.get(old_id)
+  pub fn get_new_id(&self, old_id: &str) -> Option<&str> {
+    Some(self.id_map.get(old_id)?.as_str())
   }
 
   pub fn generate_new_id(&self) -> String {

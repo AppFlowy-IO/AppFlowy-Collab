@@ -9,7 +9,7 @@ use tokio::sync::broadcast;
 use crate::revision::RevisionMapping;
 use crate::section::SectionMap;
 use crate::view::FOLDER_VIEW_ID;
-use crate::{ParentChildRelations, View, view_from_map_ref};
+use crate::{ParentChildRelations, View, ViewId, view_from_map_ref};
 
 #[derive(Debug, Clone)]
 pub enum ViewChange {
@@ -23,7 +23,7 @@ pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
 
 pub(crate) fn subscribe_view_change(
   root: &MapRef,
-  deletion_cache: Arc<DashMap<String, Arc<View>>>,
+  deletion_cache: Arc<DashMap<ViewId, Arc<View>>>,
   change_tx: ViewChangeSender,
   view_relations: Arc<ParentChildRelations>,
   section_map: Arc<SectionMap>,

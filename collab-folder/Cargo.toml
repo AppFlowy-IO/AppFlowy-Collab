@@ -22,6 +22,7 @@ tracing.workspace = true
 dashmap = "5"
 arc-swap = "1.7"
 uuid.workspace = true
+async-trait.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

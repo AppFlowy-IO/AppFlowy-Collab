@@ -3,7 +3,7 @@ use collab::preclude::{Any, Array, ArrayRef, Map, MapExt, MapRef, ReadTxn, YrsVa
 use serde::{Deserialize, Serialize};
 
 use crate::folder::FAVORITES_V1;
-use crate::{Folder, ParentChildRelations, SectionItem, Workspace};
+use crate::{Folder, ParentChildRelations, SectionItem, ViewId, Workspace};
 
 const WORKSPACE_ID: &str = "id";
 const WORKSPACE_NAME: &str = "name";
@@ -62,7 +62,7 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
   map_ref: &MapRef,
   views: &ParentChildRelations,
 ) -> Option<Workspace> {
-  let id: String = map_ref.get_with_txn(txn, WORKSPACE_ID)?;
+  let id: ViewId = map_ref.get_with_txn(txn, WORKSPACE_ID)?;
   let name = map_ref
     .get_with_txn(txn, WORKSPACE_NAME)
     .unwrap_or_default();
@@ -120,7 +120,7 @@ impl TryFrom<&YrsValue> for FavoriteId {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TrashRecord {
-  pub id: String,
+  pub id: ViewId,
   #[serde(deserialize_with = "collab::preclude::deserialize_i64_from_numeric")]
   pub created_at: i64,
   #[serde(default)]

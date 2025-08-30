@@ -21,7 +21,7 @@ fn custom_section_test() {
     .section
     .section_op(&txn, Section::Favorite, uid.as_i64())
     .unwrap();
-  op.add_sections_item(&mut txn, vec![SectionItem::new("1".to_string())]);
+  op.add_sections_item(&mut txn, vec![SectionItem::new("1".into())]);
 
   let _ = folder
     .body
@@ -32,7 +32,7 @@ fn custom_section_test() {
     .section
     .section_op(&txn, Section::Custom("private".to_string()), uid.as_i64())
     .unwrap();
-  op.add_sections_item(&mut txn, vec![SectionItem::new("2".to_string())]);
+  op.add_sections_item(&mut txn, vec![SectionItem::new("2".into())]);
 
   drop(txn);
 

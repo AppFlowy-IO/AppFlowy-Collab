@@ -9,7 +9,7 @@ pub enum AnyMut {
   Bool(bool),
   Number(f64),
   BigInt(i64),
-  String(String),
+  String(Arc<str>),
   Bytes(bytes::BytesMut),
   Array(Vec<AnyMut>),
   Map(HashMap<String, AnyMut>),
@@ -23,7 +23,7 @@ impl From<Any> for AnyMut {
       Any::Bool(bool) => AnyMut::Bool(bool),
       Any::Number(num) => AnyMut::Number(num),
       Any::BigInt(num) => AnyMut::BigInt(num),
-      Any::String(str) => AnyMut::String(str.to_string()),
+      Any::String(str) => AnyMut::String(str.clone()),
       Any::Buffer(buf) => AnyMut::Bytes(bytes::BytesMut::from(&*buf)),
       Any::Array(array) => {
         let array: Vec<AnyMut> = array.iter().map(|any| AnyMut::from(any.clone())).collect();
@@ -48,7 +48,7 @@ impl From<AnyMut> for Any {
       AnyMut::Bool(bool) => Any::Bool(bool),
       AnyMut::Number(num) => Any::Number(num),
       AnyMut::BigInt(num) => Any::BigInt(num),
-      AnyMut::String(str) => Any::String(str.into()),
+      AnyMut::String(str) => Any::String(str),
       AnyMut::Bytes(bytes) => Any::Buffer(bytes.freeze().to_vec().into()),
       AnyMut::Array(array) => Any::Array(array.into_iter().map(Any::from).collect()),
       AnyMut::Map(map) => {
