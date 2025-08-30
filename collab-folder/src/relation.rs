@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
+use uuid::Uuid;
+use collab_entity::define::ViewId;
 use collab::preclude::{Any, MapExt, MapRef, YrsValue};
 use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
@@ -47,7 +49,7 @@ impl ParentChildRelations {
     view_id: &str,
   ) -> Option<ViewIdentifier> {
     let child = ViewIdentifier {
-      id: collab_entity::uuid_validation::view_id_from_any_string(view_id),
+      id: Uuid::parse_str(view_id).ok()?,
     };
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let index = children
@@ -86,15 +88,13 @@ impl ParentChildRelations {
     txn: &mut TransactionMut,
     parent_id: &str,
     view_id: &str,
-    prev_view_id: Option<String>,
+    prev_view_id: Option<ViewId>,
   ) {
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let prev_index = match prev_view_id {
         None => None,
         Some(prev_id) => {
-          let prev_child = ViewIdentifier {
-            id: collab_entity::uuid_validation::view_id_from_any_string(&prev_id),
-          };
+          let prev_child = ViewIdentifier { id: prev_id };
           children
             .get_children_with_txn(txn)
             .items
@@ -107,7 +107,7 @@ impl ParentChildRelations {
         Some(index) => (index + 1) as u32,
       };
       let child = ViewIdentifier {
-        id: collab_entity::uuid_validation::view_id_from_any_string(view_id),
+        id: Uuid::parse_str(view_id).unwrap_or_else(|_| Uuid::nil()),
       };
       children.insert_child_with_txn(txn, index, child);
     }
@@ -124,8 +124,8 @@ impl ParentChildRelations {
     txn: &T,
     parent_id: &str,
   ) -> Option<ChildrenArray> {
-    let uuid_parent_id =
-      collab_entity::uuid_validation::view_id_from_any_string(parent_id).to_string();
+    // Validate the parent_id is a valid UUID
+    let uuid_parent_id = Uuid::parse_str(parent_id).ok()?.to_string();
     let array = self.container.get_with_txn(txn, &uuid_parent_id)?;
     Some(ChildrenArray::from_array(array))
   }
@@ -135,8 +135,10 @@ impl ParentChildRelations {
     txn: &mut TransactionMut,
     parent_id: &str,
   ) -> ChildrenArray {
-    let uuid_parent_id =
-      collab_entity::uuid_validation::view_id_from_any_string(parent_id).to_string();
+    // Ensure parent_id is a valid UUID string
+    let uuid_parent_id = Uuid::parse_str(parent_id)
+      .unwrap_or_else(|_| Uuid::nil())
+      .to_string();
     let array_ref: ArrayRef = self
       .container
       .get_with_txn(txn, &uuid_parent_id)
@@ -242,17 +244,17 @@ impl ChildrenArray {
     children: Vec<ViewIdentifier>,
     index: Option<u32>,
   ) {
-    let mut existing_children_ids: Vec<String> = self
+    let mut existing_children_ids: Vec<ViewId> = self
       .get_children_with_txn(txn)
       .into_inner()
       .into_iter()
-      .map(|child_view| child_view.id.to_string())
+      .map(|child_view| child_view.id)
       .collect();
 
     let values = children.into_iter().filter(|child| {
-      let contains_child = existing_children_ids.contains(&child.id.to_string());
+      let contains_child = existing_children_ids.contains(&child.id);
       if !contains_child {
-        existing_children_ids.push(child.id.to_string());
+        existing_children_ids.push(child.id);
       }
       !contains_child
     });
@@ -331,6 +333,7 @@ impl From<RepeatedViewIdentifier> for Vec<Any> {
   }
 }
 
+#[repr(transparent)]
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
 pub struct ViewIdentifier {
   pub id: collab_entity::uuid_validation::ViewId,
@@ -352,7 +355,7 @@ impl ViewIdentifier {
   pub fn from_map(map: &HashMap<String, Any>) -> Option<Self> {
     if let Any::String(id) = map.get("id")? {
       return Some(Self {
-        id: collab_entity::uuid_validation::view_id_from_any_string(id),
+        id: Uuid::parse_str(id).ok()?,
       });
     }
 

@@ -109,7 +109,6 @@ pub fn try_parse_database_view_id(id: &str) -> Option<DatabaseViewId> {
   Uuid::parse_str(id).ok()
 }
 
-
 /// Convert any string to DocumentId using deterministic UUID generation for testing
 /// This is used in tests where predictable string IDs are needed
 pub fn document_id_from_any_string(id: &str) -> DocumentId {
@@ -142,7 +141,6 @@ pub fn view_id_from_any_string(id: &str) -> ViewId {
     Uuid::new_v5(&Uuid::NAMESPACE_OID, id.as_bytes())
   }
 }
-
 
 /// Validates a row ID is a valid UUID (always succeeds since type is Uuid)
 pub fn validate_row_id(_id: &RowId) -> Result<()> {

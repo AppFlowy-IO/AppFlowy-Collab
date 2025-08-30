@@ -8,6 +8,7 @@ pub use section::*;
 pub use space_info::*;
 pub use view::*;
 pub use workspace::*;
+pub use collab_entity::define::ViewId;
 
 mod entities;
 mod folder;

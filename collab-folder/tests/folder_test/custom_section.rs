@@ -21,7 +21,7 @@ fn custom_section_test() {
     .section
     .section_op(&txn, Section::Favorite, uid.as_i64())
     .unwrap();
-  op.add_sections_item(&mut txn, vec![SectionItem::new("1".to_string())]);
+  op.add_sections_item(&mut txn, vec![SectionItem::new(crate::util::test_uuid("1"))]);
 
   let _ = folder
     .body
@@ -32,25 +32,27 @@ fn custom_section_test() {
     .section
     .section_op(&txn, Section::Custom("private".to_string()), uid.as_i64())
     .unwrap();
-  op.add_sections_item(&mut txn, vec![SectionItem::new("2".to_string())]);
+  op.add_sections_item(&mut txn, vec![SectionItem::new(crate::util::test_uuid("2"))]);
 
   drop(txn);
 
   let json = folder.to_json_value();
+  let id_1_uuid = crate::util::test_uuid("1").to_string();
+  let id_2_uuid = crate::util::test_uuid("2").to_string();
   assert_json_include!(
     actual: json,
     expected: json!({"section": {
       "favorite": {
         "1": [
           {
-            "id": "1"
+            "id": &id_1_uuid
           }
         ]
       },
       "private": {
         "1": [
           {
-            "id": "2"
+            "id": &id_2_uuid
           }
         ]
       }

@@ -21,28 +21,25 @@ impl FolderCollabRemapper {
   ) -> Result<Folder> {
     let new_workspace_id = id_mapper
       .get_new_id(&relation_map.workspace_id)
-      .ok_or_else(|| anyhow!("missing mapping for workspace id"))?
-      .clone();
+      .ok_or_else(|| anyhow!("missing mapping for workspace id"))?;
 
     let current_time = timestamp();
 
-    let mut folder_data = default_folder_data(uid, &new_workspace_id);
+    let mut folder_data = default_folder_data(uid, new_workspace_id);
     let mut views = vec![];
     let mut top_level_view_ids = vec![];
 
     for (old_view_id, view_metadata) in &relation_map.views {
       let new_view_id = id_mapper
         .get_new_id(old_view_id)
-        .ok_or_else(|| anyhow!("missing mapping for view id: {}", old_view_id))?
-        .clone();
+        .ok_or_else(|| anyhow!("missing mapping for view id: {}", old_view_id))?;
 
       let new_parent_id = if let Some(old_parent_id) = &view_metadata.parent_id {
         id_mapper
           .get_new_id(old_parent_id)
           .ok_or_else(|| anyhow!("missing mapping for parent id: {}", old_parent_id))?
-          .clone()
       } else {
-        new_workspace_id.clone()
+        new_workspace_id
       };
 
       if view_metadata
@@ -67,9 +64,11 @@ impl FolderCollabRemapper {
         })
         .collect();
 
+      let view_uuid = collab_entity::uuid_validation::view_id_from_any_string(new_view_id);
+      let parent_uuid = collab_entity::uuid_validation::view_id_from_any_string(new_parent_id);
       let mut view = View::new(
-        new_view_id.clone(),
-        new_parent_id,
+        view_uuid,
+        parent_uuid,
         view_metadata.name.clone(),
         view_metadata.layout.clone(),
         Some(uid),

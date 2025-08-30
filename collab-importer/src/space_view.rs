@@ -28,8 +28,10 @@ pub fn create_space_view(
   let collab = Collab::new_with_options(CollabOrigin::Empty, options)
     .map_err(|err| ImporterError::Internal(err.into()))?;
 
-  let view = NestedChildViewBuilder::new(uid, workspace_id.to_string())
-    .with_view_id(view_id)
+  let workspace_uuid = Uuid::parse_str(workspace_id).unwrap_or_else(|_| Uuid::nil());
+  let view_uuid = Uuid::parse_str(view_id).unwrap_or_else(|_| Uuid::nil());
+  let view = NestedChildViewBuilder::new(uid, workspace_uuid)
+    .with_view_id(view_uuid)
     .with_layout(ViewLayout::Document)
     .with_name(name)
     .with_children(child_views)

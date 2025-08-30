@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{SectionsByUid, View, Workspace};
+use crate::{SectionsByUid, View, ViewId, Workspace};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FolderData {
   pub uid: i64,
   pub workspace: Workspace,
-  pub current_view: String,
+  pub current_view: ViewId,
   pub views: Vec<View>,
   #[serde(default)]
   pub favorites: SectionsByUid,
@@ -23,7 +23,7 @@ impl FolderData {
     Self {
       uid,
       workspace,
-      current_view: "".to_string(),
+      current_view: uuid::Uuid::nil(),
       views: vec![],
       favorites: SectionsByUid::new(),
       recent: SectionsByUid::new(),
@@ -35,12 +35,9 @@ impl FolderData {
 
 #[derive(Clone, Debug)]
 pub struct TrashInfo {
-  pub id: String,
+  pub id: ViewId,
   pub name: String,
   pub created_at: i64,
 }
-impl AsRef<str> for TrashInfo {
-  fn as_ref(&self) -> &str {
-    &self.id
-  }
-}
+// TrashInfo no longer implements AsRef<str> since id is now a UUID
+// If needed, callers should use id.to_string() explicitly

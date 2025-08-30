@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::bail;
+use uuid::Uuid;
 use collab::preclude::{
   Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut,
 };
@@ -18,6 +19,7 @@ use crate::section::{Section, SectionItem, SectionMap};
 use crate::space_info::SpaceInfo;
 use crate::{ParentChildRelations, RepeatedViewIdentifier, ViewIdentifier, subscribe_view_change};
 use crate::{UserId, impl_any_update, impl_i64_update, impl_option_i64_update, impl_str_update};
+use collab_entity::define::ViewId;
 
 pub(crate) const FOLDER_VIEW_ID: &str = "id";
 pub(crate) const FOLDER_VIEW_NAME: &str = "name";
@@ -43,7 +45,7 @@ pub struct ViewsMap {
   pub(crate) section_map: Arc<SectionMap>,
   pub(crate) revision_map: Arc<RevisionMapping>,
   // Minimal cache only for deletion notifications - stores basic view info
-  deletion_cache: Arc<DashMap<String, Arc<View>>>,
+  deletion_cache: Arc<DashMap<ViewId, Arc<View>>>,
   subscription: Mutex<Option<Subscription>>,
   change_tx: Option<ViewChangeSender>,
 }
@@ -69,7 +71,7 @@ impl ViewsMap {
     }
   }
 
-  pub async fn observe_view_change(&self, uid: i64, views: HashMap<String, Arc<View>>) {
+  pub async fn observe_view_change(&self, uid: i64, views: HashMap<ViewId, Arc<View>>) {
     for (k, v) in views {
       self.deletion_cache.insert(k, v);
     }
@@ -110,7 +112,7 @@ impl ViewsMap {
     txn: &mut TransactionMut,
     parent_id: &str,
     view_id: &str,
-    prev_id: Option<String>,
+    prev_id: Option<ViewId>,
   ) {
     self.associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
   }
@@ -131,7 +133,7 @@ impl ViewsMap {
     txn: &mut TransactionMut,
     parent_id: &str,
     view_id: &str,
-    prev_view_id: Option<String>,
+    prev_view_id: Option<ViewId>,
   ) {
     self
       .parent_children_relation
@@ -161,10 +163,10 @@ impl ViewsMap {
         .iter()
         .flat_map(|child| {
           // Always load fresh from storage
-          let (child_id, mappings) = self.revision_map.mappings(txn, child.id.to_string());
+          let (child_id, mappings) = self.revision_map.mappings(txn, child.id);
           self
             .container
-            .get_with_txn(txn, &child_id)
+            .get_with_txn(txn, &child_id.to_string())
             .and_then(|map| {
               view_from_map_ref(
                 &map,
@@ -224,7 +226,8 @@ impl ViewsMap {
       .collect();
 
     for view_id in roots {
-      let (_, mappings) = self.revision_map.mappings(txn, view_id.to_string());
+      let view_uuid = Uuid::parse_str(view_id).unwrap_or_else(|_| Uuid::nil());
+      let (_, mappings) = self.revision_map.mappings(txn, view_uuid);
       let values = mapped
         .entry(view_id.to_string())
         .or_insert_with(HashSet::new);
@@ -271,10 +274,10 @@ impl ViewsMap {
     view_id: &str,
     uid: i64,
   ) -> Option<Arc<View>> {
-    // Convert view_id to deterministic UUID for lookup
-    let uuid_view_id = collab_entity::uuid_validation::view_id_from_any_string(view_id).to_string();
+    // Convert view_id to UUID for lookup
+    let uuid_view_id = Uuid::parse_str(view_id).ok()?;
     let (view_id, mappings) = self.revision_map.mappings(txn, uuid_view_id);
-    let map_ref = self.container.get_with_txn(txn, &view_id)?;
+    let map_ref = self.container.get_with_txn(txn, &view_id.to_string())?;
     view_from_map_ref(
       &map_ref,
       txn,
@@ -307,13 +310,15 @@ impl ViewsMap {
   /// Updates the deletion cache - only used for deletion notifications
   fn update_deletion_cache(&self, view: Option<Arc<View>>) {
     if let Some(view) = view {
-      self.deletion_cache.insert(view.id.to_string(), view);
+      self.deletion_cache.insert(view.id, view);
     }
   }
 
   /// Removes from deletion cache
   fn remove_from_deletion_cache(&self, view_id: &str) {
-    self.deletion_cache.remove(view_id);
+    if let Ok(uuid) = Uuid::parse_str(view_id) {
+      self.deletion_cache.remove(&uuid);
+    }
   }
 
   /// Inserts a new view into the specified workspace under a given parent view.
@@ -474,13 +479,13 @@ impl ViewsMap {
   pub fn replace_view(
     &self,
     txn: &mut TransactionMut,
-    old_view_id: &str,
-    new_view_id: &str,
+    old_view_id: &ViewId,
+    new_view_id: &ViewId,
     uid: i64,
   ) -> bool {
-    if let Some(old_view) = self.get_view(txn, old_view_id, uid) {
+    if let Some(old_view) = self.get_view(txn, &old_view_id.to_string(), uid) {
       let mut new_view = (*old_view).clone();
-      new_view.id = collab_entity::uuid_validation::view_id_from_any_string(new_view_id);
+      new_view.id = *new_view_id;
       new_view.last_edited_by = Some(uid);
       new_view.last_edited_time = timestamp();
 
@@ -488,7 +493,7 @@ impl ViewsMap {
 
       self
         .revision_map
-        .replace_view(txn, old_view_id, new_view_id);
+        .replace_view(txn, &old_view_id.to_string(), &new_view_id.to_string());
 
       true
     } else {
@@ -503,10 +508,12 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   view_relations: &Arc<ParentChildRelations>,
   section_map: &SectionMap,
   uid: i64,
-  mappings: impl IntoIterator<Item = String>,
+  mappings: impl IntoIterator<Item = ViewId>,
 ) -> Option<View> {
-  let parent_view_id: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
-  let id: String = map_ref.get_with_txn(txn, FOLDER_VIEW_ID)?;
+  let parent_view_id_str: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
+  let parent_view_id = Uuid::parse_str(&parent_view_id_str).ok()?;
+  let id_str: String = map_ref.get_with_txn(txn, FOLDER_VIEW_ID)?;
+  let id = Uuid::parse_str(&id_str).ok()?;
   let name: String = map_ref
     .get_with_txn(txn, FOLDER_VIEW_NAME)
     .unwrap_or_default();
@@ -518,13 +525,13 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .and_then(|v| v.try_into().ok())?;
 
   let mut children = view_relations
-    .get_children_with_txn(txn, &id)
+    .get_children_with_txn(txn, &id.to_string())
     .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
 
   for view_id in mappings {
     let ids = view_relations
-      .get_children_with_txn(txn, &view_id)
+      .get_children_with_txn(txn, &view_id.to_string())
       .map(|array| array.get_children_with_txn(txn))
       .unwrap_or_default();
     for view_id in ids.items {
@@ -537,7 +544,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   let icon = get_icon_from_view_map(map_ref, txn);
   let is_favorite = section_map
     .section_op(txn, Section::Favorite, uid)
-    .map(|op| op.contains_with_txn(txn, &id))
+    .map(|op| op.contains_with_txn(txn, &id.to_string()))
     .unwrap_or(false);
 
   let created_by = map_ref.get_with_txn(txn, VIEW_CREATED_BY);
@@ -549,8 +556,8 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   let extra = map_ref.get_with_txn(txn, VIEW_EXTRA);
 
   Some(View {
-    id: collab_entity::uuid_validation::view_id_from_any_string(&id),
-    parent_view_id: collab_entity::uuid_validation::view_id_from_any_string(&parent_view_id),
+    id,
+    parent_view_id,
     name,
     children,
     created_at,
@@ -693,8 +700,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         .section_op(self.txn, Section::Private, self.uid.as_i64())
     {
       if is_private {
-        private_section
-          .add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+        let view_uuid = Uuid::parse_str(self.view_id).unwrap_or_else(|_| Uuid::nil());
+        private_section.add_sections_item(self.txn, vec![SectionItem::new(view_uuid)]);
       } else {
         private_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -710,7 +717,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         .section_op(self.txn, Section::Favorite, self.uid.as_i64())
     {
       if is_favorite {
-        fav_section.add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+        let view_uuid = Uuid::parse_str(self.view_id).unwrap_or_else(|_| Uuid::nil());
+        fav_section.add_sections_item(self.txn, vec![SectionItem::new(view_uuid)]);
       } else {
         fav_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -734,7 +742,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         .section_op(self.txn, Section::Trash, self.uid.as_i64())
     {
       if is_trash {
-        trash_section.add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+        let view_uuid = Uuid::parse_str(self.view_id).unwrap_or_else(|_| Uuid::nil());
+        trash_section.add_sections_item(self.txn, vec![SectionItem::new(view_uuid)]);
       } else {
         trash_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -766,6 +775,9 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     )
   }
 }
+
+// Use ViewId from collab_entity instead
+// pub type ViewId = Arc<str>;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct View {
@@ -802,15 +814,15 @@ pub struct View {
 
 impl View {
   pub fn new(
-    view_id: String,
-    parent_view_id: String,
+    view_id: ViewId,
+    parent_view_id: ViewId,
     name: String,
     layout: ViewLayout,
     created_by: Option<i64>,
   ) -> Self {
     Self {
-      id: collab_entity::uuid_validation::view_id_from_any_string(&view_id),
-      parent_view_id: collab_entity::uuid_validation::view_id_from_any_string(&parent_view_id),
+      id: view_id,
+      parent_view_id,
       name,
       children: Default::default(),
       created_at: timestamp(),
@@ -825,23 +837,6 @@ impl View {
     }
   }
 
-  pub fn orphan_view(view_id: &str, layout: ViewLayout, uid: Option<i64>) -> Self {
-    View {
-      id: collab_entity::uuid_validation::view_id_from_any_string(view_id),
-      parent_view_id: collab_entity::uuid_validation::view_id_from_any_string(view_id),
-      name: "".to_string(),
-      children: Default::default(),
-      created_at: timestamp(),
-      is_favorite: false,
-      layout,
-      icon: None,
-      created_by: uid,
-      last_edited_time: 0,
-      last_edited_by: None,
-      is_locked: None,
-      extra: None,
-    }
-  }
   pub fn space_info(&self) -> Option<SpaceInfo> {
     let extra = self.extra.as_ref()?;
     serde_json::from_str::<SpaceInfo>(extra).ok()

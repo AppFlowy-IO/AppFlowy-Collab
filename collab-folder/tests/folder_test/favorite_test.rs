@@ -13,15 +13,16 @@ fn create_favorite_test() {
 
   // Insert view_1
   let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
+  let view_1_id = view_1.id.to_string();
   folder.insert_view(view_1, None, uid.as_i64());
 
   // Get view_1 from folder
-  let view_1 = folder.get_view("1", uid.as_i64()).unwrap();
+  let view_1 = folder.get_view(&view_1_id, uid.as_i64()).unwrap();
   assert!(!view_1.is_favorite);
-  folder.add_favorite_view_ids(vec!["1".to_string()], uid.as_i64());
+  folder.add_favorite_view_ids(vec![view_1_id.clone()], uid.as_i64());
 
   // Check if view_1 is favorite
-  let view_1 = folder.get_view("1", uid.as_i64()).unwrap();
+  let view_1 = folder.get_view(&view_1_id, uid.as_i64()).unwrap();
   assert!(view_1.is_favorite);
 
   // Insert view_2
@@ -60,8 +61,9 @@ fn add_favorite_view_and_then_remove_test() {
 
   // Insert view_1
   let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
+  let view_1_id = view_1.id.to_string();
   folder.insert_view(view_1, None, uid.as_i64());
-  folder.add_favorite_view_ids(vec!["1".to_string()], uid.as_i64());
+  folder.add_favorite_view_ids(vec![view_1_id.clone()], uid.as_i64());
 
   let views =
     folder
@@ -75,7 +77,7 @@ fn add_favorite_view_and_then_remove_test() {
   );
   assert!(views[0].is_favorite);
 
-  folder.delete_favorite_view_ids(vec!["1".to_string()], uid.as_i64());
+  folder.delete_favorite_view_ids(vec![view_1_id], uid.as_i64());
   let views =
     folder
       .body
@@ -94,13 +96,15 @@ fn create_multiple_user_favorite_test() {
 
   // Insert view_1
   let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
+  let view_1_id = view_1.id.to_string();
   folder_1.insert_view(view_1, None, uid_1.as_i64());
 
   // Insert view_2
   let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
+  let view_2_id = view_2.id.to_string();
   folder_1.insert_view(view_2, None, uid_1.as_i64());
 
-  folder_1.add_favorite_view_ids(vec!["1".to_string(), "2".to_string()], uid_1.as_i64());
+  folder_1.add_favorite_view_ids(vec![view_1_id.clone(), view_2_id.clone()], uid_1.as_i64());
   let favorites = folder_1.get_my_favorite_sections(uid_1.as_i64());
   assert_eq!(favorites.len(), 2);
   assert_eq!(
@@ -134,13 +138,15 @@ fn favorite_data_serde_test() {
 
   // Insert view_1
   let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
+  let view_1_id = view_1.id.to_string();
   folder.insert_view(view_1, None, uid_1.as_i64());
 
   // Insert view_2
   let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
+  let view_2_id = view_2.id.to_string();
   folder.insert_view(view_2, None, uid_1.as_i64());
 
-  folder.add_favorite_view_ids(vec!["1".to_string(), "2".to_string()], uid_1.as_i64());
+  folder.add_favorite_view_ids(vec![view_1_id, view_2_id], uid_1.as_i64());
   let workspace_uuid_str = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
   let folder_data = folder
     .get_folder_data(&workspace_uuid_str, uid_1.as_i64())
@@ -152,7 +158,7 @@ fn favorite_data_serde_test() {
   assert_json_include!(
     actual: value,
     expected: json!({
-      "current_view": "",
+      "current_view": "00000000-0000-0000-0000-000000000000",
       "favorites": {
         "1": [
           {

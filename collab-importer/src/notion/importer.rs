@@ -184,11 +184,11 @@ impl ImportedInfo {
     !self.views.iter().any(|view| !view.is_dir)
   }
 
-  fn space_ids(&self) -> Vec<String> {
-    let mut space_ids = Vec::new();
+  fn space_ids(&self) -> HashSet<String> {
+    let mut space_ids = HashSet::new();
     for view in &self.views {
       if view.is_dir {
-        space_ids.push(view.view_id.clone());
+        space_ids.insert(view.view_id.clone());
       }
     }
     space_ids
@@ -300,10 +300,11 @@ async fn convert_notion_page_to_parent_child(
     NotionFile::CSVPart { .. } => ViewLayout::Grid,
     NotionFile::Markdown { .. } => ViewLayout::Document,
   };
-  let mut view_builder = NestedChildViewBuilder::new(uid, parent_id.to_string())
+  let parent_uuid = uuid::Uuid::parse_str(parent_id).unwrap_or_else(|_| uuid::Uuid::nil());
+  let mut view_builder = NestedChildViewBuilder::new(uid, parent_uuid)
     .with_name(&notion_page.notion_name)
     .with_layout(view_layout)
-    .with_view_id(&notion_page.view_id);
+    .with_view_id(uuid::Uuid::parse_str(&notion_page.view_id).unwrap_or_else(|_| uuid::Uuid::nil()));
 
   for child_notion_page in &notion_page.children {
     view_builder = view_builder

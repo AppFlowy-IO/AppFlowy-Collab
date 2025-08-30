@@ -92,10 +92,10 @@ pub fn create_folder_with_workspace(uid: UserId, workspace_id: &str) -> FolderTe
   create_folder(uid, workspace_id)
 }
 
-pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<String>) -> View {
+pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<ViewId>) -> View {
   let belongings = belongings
     .into_iter()
-    .map(|s| ViewIdentifier::new(collab_entity::uuid_validation::view_id_from_any_string(&s)))
+    .map(|id| ViewIdentifier::new(id))
     .collect::<Vec<ViewIdentifier>>();
   View {
     id: collab_entity::uuid_validation::view_id_from_any_string(view_id),
@@ -163,6 +163,12 @@ pub fn setup_log() {
       .finish();
     subscriber.try_init().unwrap();
   });
+}
+
+/// Helper function for tests to create deterministic UUIDs from strings
+pub fn test_uuid(s: &str) -> ViewId {
+  // For test purposes, use deterministic UUID generation
+  uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, s.as_bytes())
 }
 
 
