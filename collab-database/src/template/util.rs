@@ -2,7 +2,7 @@ use crate::database::timestamp;
 use crate::entity::{CreateDatabaseParams, CreateViewParams};
 use crate::error::DatabaseError;
 use crate::fields::Field;
-use crate::rows::{CreateRowParams, RowId};
+use crate::rows::CreateRowParams;
 use crate::template::entity::DatabaseTemplate;
 
 /// This trait that provides methods to extend the [TypeOption::CellData] functionalities.
@@ -26,13 +26,13 @@ where
   let template = template
     .try_into()
     .map_err(|err| DatabaseError::ImportData(err.to_string()))?;
-  let params = create_database_params_from_template(template);
+  let params = create_database_params_from_template(template)?;
   Ok(params)
 }
 
 pub(crate) fn create_database_params_from_template(
   template: DatabaseTemplate,
-) -> CreateDatabaseParams {
+) -> Result<CreateDatabaseParams, DatabaseError> {
   let database_id = template.database_id;
   let timestamp = timestamp();
 
@@ -52,9 +52,12 @@ pub(crate) fn create_database_params_from_template(
 
   let mut rows = vec![];
   for row_template in template.rows {
+    let row_id = uuid::Uuid::parse_str(&row_template.row_id).map_err(|_| {
+      DatabaseError::Internal(anyhow::anyhow!("Invalid row ID: {}", row_template.row_id))
+    })?;
     rows.push(CreateRowParams {
-      id: RowId::from(row_template.row_id),
-      database_id: database_id.clone(),
+      id: row_id,
+      database_id,
       cells: row_template.cells,
       height: row_template.height,
       visibility: row_template.visibility,
@@ -68,8 +71,8 @@ pub(crate) fn create_database_params_from_template(
   let mut views = vec![];
   for view_template in template.views {
     views.push(CreateViewParams {
-      database_id: database_id.clone(),
-      view_id: template.view_id.clone(),
+      database_id,
+      view_id: template.view_id,
       name: view_template.name,
       layout: view_template.layout,
       layout_settings: view_template.layout_settings,
@@ -84,10 +87,10 @@ pub(crate) fn create_database_params_from_template(
     });
   }
 
-  CreateDatabaseParams {
+  Ok(CreateDatabaseParams {
     database_id,
     fields,
     rows,
     views,
-  }
+  })
 }

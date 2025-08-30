@@ -2,6 +2,7 @@ use crate::database::{gen_field_id, gen_row_id};
 use crate::template::entity::{
   CELL_DATA, CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, RowTemplate,
 };
+use collab_entity::uuid_validation::{DatabaseId, DatabaseViewId};
 
 use crate::entity::FieldType;
 use crate::fields::checkbox_type_option::CheckboxTypeOption;
@@ -34,8 +35,8 @@ pub trait FileUrlBuilder: Send + Sync + 'static {
 
 pub struct DatabaseTemplateBuilder {
   #[allow(dead_code)]
-  database_id: String,
-  view_id: String,
+  database_id: DatabaseId,
+  view_id: DatabaseViewId,
   columns: Vec<Vec<CellTemplateData>>,
   fields: Vec<FieldTemplate>,
   file_url_builder: Option<Box<dyn FileUrlBuilder>>,
@@ -43,8 +44,8 @@ pub struct DatabaseTemplateBuilder {
 
 impl DatabaseTemplateBuilder {
   pub fn new(
-    database_id: String,
-    view_id: String,
+    database_id: DatabaseId,
+    view_id: DatabaseViewId,
     file_url_builder: Option<Box<dyn FileUrlBuilder>>,
   ) -> Self {
     Self {

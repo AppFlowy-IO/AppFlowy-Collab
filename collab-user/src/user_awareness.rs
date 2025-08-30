@@ -14,6 +14,7 @@ use collab_entity::CollabType;
 use collab_entity::define::USER_AWARENESS;
 use collab_entity::reminder::Reminder;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 const REMINDERS: &str = "reminders";
 const APPEARANCE_SETTINGS: &str = "appearance_settings";
@@ -147,7 +148,8 @@ impl UserAwareness {
 }
 
 pub fn default_user_awareness_data(object_id: &str, client_id: ClientID) -> EncodedCollab {
-  let options = CollabOptions::new(object_id.to_string(), client_id);
+  let object_uuid = Uuid::parse_str(object_id).unwrap_or_else(|_| Uuid::new_v4());
+  let options = CollabOptions::new(object_uuid, client_id);
   let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let awareness = UserAwareness::create(collab, None).unwrap();
   awareness

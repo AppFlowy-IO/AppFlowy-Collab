@@ -2,14 +2,17 @@ use collab::preclude::Any;
 use collab::util::{AnyExt, AnyMapExt};
 use collab_database::entity::CreateViewParams;
 use collab_database::views::{DatabaseLayout, GroupMap};
+use uuid::Uuid;
 
-use crate::database_test::helper::{DatabaseTest, create_database_with_default_data};
+use crate::database_test::helper::{
+  DatabaseTest, TEST_VIEW_ID_V1, create_database_with_default_data,
+};
 use crate::helper::{CONTENT, GROUPS, TestGroup, TestGroupSetting};
 
 #[tokio::test]
 async fn create_database_view_with_group_test() {
   let database_test = create_database_with_two_groups().await;
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   assert_eq!(view.group_settings.len(), 2);
   let group_settings = view
     .group_settings
@@ -46,9 +49,9 @@ async fn create_database_view_with_group_test2() {
     ],
     content: "".to_string(),
   };
-  database_test.insert_group_setting("v1", group_setting);
+  database_test.insert_group_setting(TEST_VIEW_ID_V1, group_setting);
 
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   assert_eq!(view.group_settings.len(), 1);
   let group_settings = view
     .group_settings
@@ -84,8 +87,8 @@ async fn get_single_database_group_test() {
     ],
     content: "test group".to_string(),
   };
-  database_test.insert_group_setting("v1", group_setting);
-  let settings = database_test.get_all_group_setting::<TestGroupSetting>("v1");
+  database_test.insert_group_setting(TEST_VIEW_ID_V1, group_setting);
+  let settings = database_test.get_all_group_setting::<TestGroupSetting>(TEST_VIEW_ID_V1);
   assert_eq!(settings.len(), 1);
   assert_eq!(settings[0].id, "g1");
   assert_eq!(settings[0].content, "test group");
@@ -123,10 +126,10 @@ async fn get_multiple_database_group_test() {
     groups: vec![],
     content: "test group 2".to_string(),
   };
-  database_test.insert_group_setting("v1", group_setting_1);
-  database_test.insert_group_setting("v1", group_setting_2);
+  database_test.insert_group_setting(TEST_VIEW_ID_V1, group_setting_1);
+  database_test.insert_group_setting(TEST_VIEW_ID_V1, group_setting_2);
 
-  let settings = database_test.get_all_group_setting::<TestGroupSetting>("v1");
+  let settings = database_test.get_all_group_setting::<TestGroupSetting>(TEST_VIEW_ID_V1);
   assert_eq!(settings.len(), 2);
   assert_eq!(settings[1].id, "g2");
   assert_eq!(settings[1].content, "test group 2");
@@ -136,7 +139,7 @@ async fn get_multiple_database_group_test() {
 #[tokio::test]
 async fn extend_database_view_group_test() {
   let mut database_test = create_database_with_two_groups().await;
-  database_test.update_group_setting("v1", "g1", |object| {
+  database_test.update_group_setting(TEST_VIEW_ID_V1, "g1", |object| {
     object.insert(CONTENT.into(), "hello world".into());
     let mut groups = object
       .remove(GROUPS)
@@ -150,7 +153,7 @@ async fn extend_database_view_group_test() {
     object.insert(GROUPS.into(), Any::from(groups));
   });
 
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   assert_eq!(view.group_settings.len(), 2);
   let group_settings = view
     .group_settings
@@ -168,7 +171,7 @@ async fn extend_database_view_group_test() {
 #[tokio::test]
 async fn remove_database_view_group_test() {
   let mut database_test = create_database_with_two_groups().await;
-  database_test.update_group_setting("v1", "g1", |object| {
+  database_test.update_group_setting(TEST_VIEW_ID_V1, "g1", |object| {
     let mut groups = object
       .remove(GROUPS)
       .and_then(|any| any.into_array())
@@ -181,7 +184,7 @@ async fn remove_database_view_group_test() {
     object.insert(GROUPS.into(), groups.into());
   });
 
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   let group_settings = view
     .group_settings
     .iter()
@@ -223,8 +226,8 @@ async fn create_database_with_two_groups() -> DatabaseTest {
   };
 
   let params = CreateViewParams {
-    database_id: "1".to_string(),
-    view_id: "v1".to_string(),
+    database_id: Uuid::new_v4(),
+    view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
     group_settings: vec![group_1.into(), group_2.into()],
     layout: DatabaseLayout::Grid,
     ..Default::default()

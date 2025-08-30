@@ -62,7 +62,8 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
   map_ref: &MapRef,
   views: &ParentChildRelations,
 ) -> Option<Workspace> {
-  let id: ViewId = map_ref.get_with_txn(txn, WORKSPACE_ID)?;
+  let id_str: String = map_ref.get_with_txn(txn, WORKSPACE_ID)?;
+  let id = uuid::Uuid::parse_str(&id_str).ok()?;
   let name = map_ref
     .get_with_txn(txn, WORKSPACE_NAME)
     .unwrap_or_default();
@@ -71,7 +72,7 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
     .unwrap_or_default();
 
   let child_views = views
-    .get_children_with_txn(txn, &id)
+    .get_children_with_txn(txn, &id.to_string())
     .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
 

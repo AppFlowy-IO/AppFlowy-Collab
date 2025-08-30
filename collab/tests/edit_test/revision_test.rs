@@ -3,16 +3,15 @@ use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::entity::EncoderVersion;
 use collab::preclude::Collab;
 use serde_json::json;
+use uuid::Uuid;
 use yrs::Update;
 use yrs::updates::decoder::Decode;
 
 #[tokio::test]
 async fn create_restore_revision() {
-  let mut collab = Collab::new_with_options(
-    CollabOrigin::Client(CollabClient::new(1, "1".to_string())),
-    CollabOptions::new("1".into(), default_client_id()).with_gc(false),
-  )
-  .unwrap();
+  let options = CollabOptions::new(Uuid::new_v4(), default_client_id()).with_gc(false);
+  let mut collab =
+    Collab::new_with_options(CollabOrigin::Client(CollabClient::new(1, "1")), options).unwrap();
   collab.insert("key", "value1");
   let state1 = collab
     .encode_collab_v1(|_| Ok::<_, anyhow::Error>(()))
@@ -30,7 +29,7 @@ async fn create_restore_revision() {
 
   let restored = Collab::new_with_options(
     CollabOrigin::Empty,
-    CollabOptions::new("1".into(), default_client_id())
+    CollabOptions::new(Uuid::new_v4(), default_client_id())
       .with_data_source(DataSource::DocStateV2(restored.doc_state.into())),
   )
   .unwrap();
@@ -41,11 +40,9 @@ async fn create_restore_revision() {
 
 #[tokio::test]
 async fn remove_revision_cleanups_deleted_data() {
-  let mut collab = Collab::new_with_options(
-    CollabOrigin::Client(CollabClient::new(1, "1".to_string())),
-    CollabOptions::new("1".into(), default_client_id()).with_gc(false),
-  )
-  .unwrap();
+  let options = CollabOptions::new(Uuid::new_v4(), default_client_id()).with_gc(false);
+  let mut collab =
+    Collab::new_with_options(CollabOrigin::Client(CollabClient::new(1, "1")), options).unwrap();
   collab.insert("key", "value1");
   let r1 = collab.create_named_revision("r1").unwrap();
   collab.insert("key", "value2");
@@ -78,11 +75,9 @@ async fn remove_revision_cleanups_deleted_data() {
 
 #[tokio::test]
 async fn remove_revision_should_eventually_remove_revision_data() {
-  let mut collab = Collab::new_with_options(
-    CollabOrigin::Client(CollabClient::new(1, "1".to_string())),
-    CollabOptions::new("1".into(), default_client_id()).with_gc(false),
-  )
-  .unwrap();
+  let options = CollabOptions::new(Uuid::new_v4(), default_client_id()).with_gc(false);
+  let mut collab =
+    Collab::new_with_options(CollabOrigin::Client(CollabClient::new(1, "1")), options).unwrap();
   collab.insert("key", "value1");
   let r1 = collab.create_named_revision("revision1").unwrap();
   collab.insert("key", "value2");
@@ -113,11 +108,9 @@ async fn remove_revision_should_eventually_remove_revision_data() {
 
 #[tokio::test]
 async fn cleaning_all_revisions_doesnt_leave_garbage() {
-  let mut collab = Collab::new_with_options(
-    CollabOrigin::Client(CollabClient::new(1, "1".to_string())),
-    CollabOptions::new("1".into(), default_client_id()).with_gc(false),
-  )
-  .unwrap();
+  let options = CollabOptions::new(Uuid::new_v4(), default_client_id()).with_gc(false);
+  let mut collab =
+    Collab::new_with_options(CollabOrigin::Client(CollabClient::new(1, "1")), options).unwrap();
   collab.insert("key", "value1");
   let r1 = collab.create_named_revision("revision1").unwrap();
   collab.insert("key", "value2");
@@ -144,22 +137,18 @@ async fn cleaning_all_revisions_doesnt_leave_garbage() {
 
 #[tokio::test]
 async fn remote_updates_can_be_cleaned_up() {
-  let mut c1 = Collab::new_with_options(
-    CollabOrigin::Client(CollabClient::new(1, "1".to_string())),
-    CollabOptions::new("1".into(), default_client_id()).with_gc(false),
-  )
-  .unwrap();
+  let options = CollabOptions::new(Uuid::new_v4(), default_client_id()).with_gc(false);
+  let mut c1 =
+    Collab::new_with_options(CollabOrigin::Client(CollabClient::new(1, "1")), options).unwrap();
   c1.insert("key", "value1");
   let r1 = c1.create_named_revision("revision1").unwrap();
   c1.insert("key", "value2");
   let _r2 = c1.create_named_revision("revision2").unwrap();
   c1.insert("key", "value3");
 
-  let mut c2 = Collab::new_with_options(
-    CollabOrigin::Client(CollabClient::new(1, "2".to_string())),
-    CollabOptions::new("1".into(), default_client_id()).with_gc(false),
-  )
-  .unwrap();
+  let options2 = CollabOptions::new(Uuid::new_v4(), default_client_id()).with_gc(false);
+  let mut c2 =
+    Collab::new_with_options(CollabOrigin::Client(CollabClient::new(1, "2")), options2).unwrap();
   let state = c1.encode_collab_v2();
   c2.apply_update(Update::decode_v2(&state.doc_state).unwrap())
     .unwrap();

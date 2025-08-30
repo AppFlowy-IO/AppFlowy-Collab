@@ -98,6 +98,7 @@ pub fn generate_id() -> String {
 }
 
 pub fn page_id_from_document_id(document_id: &str) -> Option<String> {
-  let document_uuid = Uuid::parse_str(document_id).ok()?;
-  Some(Uuid::new_v5(&document_uuid, PAGE.as_bytes()).to_string())
+  // Use deterministic UUID conversion for consistency
+  let doc_id = collab_entity::uuid_validation::document_id_from_any_string(document_id);
+  Some(Uuid::new_v5(&doc_id, PAGE.as_bytes()).to_string())
 }

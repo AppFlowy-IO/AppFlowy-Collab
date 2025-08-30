@@ -1,4 +1,5 @@
-use crate::rows::{Cell, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY, Row, RowId};
+use crate::rows::{Cell, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY, Row};
+use collab_entity::uuid_validation::RowId;
 
 use collab::preclude::{DeepObservable, EntryChange, Event, MapRef, TransactionMut};
 use collab::preclude::{PathSegment, ToJson};
@@ -77,7 +78,7 @@ fn handle_map_event(
             RowChangeValue::Height => {
               if let Ok(value) = value.clone().cast::<i64>() {
                 let _ = change_tx.send(RowChange::DidUpdateHeight {
-                  row_id: row_id.clone(),
+                  row_id: *row_id,
                   value: value as i32,
                 });
               }
@@ -85,7 +86,7 @@ fn handle_map_event(
             RowChangeValue::Visibility => {
               if let Ok(value) = value.clone().cast::<bool>() {
                 let _ = change_tx.send(RowChange::DidUpdateVisibility {
-                  row_id: row_id.clone(),
+                  row_id: *row_id,
                   value,
                 });
               }
@@ -105,7 +106,7 @@ fn handle_map_event(
               // when insert a cell into the row, the key is the field_id
               let field_id = key.to_string();
               let _ = change_tx.send(RowChange::DidUpdateCell {
-                row_id: row_id.clone(),
+                row_id: *row_id,
                 field_id,
                 value: cell,
               });
@@ -123,7 +124,7 @@ fn handle_map_event(
               if let Some(cell) = event.target().to_json(txn).into_map() {
                 let field_id = key.deref().to_string();
                 let _ = change_tx.send(RowChange::DidUpdateCell {
-                  row_id: row_id.clone(),
+                  row_id: *row_id,
                   field_id,
                   value: cell,
                 });
@@ -135,7 +136,7 @@ fn handle_map_event(
             if let Some(PathSegment::Key(key)) = event.path().pop_back() {
               let field_id = key.deref().to_string();
               let _ = change_tx.send(RowChange::DidUpdateCell {
-                row_id: row_id.clone(),
+                row_id: *row_id,
                 field_id,
                 value: Cell::default(),
               });

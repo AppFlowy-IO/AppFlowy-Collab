@@ -20,14 +20,14 @@ async fn restore_row_from_disk_test() {
   let (db, mut database_test) = create_database_with_db(1, &workspace_id, &database_id).await;
   let row_1_id = Uuid::new_v4();
   let row_2_id = Uuid::new_v4();
-  let row_1 = CreateRowParams::new(row_1_id, database_id.clone());
-  let row_2 = CreateRowParams::new(row_2_id, database_id.clone());
+  let row_1 = CreateRowParams::new(row_1_id, database_id.to_string());
+  let row_2 = CreateRowParams::new(row_2_id, database_id.to_string());
   database_test.create_row(row_1.clone()).await.unwrap();
   database_test.create_row(row_2.clone()).await.unwrap();
   drop(database_test);
 
   let database_test = restore_database_from_db(1, &workspace_id, &database_id, db).await;
-  let rows = database_test.get_rows_for_view("v1").await;
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows.len(), 2);
 
   assert!(rows.iter().any(|row| row.id == row_1.id));

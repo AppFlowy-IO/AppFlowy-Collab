@@ -43,8 +43,11 @@ impl BlockTestCore {
       workspace_id,
     };
 
-    let options = CollabOptions::new(doc_id.to_string(), default_client_id())
-      .with_data_source(data_source.into());
+    let options = CollabOptions::new(
+      Uuid::parse_str(doc_id).unwrap_or_else(|_| Uuid::new_v4()),
+      default_client_id(),
+    )
+    .with_data_source(data_source.into());
     let client = CollabClient::new(1, "1");
     let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));

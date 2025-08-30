@@ -5,6 +5,7 @@ use collab_folder::{
   CollabOrigin, Folder, RepeatedViewIdentifier, View, ViewIdentifier, Workspace,
   default_folder_data, timestamp,
 };
+use uuid::Uuid;
 
 use crate::workspace::entities::WorkspaceRelationMap;
 use crate::workspace::id_mapper::IdMapper;
@@ -46,18 +47,28 @@ impl FolderCollabRemapper {
         .as_ref()
         .is_none_or(|pid| pid == &relation_map.workspace_id)
       {
-        top_level_view_ids.push(ViewIdentifier::new(new_view_id));
+        top_level_view_ids.push(ViewIdentifier::new(
+          collab_entity::uuid_validation::view_id_from_any_string(new_view_id),
+        ));
       }
 
       let children_ids: Vec<ViewIdentifier> = view_metadata
         .children
         .iter()
-        .filter_map(|child_id| id_mapper.get_new_id(child_id).map(ViewIdentifier::new))
+        .filter_map(|child_id| {
+          id_mapper.get_new_id(child_id).map(|new_id| {
+            ViewIdentifier::new(collab_entity::uuid_validation::view_id_from_any_string(
+              new_id,
+            ))
+          })
+        })
         .collect();
 
+      let view_uuid = collab_entity::uuid_validation::view_id_from_any_string(new_view_id);
+      let parent_uuid = collab_entity::uuid_validation::view_id_from_any_string(new_parent_id);
       let mut view = View::new(
-        new_view_id.into(),
-        new_parent_id.into(),
+        view_uuid,
+        parent_uuid,
         view_metadata.name.clone(),
         view_metadata.layout.clone(),
         Some(uid),
@@ -73,7 +84,7 @@ impl FolderCollabRemapper {
 
     folder_data.views = views;
     folder_data.workspace = Workspace {
-      id: new_workspace_id.into(),
+      id: Uuid::parse_str(new_workspace_id).map_err(|_| anyhow!("invalid workspace id"))?,
       name: workspace_name.to_string(),
       child_views: RepeatedViewIdentifier::new(top_level_view_ids),
       created_at: current_time,
@@ -82,7 +93,8 @@ impl FolderCollabRemapper {
       last_edited_by: Some(uid),
     };
 
-    let options = CollabOptions::new(new_workspace_id.into(), default_client_id());
+    let workspace_uuid = Uuid::parse_str(new_workspace_id).unwrap_or_else(|_| Uuid::new_v4());
+    let options = CollabOptions::new(workspace_uuid, default_client_id());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let folder = Folder::create(collab, None, folder_data);
     Ok(folder)

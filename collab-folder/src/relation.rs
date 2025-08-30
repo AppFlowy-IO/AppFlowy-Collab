@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use crate::ViewId;
 use collab::preclude::{Any, MapExt, MapRef, YrsValue};
 use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
+use collab_entity::define::ViewId;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Used to keep track of the view hierarchy.
 /// Parent-child relationship is stored in the map and each child is stored in an array.
@@ -47,13 +48,15 @@ impl ParentChildRelations {
     parent_id: &str,
     view_id: &str,
   ) -> Option<ViewIdentifier> {
-    let child = ViewIdentifier { id: view_id.into() };
+    let child = ViewIdentifier {
+      id: Uuid::parse_str(view_id).ok()?,
+    };
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let index = children
         .get_children_with_txn(txn)
         .items
         .iter()
-        .position(|i| i.id.as_ref() == view_id);
+        .position(|i| i.id == child.id);
       match index {
         None => {
           tracing::warn!("🟡 The view {} is not in parent {}.", view_id, parent_id);
@@ -90,17 +93,22 @@ impl ParentChildRelations {
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let prev_index = match prev_view_id {
         None => None,
-        Some(prev_id) => children
-          .get_children_with_txn(txn)
-          .items
-          .iter()
-          .position(|i| i.id == prev_id),
+        Some(prev_id) => {
+          let prev_child = ViewIdentifier { id: prev_id };
+          children
+            .get_children_with_txn(txn)
+            .items
+            .iter()
+            .position(|i| i.id == prev_child.id)
+        },
       };
       let index = match prev_index {
         None => 0,
         Some(index) => (index + 1) as u32,
       };
-      let child = ViewIdentifier { id: view_id.into() };
+      let child = ViewIdentifier {
+        id: Uuid::parse_str(view_id).unwrap_or_else(|_| Uuid::nil()),
+      };
       children.insert_child_with_txn(txn, index, child);
     }
   }
@@ -116,7 +124,9 @@ impl ParentChildRelations {
     txn: &T,
     parent_id: &str,
   ) -> Option<ChildrenArray> {
-    let array = self.container.get_with_txn(txn, parent_id)?;
+    // Validate the parent_id is a valid UUID
+    let uuid_parent_id = Uuid::parse_str(parent_id).ok()?.to_string();
+    let array = self.container.get_with_txn(txn, &uuid_parent_id)?;
     Some(ChildrenArray::from_array(array))
   }
 
@@ -125,10 +135,18 @@ impl ParentChildRelations {
     txn: &mut TransactionMut,
     parent_id: &str,
   ) -> ChildrenArray {
+    // Ensure parent_id is a valid UUID string
+    let uuid_parent_id = Uuid::parse_str(parent_id)
+      .unwrap_or_else(|_| Uuid::nil())
+      .to_string();
     let array_ref: ArrayRef = self
       .container
-      .get_with_txn(txn, parent_id)
-      .unwrap_or_else(|| self.container.get_or_init_array(txn, parent_id));
+      .get_with_txn(txn, &uuid_parent_id)
+      .unwrap_or_else(|| {
+        self
+          .container
+          .get_or_init_array(txn, uuid_parent_id.as_str())
+      });
     ChildrenArray::from_array(array_ref)
   }
 
@@ -236,7 +254,7 @@ impl ChildrenArray {
     let values = children.into_iter().filter(|child| {
       let contains_child = existing_children_ids.contains(&child.id);
       if !contains_child {
-        existing_children_ids.push(child.id.clone());
+        existing_children_ids.push(child.id);
       }
       !contains_child
     });
@@ -318,11 +336,11 @@ impl From<RepeatedViewIdentifier> for Vec<Any> {
 #[repr(transparent)]
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
 pub struct ViewIdentifier {
-  pub id: ViewId,
+  pub id: collab_entity::uuid_validation::ViewId,
 }
 
 impl Deref for ViewIdentifier {
-  type Target = str;
+  type Target = collab_entity::uuid_validation::ViewId;
 
   fn deref(&self) -> &Self::Target {
     &self.id
@@ -330,12 +348,15 @@ impl Deref for ViewIdentifier {
 }
 
 impl ViewIdentifier {
-  pub fn new<S: Into<Arc<str>>>(id: S) -> Self {
-    Self { id: id.into() }
+  pub fn new(id: collab_entity::uuid_validation::ViewId) -> Self {
+    Self { id }
   }
+
   pub fn from_map(map: &HashMap<String, Any>) -> Option<Self> {
     if let Any::String(id) = map.get("id")? {
-      return Some(Self { id: id.clone() });
+      return Some(Self {
+        id: Uuid::parse_str(id).ok()?,
+      });
     }
 
     None
@@ -345,7 +366,10 @@ impl ViewIdentifier {
 impl From<ViewIdentifier> for Any {
   fn from(value: ViewIdentifier) -> Self {
     let mut map = HashMap::new();
-    map.insert("id".to_string(), Any::String(value.id.clone()));
+    map.insert(
+      "id".to_string(),
+      Any::String(Arc::from(value.id.to_string())),
+    );
     Any::Map(Arc::new(map))
   }
 }

@@ -1,4 +1,4 @@
-use crate::database_test::helper::create_database_with_params;
+use crate::database_test::helper::{TEST_VIEW_ID_V1, TEST_VIEW_ID_V2, create_database_with_params};
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_database::rows::CreateRowParams;
 use uuid::Uuid;
@@ -6,12 +6,12 @@ use uuid::Uuid;
 #[tokio::test]
 async fn create_database_test() {
   let database_id = Uuid::new_v4();
-  let view_id = "v1".to_string();
+  let view_id = Uuid::parse_str(TEST_VIEW_ID_V1).unwrap();
   let database = create_database_with_params(CreateDatabaseParams {
-    database_id: database_id.to_string(),
+    database_id,
     views: vec![CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: view_id.clone(),
+      database_id,
+      view_id,
       ..Default::default()
     }],
     ..Default::default()
@@ -35,7 +35,7 @@ async fn create_database_test() {
 //       database_id: database_id_1.to_string(),
 //       views: vec![CreateViewParams {
 //         database_id: database_id_1.to_string(),
-//         view_id: "v1".to_string(),
+//         view_id: uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()),
 //         ..Default::default()
 //       }],
 //       ..Default::default()
@@ -48,7 +48,7 @@ async fn create_database_test() {
 //       database_id: database_id_2.to_string(),
 //       views: vec![CreateViewParams {
 //         database_id: database_id_2.to_string(),
-//         view_id: "v2".to_string(),
+//         view_id: uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()),
 //         ..Default::default()
 //       }],
 //       ..Default::default()
@@ -68,10 +68,10 @@ async fn create_database_test() {
 //   let database_id = Uuid::new_v4();
 //   let database = test
 //     .create_database(CreateDatabaseParams {
-//       database_id: database_id.to_string(),
+//       database_id: collab_entity::uuid_validation::database_id_from_string(&database_id.to_string()).unwrap_or_else(|_| collab_entity::uuid_validation::generate_database_id()),
 //       views: vec![CreateViewParams {
-//         database_id: database_id.to_string(),
-//         view_id: "v1".to_string(),
+//         database_id: collab_entity::uuid_validation::database_id_from_string(&database_id.to_string()).unwrap_or_else(|_| collab_entity::uuid_validation::generate_database_id()),
+//         view_id: uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()),
 //         ..Default::default()
 //       }],
 //       ..Default::default()
@@ -111,10 +111,10 @@ async fn duplicate_database_view_test() {
   // create the database with inline view
   let database_id = Uuid::new_v4();
   let mut database = create_database_with_params(CreateDatabaseParams {
-    database_id: database_id.to_string(),
+    database_id,
     views: vec![CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v1".to_string(),
+      database_id,
+      view_id: Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
       ..Default::default()
     }],
     ..Default::default()
@@ -123,36 +123,39 @@ async fn duplicate_database_view_test() {
 
   database
     .create_linked_view(CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v2".to_string(),
+      database_id,
+      view_id: Uuid::parse_str(TEST_VIEW_ID_V2).unwrap(),
       ..Default::default()
     })
     .unwrap();
 
   // Duplicate the linked view.
-  let duplicated_view = database.duplicate_linked_view("v2").unwrap();
+  let duplicated_view = database.duplicate_linked_view(TEST_VIEW_ID_V2).unwrap();
   let row_id = Uuid::new_v4();
   database
-    .create_row(CreateRowParams::new(row_id, database_id.to_string()))
+    .create_row(CreateRowParams::new(row_id, database_id))
     .await
     .unwrap();
 
   // Duplicated database should have the same rows as the original database
   assert_eq!(
-    database.get_rows_for_view(&duplicated_view.id).await.len(),
+    database
+      .get_rows_for_view(&duplicated_view.id.to_string())
+      .await
+      .len(),
     1
   );
-  assert_eq!(database.get_rows_for_view("v1").await.len(), 1);
+  assert_eq!(database.get_rows_for_view(TEST_VIEW_ID_V1).await.len(), 1);
 }
 
 #[tokio::test]
 async fn delete_database_linked_view_test() {
   let database_id = Uuid::new_v4();
   let mut database = create_database_with_params(CreateDatabaseParams {
-    database_id: database_id.to_string(),
+    database_id,
     views: vec![CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v1".to_string(),
+      database_id,
+      view_id: Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
       ..Default::default()
     }],
     ..Default::default()
@@ -161,8 +164,8 @@ async fn delete_database_linked_view_test() {
 
   database
     .create_linked_view(CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v2".to_string(),
+      database_id,
+      view_id: Uuid::parse_str(TEST_VIEW_ID_V2).unwrap(),
       ..Default::default()
     })
     .unwrap();
@@ -170,12 +173,12 @@ async fn delete_database_linked_view_test() {
   let views = database.get_all_views();
   assert_eq!(views.len(), 2);
 
-  database.delete_view("v2");
+  database.delete_view(TEST_VIEW_ID_V2);
 
   let views = database.get_all_views();
   assert_eq!(views.len(), 1);
 
-  database.delete_view("v1");
+  database.delete_view(TEST_VIEW_ID_V1);
 
   let views = database.get_all_views();
   assert_eq!(views.len(), 0);
@@ -185,10 +188,10 @@ async fn delete_database_linked_view_test() {
 async fn delete_database_inline_view_test() {
   let database_id = Uuid::new_v4();
   let mut database = create_database_with_params(CreateDatabaseParams {
-    database_id: database_id.to_string(),
+    database_id,
     views: vec![CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v1".to_string(),
+      database_id,
+      view_id: Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
       ..Default::default()
     }],
     ..Default::default()
@@ -198,8 +201,8 @@ async fn delete_database_inline_view_test() {
   for i in 2..5 {
     database
       .create_linked_view(CreateViewParams {
-        database_id: database_id.to_string(),
-        view_id: format!("v{}", i),
+        database_id,
+        view_id: Uuid::new_v5(&Uuid::NAMESPACE_OID, format!("v{}", i).as_bytes()),
         ..Default::default()
       })
       .unwrap();
@@ -209,7 +212,7 @@ async fn delete_database_inline_view_test() {
   let views = database.get_all_views();
   assert_eq!(views.len(), 4);
 
-  database.delete_view("v1");
+  database.delete_view(TEST_VIEW_ID_V1);
   let views = database.get_all_views();
   assert_eq!(views.len(), 3);
 }
@@ -218,24 +221,25 @@ async fn delete_database_inline_view_test() {
 async fn get_database_by_view_id_test() {
   let database_id = Uuid::new_v4();
   let mut database = create_database_with_params(CreateDatabaseParams {
-    database_id: database_id.to_string(),
+    database_id,
     views: vec![CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v1".to_string(),
+      database_id,
+      view_id: Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
       ..Default::default()
     }],
     ..Default::default()
   })
   .await;
 
+  let view_id = Uuid::parse_str(TEST_VIEW_ID_V2).unwrap();
   database
     .create_linked_view(CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: "v2".to_string(),
+      database_id,
+      view_id,
       ..Default::default()
     })
     .unwrap();
 
-  let database = database.get_view("v2");
+  let database = database.get_view(&view_id.to_string());
   assert!(database.is_some());
 }

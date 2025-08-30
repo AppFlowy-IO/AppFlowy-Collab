@@ -255,7 +255,7 @@ impl ImportedInfo {
       vec![space_view]
     } else {
       views.iter_mut().for_each(|view| {
-        if space_ids.contains(view.view.id.as_ref()) {
+        if space_ids.contains(&view.view.id.to_string()) {
           view.view.extra = serde_json::to_string(
             &ViewExtraBuilder::new()
               .is_space(true)
@@ -300,10 +300,13 @@ async fn convert_notion_page_to_parent_child(
     NotionFile::CSVPart { .. } => ViewLayout::Grid,
     NotionFile::Markdown { .. } => ViewLayout::Document,
   };
-  let mut view_builder = NestedChildViewBuilder::new(uid, parent_id.into())
+  let parent_uuid = uuid::Uuid::parse_str(parent_id).unwrap_or_else(|_| uuid::Uuid::nil());
+  let mut view_builder = NestedChildViewBuilder::new(uid, parent_uuid)
     .with_name(&notion_page.notion_name)
     .with_layout(view_layout)
-    .with_view_id(notion_page.view_id.as_str());
+    .with_view_id(
+      uuid::Uuid::parse_str(&notion_page.view_id).unwrap_or_else(|_| uuid::Uuid::nil()),
+    );
 
   for child_notion_page in &notion_page.children {
     view_builder = view_builder

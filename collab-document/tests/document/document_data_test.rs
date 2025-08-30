@@ -3,6 +3,7 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_document::document::Document;
 use collab_document::document_data::default_document_data;
+use uuid::Uuid;
 
 #[test]
 fn get_default_data_test() {
@@ -32,7 +33,10 @@ fn validate_document_data() {
   let document = Document::create(document_id, document_data, default_client_id()).unwrap();
   assert!(document.validate().is_ok());
 
-  let options = CollabOptions::new(document_id.to_string(), default_client_id());
+  let options = CollabOptions::new(
+    Uuid::parse_str(document_id).unwrap_or_else(|_| Uuid::new_v4()),
+    default_client_id(),
+  );
   let new_collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let result = Document::open(new_collab);
   assert!(result.is_err())

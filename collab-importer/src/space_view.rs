@@ -5,6 +5,7 @@ use collab::preclude::Collab;
 use collab_document::document_data::default_document_collab_data;
 use collab_folder::hierarchy_builder::{NestedChildViewBuilder, ParentChildViews};
 use collab_folder::{SpaceInfo, ViewLayout};
+use uuid::Uuid;
 
 #[allow(dead_code)]
 pub fn create_space_view(
@@ -21,13 +22,16 @@ pub fn create_space_view(
     .doc_state
     .to_vec();
 
-  let options = CollabOptions::new(view_id.to_string(), client_id)
+  let view_uuid = Uuid::parse_str(view_id).unwrap_or_else(|_| Uuid::new_v4());
+  let options = CollabOptions::new(view_uuid, client_id)
     .with_data_source(DataSource::DocStateV1(import_container_doc_state));
   let collab = Collab::new_with_options(CollabOrigin::Empty, options)
     .map_err(|err| ImporterError::Internal(err.into()))?;
 
-  let view = NestedChildViewBuilder::new(uid, workspace_id.into())
-    .with_view_id(view_id)
+  let workspace_uuid = Uuid::parse_str(workspace_id).unwrap_or_else(|_| Uuid::nil());
+  let view_uuid = Uuid::parse_str(view_id).unwrap_or_else(|_| Uuid::nil());
+  let view = NestedChildViewBuilder::new(uid, workspace_uuid)
+    .with_view_id(view_uuid)
     .with_layout(ViewLayout::Document)
     .with_name(name)
     .with_children(child_views)

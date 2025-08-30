@@ -17,7 +17,7 @@ pub struct Block {
   pub id: String,
   pub ty: String,
   pub parent: String,
-  pub children: String,
+  pub children: String, // This is a key for the children_map, not a BlockId
   /// Optional external id and type for blocks that are not stored in the document
   pub external_id: Option<String>,
   /// Optional external type for blocks that are not stored in the document

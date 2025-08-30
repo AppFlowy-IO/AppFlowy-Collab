@@ -18,3 +18,4 @@ collab-plugins/.env.test
 **/temp/**
 
 **/.DS_Store
+.claude
