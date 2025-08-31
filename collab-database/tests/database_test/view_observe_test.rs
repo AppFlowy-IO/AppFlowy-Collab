@@ -1,6 +1,4 @@
-use crate::database_test::helper::{
-  TEST_VIEW_ID_V1, create_database, wait_for_specific_event,
-};
+use crate::database_test::helper::{TEST_VIEW_ID_V1, create_database, wait_for_specific_event};
 use crate::helper::setup_log;
 use collab_database::database::{DatabaseBody, gen_row_id};
 use uuid::Uuid;
