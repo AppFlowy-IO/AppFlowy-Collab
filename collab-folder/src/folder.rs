@@ -723,7 +723,7 @@ impl FolderBody {
     let view = self.views.get_view_with_txn(txn, view_id, uid)?;
     self
       .views
-      .move_child(txn, &view.parent_view_id.to_string(), from, to);
+      .move_child(txn, &view.parent_view_id, from, to);
     Some(view)
   }
 

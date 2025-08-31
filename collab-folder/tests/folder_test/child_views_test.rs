@@ -233,11 +233,11 @@ fn move_child_views_test() {
   folder
     .body
     .views
-    .move_child(&mut txn, &v_1.id.to_string(), 2, 0);
+    .move_child(&mut txn, &v_1.id, 2, 0);
   folder
     .body
     .views
-    .move_child(&mut txn, &v_1.id.to_string(), 0, 1);
+    .move_child(&mut txn, &v_1.id, 0, 1);
 
   let v_1_child_views = folder
     .body

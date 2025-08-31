@@ -39,8 +39,8 @@ impl SpaceViewEdgeCaseHandler {
     id_mapper
       .id_map
       .insert(space_view_uuid, space_view_uuid);
-    self.reparent_workspace_views(relation_map, &space_view_uuid.to_string())?;
-    self.generate_space_document(&space_view_uuid.to_string(), export_path)?;
+    self.reparent_workspace_views(relation_map, &space_view_uuid)?;
+    self.generate_space_document(&space_view_uuid, export_path)?;
 
     Ok(Some(space_view_uuid.to_string()))
   }
@@ -90,11 +90,11 @@ impl SpaceViewEdgeCaseHandler {
   fn reparent_workspace_views(
     &self,
     relation_map: &mut WorkspaceRelationMap,
-    space_view_id: &str,
+    space_view_id: &Uuid,
   ) -> Result<()> {
     let mut workspace_children = Vec::new();
 
-    let space_view_uuid = Uuid::parse_str(space_view_id)?;
+    let space_view_uuid = *space_view_id;
     let original_workspace_uuid = self.original_workspace_id;
 
     for (view_id, view_metadata) in relation_map.views.iter_mut() {
@@ -114,7 +114,7 @@ impl SpaceViewEdgeCaseHandler {
     Ok(())
   }
 
-  fn generate_space_document(&self, space_view_id: &str, export_path: &Path) -> Result<()> {
+  fn generate_space_document(&self, space_view_id: &Uuid, export_path: &Path) -> Result<()> {
     let documents_dir = export_path.join("collab_jsons").join("documents");
     fs::create_dir_all(&documents_dir)?;
 
@@ -122,7 +122,7 @@ impl SpaceViewEdgeCaseHandler {
 
     let document_content = serde_json::json!({
         "document": {
-            "page_id": space_view_id,
+            "page_id": space_view_id.to_string(),
             "blocks": {},
             "meta": {
                 "children_map": {},

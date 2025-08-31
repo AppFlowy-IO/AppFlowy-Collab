@@ -15,13 +15,12 @@ use collab_document::blocks::{
 use collab_document::importer::define::URL_FIELD;
 use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::ParentChildViews;
-use collab_folder::{Folder, View, ViewId, default_folder_data};
+use collab_folder::{Folder, View, default_folder_data};
 use collab_importer::error::ImporterError;
 use collab_importer::imported_collab::{ImportType, ImportedCollabInfo, import_notion_zip_file};
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::{CSVContentCache, NotionImporter, is_csv_contained_cached};
 use collab_importer::util::{CSVRow, parse_csv};
-use uuid::Uuid;
 
 use collab::core::collab::default_client_id;
 use collab_document::document::Document;
@@ -55,10 +54,6 @@ use std::sync::Arc;
 //   println!("{}", nested_view);
 // }
 
-/// Helper function to parse string to ViewId for tests
-fn parse_view_id(s: &str) -> ViewId {
-  Uuid::parse_str(s).expect(&format!("Invalid UUID format: {}", s))
-}
 
 #[tokio::test]
 async fn import_zip_file_contains_zip_as_attachments() {
@@ -761,7 +756,7 @@ async fn import_level_test() {
   assert_eq!(view_hierarchy.flatten_views().len(), 14);
   folder.insert_nested_views(view_hierarchy.into_inner(), uid);
 
-  let first_level_views = folder.get_views_belong_to(&parse_view_id(&info.workspace_id.to_string()), uid);
+  let first_level_views = folder.get_views_belong_to(&info.workspace_id, uid);
   assert_eq!(first_level_views.len(), 1);
   assert_eq!(first_level_views[0].children.len(), 3);
   println!("first_level_views: {:?}", first_level_views);

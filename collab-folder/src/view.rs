@@ -89,25 +89,18 @@ impl ViewsMap {
     *self.subscription.lock().await = subscription;
   }
 
-  pub fn move_child(&self, txn: &mut TransactionMut, parent_id: &str, from: u32, to: u32) {
-    if let Ok(parent_uuid) = uuid::Uuid::parse_str(parent_id) {
-      self
-        .parent_children_relation
-        .move_child_with_txn(txn, &parent_uuid, from, to);
-    }
+  pub fn move_child(&self, txn: &mut TransactionMut, parent_id: &Uuid, from: u32, to: u32) {
+    self
+      .parent_children_relation
+      .move_child_with_txn(txn, parent_id, from, to);
   }
 
   /// Dissociate the relationship between parent_id and view_id.
   /// Why don't we use the move method to replace dissociate_parent_child and associate_parent_child?
   /// Because the views and workspaces are stored in two separate maps, we can't directly move a view from one map to another.
   /// So, we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
-  pub fn dissociate_parent_child(&self, txn: &mut TransactionMut, parent_id: &str, view_id: &str) {
-    if let (Ok(parent_uuid), Ok(view_uuid)) = (
-      uuid::Uuid::parse_str(parent_id),
-      uuid::Uuid::parse_str(view_id),
-    ) {
-      self.dissociate_parent_child_with_txn(txn, &parent_uuid.to_string(), &view_uuid.to_string());
-    }
+  pub fn dissociate_parent_child(&self, txn: &mut TransactionMut, parent_id: &Uuid, view_id: &Uuid) {
+    self.dissociate_parent_child_with_txn(txn, &parent_id.to_string(), &view_id.to_string());
   }
 
   /// Establish a relationship between the parent_id and view_id, and insert the view below the prev_id.
@@ -117,11 +110,11 @@ impl ViewsMap {
   pub fn associate_parent_child(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
-    view_id: &str,
+    parent_id: &Uuid,
+    view_id: &Uuid,
     prev_id: Option<ViewId>,
   ) {
-    self.associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
+    self.associate_parent_child_with_txn(txn, &parent_id.to_string(), &view_id.to_string(), prev_id);
   }
 
   pub fn dissociate_parent_child_with_txn(
@@ -157,15 +150,13 @@ impl ViewsMap {
     }
   }
 
-  pub fn remove_child(&self, txn: &mut TransactionMut, parent_id: &str, child_index: u32) {
-    if let Ok(parent_uuid) = uuid::Uuid::parse_str(parent_id) {
-      if let Some(parent) = self
-        .parent_children_relation
-        .get_children_with_txn(txn, &parent_uuid)
-      {
-        if let Some(identifier) = parent.remove_child_with_txn(txn, child_index) {
-          self.delete_views(txn, vec![identifier.id]);
-        }
+  pub fn remove_child(&self, txn: &mut TransactionMut, parent_id: &Uuid, child_index: u32) {
+    if let Some(parent) = self
+      .parent_children_relation
+      .get_children_with_txn(txn, parent_id)
+    {
+      if let Some(identifier) = parent.remove_child_with_txn(txn, child_index) {
+        self.delete_views(txn, vec![identifier.id]);
       }
     }
   }
