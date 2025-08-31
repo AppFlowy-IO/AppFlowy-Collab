@@ -14,7 +14,7 @@ async fn test_workspace_database_remapper() {
     .unwrap();
   let id_mapper = IdMapper::new(&relation_map);
 
-  let view_id_mapping = id_mapper.id_map.clone();
+  let view_id_mapping = id_mapper.get_id_map_as_strings();
 
   let workspace_database_json = serde_json::json!({
     "databases": relation_map.workspace_database_meta
@@ -45,7 +45,7 @@ async fn test_workspace_database_remapper() {
 
     if let Some(new_uuid) = id_mapper.get_new_id(original_uuid) {
       assert!(
-        json_string.contains(new_uuid),
+        json_string.contains(&new_uuid.to_string()),
         "new uuid {} should be present in workspace database data",
         new_uuid
       );

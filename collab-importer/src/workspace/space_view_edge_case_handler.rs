@@ -39,7 +39,7 @@ impl SpaceViewEdgeCaseHandler {
 
     id_mapper
       .id_map
-      .insert(space_view_id.clone(), space_view_id.clone());
+      .insert(space_view_uuid, space_view_uuid);
     self.reparent_workspace_views(relation_map, &space_view_id)?;
     self.generate_space_document(&space_view_id, export_path)?;
 

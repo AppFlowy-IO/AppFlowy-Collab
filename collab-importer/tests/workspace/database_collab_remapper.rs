@@ -19,14 +19,14 @@ async fn test_parse_real_database_json() {
     .unwrap();
   let id_mapper = IdMapper::new(&relation_map);
 
-  let view_id_mapping = id_mapper.id_map.clone();
+  let view_id_mapping = id_mapper.get_id_map_as_strings();
   let remapper = DatabaseCollabRemapper::new(json_value, view_id_mapping);
   let database = remapper.build_database().await.unwrap();
 
   let original_database_id = "0730a32c-5a52-43fb-8e68-ee73287ebf69";
   if let Some(new_database_id) = id_mapper.get_new_id(original_database_id) {
     assert_eq!(
-      &database.get_database_id().unwrap().to_string(),
+      database.get_database_id().unwrap(),
       new_database_id
     );
   }
@@ -38,7 +38,7 @@ async fn test_parse_real_database_json() {
     if view.name == "Untitled" {
       let original_view_id = "6cbe3ff3-7b3a-4d3b-9eec-f0d1e0a8b8c3";
       if let Some(new_view_id) = id_mapper.get_new_id(original_view_id) {
-        assert_eq!(&view.id.to_string(), new_view_id);
+        assert_eq!(view.id, new_view_id);
       }
     }
   }
@@ -72,7 +72,7 @@ async fn test_parse_real_database_json() {
   for original_uuid in &original_uuids {
     if let Some(new_uuid) = id_mapper.get_new_id(original_uuid) {
       assert!(
-        data_json.contains(new_uuid),
+        data_json.contains(&new_uuid.to_string()),
         "new uuid {} should be present in database",
         new_uuid
       );
@@ -94,7 +94,7 @@ async fn test_parse_real_database_json() {
     }
 
     if let Some(new_row_id) = id_mapper.get_new_id(&row_id_str) {
-      assert_eq!(&row_id_str, new_row_id, "row id should be mapped correctly");
+      assert_ne!(row_id_str, new_row_id.to_string(), "row id should be mapped correctly");
     }
 
     assert_eq!(

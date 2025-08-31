@@ -4,6 +4,7 @@ use collab_document::blocks::DocumentData;
 use collab_document::document::Document;
 use serde_json;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use crate::workspace::id_remapper::JsonIdRemapper;
 
@@ -33,9 +34,9 @@ impl DocumentCollabRemapper {
     Ok(document_data)
   }
 
-  pub fn build_document(&self, document_id: &str) -> Result<Document> {
+  pub fn build_document(&self, document_id: &Uuid) -> Result<Document> {
     let document_data = self.build_document_data()?;
-    let document = Document::create(document_id, document_data, default_client_id())?;
+    let document = Document::create(&document_id.to_string(), document_data, default_client_id())?;
     Ok(document)
   }
 }

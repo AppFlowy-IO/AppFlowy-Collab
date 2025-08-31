@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::workspace::database_collab_remapper::DatabaseCollabRemapper;
 use crate::workspace::document_collab_remapper::DocumentCollabRemapper;
@@ -23,7 +24,7 @@ pub struct WorkspaceRemapper {
   #[allow(dead_code)]
   custom_workspace_id: Option<String>,
   relation_map: WorkspaceRelationMap,
-  id_mapping: HashMap<String, String>,
+  id_mapping: HashMap<Uuid, Uuid>,
   workspace_path: PathBuf,
 }
 
@@ -60,10 +61,9 @@ impl WorkspaceRemapper {
 
     let mut id_mapper = IdMapper::new(&relation_map);
     if let Some(ref custom_workspace_id) = custom_workspace_id {
-      id_mapper.id_map.insert(
-        relation_map.workspace_id.to_string(),
-        custom_workspace_id.clone(),
-      );
+      let custom_uuid = Uuid::parse_str(custom_workspace_id)
+        .map_err(|_| anyhow!("Invalid custom workspace ID format"))?;
+      id_mapper.id_map.insert(relation_map.workspace_id, custom_uuid);
     }
 
     let handler = SpaceViewEdgeCaseHandler::new(
@@ -113,7 +113,7 @@ impl WorkspaceRemapper {
         let json_content = fs::read_to_string(&json_path)?;
         let database_json: serde_json::Value = serde_json::from_str(&json_content)?;
 
-        let remapper = DatabaseCollabRemapper::new(database_json, self.id_mapping.clone());
+        let remapper = DatabaseCollabRemapper::new(database_json, self.get_id_mapping_as_strings());
         let database = remapper.build_database().await?;
         databases.push(database);
       }
@@ -152,12 +152,13 @@ impl WorkspaceRemapper {
         let json_content = fs::read_to_string(&json_path)?;
         let document_json: serde_json::Value = serde_json::from_str(&json_content)?;
 
+        let view_uuid = Uuid::parse_str(view_id)?;
         let mapped_view_id = self
           .id_mapping
-          .get(view_id)
+          .get(&view_uuid)
           .ok_or_else(|| anyhow!("no mapping found for view_id: {}", view_id))?;
 
-        let remapper = DocumentCollabRemapper::new(document_json, self.id_mapping.clone());
+        let remapper = DocumentCollabRemapper::new(document_json, self.get_id_mapping_as_strings());
         let document = remapper.build_document(mapped_view_id)?;
         documents.push(document);
       }
@@ -176,7 +177,7 @@ impl WorkspaceRemapper {
     let workspace_database_json = serde_json::json!({
       "databases": self.relation_map.workspace_database_meta
     });
-    let remapper = WorkspaceDatabaseRemapper::new(workspace_database_json, self.id_mapping.clone());
+    let remapper = WorkspaceDatabaseRemapper::new(workspace_database_json, self.get_id_mapping_as_strings());
     let workspace_database = remapper.build_workspace_database(database_storage_id)?;
     Ok(Some(workspace_database))
   }
@@ -207,14 +208,15 @@ impl WorkspaceRemapper {
               let json_content = fs::read_to_string(&path)?;
               let document_json: serde_json::Value = serde_json::from_str(&json_content)?;
 
-              let mapped_row_id = self
-                .id_mapping
-                .get(row_document_id)
-                .unwrap_or(&row_document_id.to_string())
-                .clone();
+              let row_uuid = Uuid::parse_str(row_document_id).ok();
+              let mapped_row_uuid = if let Some(uuid) = row_uuid {
+                self.id_mapping.get(&uuid).copied().unwrap_or(uuid)
+              } else {
+                Uuid::parse_str(row_document_id).unwrap_or_else(|_| Uuid::new_v4())
+              };
 
-              let remapper = DocumentCollabRemapper::new(document_json, self.id_mapping.clone());
-              let document = remapper.build_document(&mapped_row_id)?;
+              let remapper = DocumentCollabRemapper::new(document_json, self.get_id_mapping_as_strings());
+              let document = remapper.build_document(&mapped_row_uuid)?;
               row_documents.push(document);
             }
           }
@@ -246,8 +248,15 @@ impl WorkspaceRemapper {
     })
   }
 
-  pub fn get_id_mapping(&self) -> HashMap<String, String> {
+  pub fn get_id_mapping(&self) -> HashMap<Uuid, Uuid> {
     self.id_mapping.clone()
+  }
+
+  pub fn get_id_mapping_as_strings(&self) -> HashMap<String, String> {
+    self.id_mapping
+      .iter()
+      .map(|(k, v)| (k.to_string(), v.to_string()))
+      .collect()
   }
 
   pub fn get_relation_map(&self) -> WorkspaceRelationMap {

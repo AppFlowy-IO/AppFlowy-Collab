@@ -68,7 +68,7 @@ async fn test_id_mapper() {
   for old_id in &old_uuid_ids {
     let new_id = id_mapper.get_new_id_from_uuid(old_id).unwrap();
     assert_ne!(
-      old_id.to_string(),
+      *old_id,
       new_id,
       "old and new IDs should be different"
     );
@@ -76,7 +76,7 @@ async fn test_id_mapper() {
 
   for old_id in &old_string_ids {
     let new_id = id_mapper.get_new_id(old_id).unwrap();
-    assert_ne!(old_id, new_id, "old and new IDs should be different");
+    assert_ne!(*old_id, new_id.to_string(), "old and new IDs should be different");
   }
 
   // Convert UUIDs to strings and combine with string IDs to get actual unique count

@@ -73,7 +73,7 @@ async fn test_space_view_edge_case_handler() {
 
   let id_mapping = remapper.get_id_mapping();
   assert!(
-    id_mapping.contains_key(&space_id.to_string()),
+    id_mapping.contains_key(&space_id),
     "space view id should be in id mapping"
   );
 

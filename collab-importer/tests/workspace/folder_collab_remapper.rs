@@ -22,7 +22,7 @@ fn verify_view(
   uid: i64,
 ) {
   let new_id = id_mapper.get_new_id(old_id).unwrap();
-  let view = folder.get_view(&parse_view_id(new_id), uid).unwrap();
+  let view = folder.get_view(&parse_view_id(&new_id.to_string()), uid).unwrap();
 
   assert_eq!(view.name, expected_name);
   assert_eq!(
@@ -59,9 +59,10 @@ async fn test_folder_collab_remapper() {
   assert_ne!(workspace_id, relation_map.workspace_id.to_string());
   assert_eq!(
     workspace_id,
-    *id_mapper
+    id_mapper
       .get_new_id_from_uuid(&relation_map.workspace_id)
       .unwrap()
+      .to_string()
   );
 
   let workspace_uuid = uuid::Uuid::parse_str(&workspace_id).unwrap();
@@ -96,7 +97,7 @@ async fn test_folder_collab_remapper() {
     let old_view_id = relation_map
       .views
       .keys()
-      .find(|old_id| id_mapper.get_new_id_from_uuid(old_id) == Some(&view.id.to_string()))
+      .find(|old_id| id_mapper.get_new_id_from_uuid(old_id) == Some(view.id))
       .expect("mapped view should exist in original relation map");
 
     let original_view = &relation_map.views[old_view_id];
@@ -113,7 +114,7 @@ async fn test_folder_collab_remapper() {
       let expected_parent_id = id_mapper.get_new_id_from_uuid(original_parent_id).unwrap();
       assert_eq!(
         view.parent_view_id,
-        collab_entity::uuid_validation::view_id_from_any_string(expected_parent_id)
+        collab_entity::uuid_validation::view_id_from_any_string(&expected_parent_id.to_string())
       );
     } else {
       assert_eq!(
@@ -129,7 +130,7 @@ async fn test_folder_collab_remapper() {
         .unwrap();
       assert_eq!(
         child.id,
-        collab_entity::uuid_validation::view_id_from_any_string(expected_child_id)
+        collab_entity::uuid_validation::view_id_from_any_string(&expected_child_id.to_string())
       );
     }
   }
@@ -181,7 +182,7 @@ async fn test_folder_hierarchy_structure() {
     &id_mapper,
     "b8f96497-c880-4fea-8232-c31d57daab83",
     "Getting started",
-    general_space_new_id,
+    &general_space_new_id.to_string(),
     3,
     ViewLayout::Document,
     uid,
@@ -191,7 +192,7 @@ async fn test_folder_hierarchy_structure() {
     &id_mapper,
     "6cbe3ff3-7b3a-4d3b-9eec-f0d1e0a8b8c3",
     "To-dos",
-    general_space_new_id,
+    &general_space_new_id.to_string(),
     0,
     ViewLayout::Board,
     uid,
@@ -201,7 +202,7 @@ async fn test_folder_hierarchy_structure() {
     &id_mapper,
     "d0b0104e-996d-498b-b644-0556ebe6a37a",
     "Desktop guide",
-    getting_started_new_id,
+    &getting_started_new_id.to_string(),
     0,
     ViewLayout::Document,
     uid,
@@ -211,7 +212,7 @@ async fn test_folder_hierarchy_structure() {
     &id_mapper,
     "0a0fd09b-31ed-4cb6-814d-34280d65c5ef",
     "Mobile guide",
-    getting_started_new_id,
+    &getting_started_new_id.to_string(),
     0,
     ViewLayout::Document,
     uid,
@@ -221,7 +222,7 @@ async fn test_folder_hierarchy_structure() {
     &id_mapper,
     "b68f3000-6f31-452f-b781-db3a65aced1f",
     "Web guide",
-    getting_started_new_id,
+    &getting_started_new_id.to_string(),
     0,
     ViewLayout::Document,
     uid,
@@ -237,6 +238,6 @@ async fn test_folder_hierarchy_structure() {
     uid,
   );
 
-  let child_views = folder.get_views_belong_to(&parse_view_id(getting_started_new_id), uid);
+  let child_views = folder.get_views_belong_to(&parse_view_id(&getting_started_new_id.to_string()), uid);
   assert_eq!(child_views.len(), 3);
 }
