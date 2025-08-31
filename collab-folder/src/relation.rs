@@ -48,9 +48,7 @@ impl ParentChildRelations {
     parent_id: &ViewId,
     view_id: &ViewId,
   ) -> Option<ViewIdentifier> {
-    let child = ViewIdentifier {
-      id: *view_id,
-    };
+    let child = ViewIdentifier { id: *view_id };
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let index = children
         .get_children_with_txn(txn)
@@ -106,14 +104,18 @@ impl ParentChildRelations {
         None => 0,
         Some(index) => (index + 1) as u32,
       };
-      let child = ViewIdentifier {
-        id: *view_id,
-      };
+      let child = ViewIdentifier { id: *view_id };
       children.insert_child_with_txn(txn, index, child);
     }
   }
 
-  pub fn move_child_with_txn(&self, txn: &mut TransactionMut, parent_id: &ViewId, from: u32, to: u32) {
+  pub fn move_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &ViewId,
+    from: u32,
+    to: u32,
+  ) {
     if let Some(belonging_array) = self.get_children_with_txn(txn, parent_id) {
       belonging_array.move_child_with_txn(txn, from, to);
     }

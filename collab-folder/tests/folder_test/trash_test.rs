@@ -22,10 +22,7 @@ fn create_trash_test() {
   folder.insert_view(view_2, Some(0), uid.as_i64());
   folder.insert_view(view_3, Some(0), uid.as_i64());
 
-  folder.add_trash_view_ids(
-    vec![view_1_id, view_2_id, view_3_id],
-    uid.as_i64(),
-  );
+  folder.add_trash_view_ids(vec![view_1_id, view_2_id, view_3_id], uid.as_i64());
 
   let trash = folder.get_my_trash_sections(uid.as_i64());
   assert_eq!(trash.len(), 3);

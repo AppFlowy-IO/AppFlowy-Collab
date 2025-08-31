@@ -1,9 +1,9 @@
 use crate::util::sync_unzip_asset;
-use collab_folder::{Folder, ViewLayout, ViewId};
-use uuid::Uuid;
+use collab_folder::{Folder, ViewId, ViewLayout};
 use collab_importer::workspace::folder_collab_remapper::FolderCollabRemapper;
 use collab_importer::workspace::id_mapper::IdMapper;
 use collab_importer::workspace::relation_map_parser::RelationMapParser;
+use uuid::Uuid;
 
 /// Helper function to parse string to ViewId for tests  
 fn parse_view_id(s: &str) -> ViewId {

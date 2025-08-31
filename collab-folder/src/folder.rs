@@ -588,13 +588,7 @@ impl FolderBody {
       Some(parent_view) => {
         accumulated_views.push(parent_view.as_ref().clone());
         parent_view.children.items.iter().for_each(|child| {
-          self.get_view_recursively_with_txn(
-            txn,
-            &child.id,
-            visited,
-            accumulated_views,
-            uid,
-          )
+          self.get_view_recursively_with_txn(txn, &child.id, visited, accumulated_views, uid)
         })
       },
     }
@@ -614,9 +608,7 @@ impl FolderBody {
       return None;
     }
 
-    let view = self
-      .views
-      .get_view_with_txn(txn, workspace_id, uid)?;
+    let view = self.views.get_view_with_txn(txn, workspace_id, uid)?;
     Some(Workspace::from(view.as_ref()))
   }
 
@@ -764,9 +756,12 @@ impl FolderBody {
       .dissociate_parent_child_with_txn(txn, &parent_id, &view_id.to_string());
     // associate the child with its new parent and place it after the prev_view_id. If the prev_view_id is None,
     // place it as the first child.
-    self
-      .views
-      .associate_parent_child_with_txn(txn, &new_parent_id.to_string(), &view_id.to_string(), prev_view_id);
+    self.views.associate_parent_child_with_txn(
+      txn,
+      &new_parent_id.to_string(),
+      &view_id.to_string(),
+      prev_view_id,
+    );
     // Update the view's parent ID.
     self
       .views

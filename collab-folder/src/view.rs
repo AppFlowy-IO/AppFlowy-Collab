@@ -102,7 +102,10 @@ impl ViewsMap {
   /// Because the views and workspaces are stored in two separate maps, we can't directly move a view from one map to another.
   /// So, we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
   pub fn dissociate_parent_child(&self, txn: &mut TransactionMut, parent_id: &str, view_id: &str) {
-    if let (Ok(parent_uuid), Ok(view_uuid)) = (uuid::Uuid::parse_str(parent_id), uuid::Uuid::parse_str(view_id)) {
+    if let (Ok(parent_uuid), Ok(view_uuid)) = (
+      uuid::Uuid::parse_str(parent_id),
+      uuid::Uuid::parse_str(view_id),
+    ) {
       self.dissociate_parent_child_with_txn(txn, &parent_uuid.to_string(), &view_uuid.to_string());
     }
   }
@@ -127,7 +130,10 @@ impl ViewsMap {
     parent_id: &str,
     view_id: &str,
   ) {
-    if let (Ok(parent_uuid), Ok(view_uuid)) = (uuid::Uuid::parse_str(parent_id), uuid::Uuid::parse_str(view_id)) {
+    if let (Ok(parent_uuid), Ok(view_uuid)) = (
+      uuid::Uuid::parse_str(parent_id),
+      uuid::Uuid::parse_str(view_id),
+    ) {
       self
         .parent_children_relation
         .dissociate_parent_child_with_txn(txn, &parent_uuid, &view_uuid);
@@ -141,7 +147,10 @@ impl ViewsMap {
     view_id: &str,
     prev_view_id: Option<ViewId>,
   ) {
-    if let (Ok(parent_uuid), Ok(view_uuid)) = (uuid::Uuid::parse_str(parent_id), uuid::Uuid::parse_str(view_id)) {
+    if let (Ok(parent_uuid), Ok(view_uuid)) = (
+      uuid::Uuid::parse_str(parent_id),
+      uuid::Uuid::parse_str(view_id),
+    ) {
       self
         .parent_children_relation
         .associate_parent_child_with_txn(txn, &parent_uuid, &view_uuid, prev_view_id);
@@ -209,12 +218,7 @@ impl ViewsMap {
     }
   }
 
-  pub fn get_views<T: ReadTxn>(
-    &self,
-    txn: &T,
-    view_ids: &[ViewId],
-    uid: i64,
-  ) -> Vec<Arc<View>> {
+  pub fn get_views<T: ReadTxn>(&self, txn: &T, view_ids: &[ViewId], uid: i64) -> Vec<Arc<View>> {
     view_ids
       .iter()
       .flat_map(|view_id| self.get_view_with_txn(txn, view_id, uid))
@@ -356,7 +360,7 @@ impl ViewsMap {
       let view_identifier = ViewIdentifier { id: view.id };
       let updated_view = ViewUpdate::new(
         UserId::from(uid),
-        &view.parent_view_id.to_string(),
+        &view.parent_view_id,
         txn,
         &parent_map_ref,
         self.parent_children_relation.clone(),
@@ -464,7 +468,7 @@ impl ViewsMap {
     let map_ref = self.container.get_with_txn(txn, &uuid_view_id)?;
     let update = ViewUpdate::new(
       uid.clone(),
-      &uuid_view_id,
+      view_id,
       txn,
       &map_ref,
       self.parent_children_relation.clone(),
@@ -619,15 +623,17 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
-    let update = ViewUpdate::new(
-      uid,
-      self.view_id,
-      self.txn,
-      &self.map_ref,
-      self.belongings.clone(),
-      self.section_map,
-    );
-    self.view = f(update);
+    if let Ok(view_uuid) = uuid::Uuid::parse_str(self.view_id) {
+      let update = ViewUpdate::new(
+        uid,
+        &view_uuid,
+        self.txn,
+        &self.map_ref,
+        self.belongings.clone(),
+        self.section_map,
+      );
+      self.view = f(update);
+    }
     self
   }
   pub fn done(self) -> Option<View> {
@@ -638,7 +644,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
 pub struct ViewUpdate<'a, 'b, 'c> {
   #[allow(dead_code)]
   uid: UserId,
-  view_id: &'a str,
+  view_id: &'a ViewId,
   map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
   children_map: Arc<ParentChildRelations>,
@@ -662,7 +668,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 
   pub fn new(
     uid: UserId,
-    view_id: &'a str,
+    view_id: &'a ViewId,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRef,
     children_map: Arc<ParentChildRelations>,
@@ -679,12 +685,10 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn set_children(self, children: RepeatedViewIdentifier) -> Self {
-    if let Ok(view_uuid) = uuid::Uuid::parse_str(self.view_id) {
-      let array = self
-        .children_map
-        .get_or_create_children_with_txn(self.txn, &view_uuid);
-      array.add_children_with_txn(self.txn, children.into_inner(), None);
-    }
+    let array = self
+      .children_map
+      .get_or_create_children_with_txn(self.txn, self.view_id);
+    array.add_children_with_txn(self.txn, children.into_inner(), None);
 
     self
   }
@@ -712,8 +716,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         .section_op(self.txn, Section::Private, self.uid.as_i64())
     {
       if is_private {
-        let view_uuid = Uuid::parse_str(self.view_id).unwrap_or_else(|_| Uuid::nil());
-        private_section.add_sections_item(self.txn, vec![SectionItem::new(view_uuid)]);
+        private_section.add_sections_item(self.txn, vec![SectionItem::new(*self.view_id)]);
       } else {
         private_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -729,8 +732,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         .section_op(self.txn, Section::Favorite, self.uid.as_i64())
     {
       if is_favorite {
-        let view_uuid = Uuid::parse_str(self.view_id).unwrap_or_else(|_| Uuid::nil());
-        fav_section.add_sections_item(self.txn, vec![SectionItem::new(view_uuid)]);
+        fav_section.add_sections_item(self.txn, vec![SectionItem::new(*self.view_id)]);
       } else {
         fav_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -754,8 +756,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         .section_op(self.txn, Section::Trash, self.uid.as_i64())
     {
       if is_trash {
-        let view_uuid = Uuid::parse_str(self.view_id).unwrap_or_else(|_| Uuid::nil());
-        trash_section.add_sections_item(self.txn, vec![SectionItem::new(view_uuid)]);
+        trash_section.add_sections_item(self.txn, vec![SectionItem::new(*self.view_id)]);
       } else {
         trash_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -765,11 +766,9 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn add_children(self, children: Vec<ViewIdentifier>, index: Option<u32>) -> Self {
-    if let Ok(view_uuid) = uuid::Uuid::parse_str(self.view_id) {
-      self
-        .children_map
-        .add_children(self.txn, &view_uuid, children, index);
-    }
+    self
+      .children_map
+      .add_children(self.txn, self.view_id, children, index);
     self
   }
 

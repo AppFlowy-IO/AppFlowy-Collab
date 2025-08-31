@@ -1,4 +1,6 @@
-use crate::util::{create_folder_with_data, create_folder_with_workspace, make_test_view, parse_view_id};
+use crate::util::{
+  create_folder_with_data, create_folder_with_workspace, make_test_view, parse_view_id,
+};
 use assert_json_diff::assert_json_include;
 use collab_folder::{FolderData, UserId};
 use serde_json::json;
@@ -17,23 +19,27 @@ fn create_favorite_test() {
   folder.insert_view(view_1, None, uid.as_i64());
 
   // Get view_1 from folder
-  let view_1 = folder.get_view(&parse_view_id(&view_1_id), uid.as_i64()).unwrap();
+  let view_1 = folder
+    .get_view(&parse_view_id(&view_1_id), uid.as_i64())
+    .unwrap();
   assert!(!view_1.is_favorite);
   folder.add_favorite_view_ids(vec![view_1_id.clone()], uid.as_i64());
 
   // Check if view_1 is favorite
-  let view_1 = folder.get_view(&parse_view_id(&view_1_id), uid.as_i64()).unwrap();
+  let view_1 = folder
+    .get_view(&parse_view_id(&view_1_id), uid.as_i64())
+    .unwrap();
   assert!(view_1.is_favorite);
 
   // Insert view_2
   let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
   folder.insert_view(view_2, None, uid.as_i64());
 
-  let views =
-    folder
-      .body
-      .views
-      .get_views_belong_to(&folder.collab.transact(), &parse_view_id(&workspace_id), uid.as_i64());
+  let views = folder.body.views.get_views_belong_to(
+    &folder.collab.transact(),
+    &parse_view_id(&workspace_id),
+    uid.as_i64(),
+  );
   assert_eq!(views.len(), 2);
   assert_eq!(
     views[0].id.to_string(),
@@ -65,11 +71,11 @@ fn add_favorite_view_and_then_remove_test() {
   folder.insert_view(view_1, None, uid.as_i64());
   folder.add_favorite_view_ids(vec![view_1_id.clone()], uid.as_i64());
 
-  let views =
-    folder
-      .body
-      .views
-      .get_views_belong_to(&folder.transact(), &parse_view_id(&workspace_id), uid.as_i64());
+  let views = folder.body.views.get_views_belong_to(
+    &folder.transact(),
+    &parse_view_id(&workspace_id),
+    uid.as_i64(),
+  );
   assert_eq!(views.len(), 1);
   assert_eq!(
     views[0].id.to_string(),
@@ -78,11 +84,11 @@ fn add_favorite_view_and_then_remove_test() {
   assert!(views[0].is_favorite);
 
   folder.delete_favorite_view_ids(vec![view_1_id], uid.as_i64());
-  let views =
-    folder
-      .body
-      .views
-      .get_views_belong_to(&folder.transact(), &parse_view_id(&workspace_id), uid.as_i64());
+  let views = folder.body.views.get_views_belong_to(
+    &folder.transact(),
+    &parse_view_id(&workspace_id),
+    uid.as_i64(),
+  );
   assert!(!views[0].is_favorite);
 }
 

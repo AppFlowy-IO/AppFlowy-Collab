@@ -64,10 +64,11 @@ fn view_json_serde() {
       .views
       .insert(&mut txn, view_2, None, uid.as_i64());
 
-    let views = folder
-      .body
-      .views
-      .get_views_belong_to(&txn, &parse_view_id(&workspace_id), uid.as_i64());
+    let views =
+      folder
+        .body
+        .views
+        .get_views_belong_to(&txn, &parse_view_id(&workspace_id), uid.as_i64());
     assert_eq!(views.len(), 2);
   }
 
@@ -332,7 +333,10 @@ fn get_all_child_view_ids<T: ReadTxn>(
   view_id: &str,
   uid: i64,
 ) -> Vec<ViewId> {
-  let child_views = folder.body.views.get_views_belong_to(txn, &parse_view_id(view_id), uid);
+  let child_views = folder
+    .body
+    .views
+    .get_views_belong_to(txn, &parse_view_id(view_id), uid);
   let child_view_ids = child_views
     .iter()
     .map(|view| view.id)

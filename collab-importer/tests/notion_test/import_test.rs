@@ -16,12 +16,12 @@ use collab_document::importer::define::URL_FIELD;
 use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::ParentChildViews;
 use collab_folder::{Folder, View, ViewId, default_folder_data};
-use uuid::Uuid;
 use collab_importer::error::ImporterError;
 use collab_importer::imported_collab::{ImportType, ImportedCollabInfo, import_notion_zip_file};
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::{CSVContentCache, NotionImporter, is_csv_contained_cached};
 use collab_importer::util::{CSVRow, parse_csv};
+use uuid::Uuid;
 
 use collab::core::collab::default_client_id;
 use collab_document::document::Document;
