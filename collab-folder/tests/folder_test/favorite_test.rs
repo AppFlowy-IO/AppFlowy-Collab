@@ -160,7 +160,7 @@ fn favorite_data_serde_test() {
   assert_json_include!(
     actual: value,
     expected: json!({
-      "current_view": "00000000-0000-0000-0000-000000000000",
+      "current_view": null,
       "favorites": {
         "1": [
           {

@@ -19,7 +19,6 @@ fn folder_json_serde() {
     actual: folder_test.to_json_value(),
     expected: json!({
           "meta": {
-            "current_view": "00000000-0000-0000-0000-000000000000",
             "current_workspace": &fake_w_1_uuid
           },
           "relation": {
@@ -80,7 +79,6 @@ fn view_json_serde() {
     actual: folder.to_json_value(),
     expected: json!({
           "meta": {
-            "current_view": "00000000-0000-0000-0000-000000000000",
             "current_workspace": &fake_workspace_uuid
           },
           "relation": {
@@ -171,7 +169,6 @@ fn child_view_json_serde() {
   let v2_2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2.2".as_bytes()).to_string();
   assert_json_diff::assert_json_include!(actual: folder.to_json_value(), expected: json!({
     "meta": {
-      "current_view": "00000000-0000-0000-0000-000000000000",
       "current_workspace": &fake_workspace_uuid
     },
     "relation": {

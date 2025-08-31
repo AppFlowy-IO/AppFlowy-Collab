@@ -519,13 +519,15 @@ impl FolderBody {
 
       meta.insert(&mut txn, FOLDER_WORKSPACE_ID, workspace_id.to_string());
       // For compatibility with older collab library which doesn't use CURRENT_VIEW_FOR_USER.
-      meta.insert(&mut txn, CURRENT_VIEW, folder_data.current_view.to_string());
-      let current_view_for_user = meta.get_or_init_map(&mut txn, CURRENT_VIEW_FOR_USER);
-      current_view_for_user.insert(
-        &mut txn,
-        folder_data.uid.to_string(),
-        folder_data.current_view.to_string(),
-      );
+      if let Some(current_view) = folder_data.current_view {
+        meta.insert(&mut txn, CURRENT_VIEW, current_view.to_string());
+        let current_view_for_user = meta.get_or_init_map(&mut txn, CURRENT_VIEW_FOR_USER);
+        current_view_for_user.insert(
+          &mut txn,
+          folder_data.uid.to_string(),
+          current_view.to_string(),
+        );
+      }
 
       if let Some(fav_section) = section.section_op(&txn, Section::Favorite, folder_data.uid) {
         for (uid, sections) in folder_data.favorites {
@@ -646,7 +648,7 @@ impl FolderBody {
         .get_view_with_txn(txn, workspace_id, uid)?
         .as_ref(),
     );
-    let current_view = self.get_current_view(txn, uid).unwrap_or_default();
+    let current_view = self.get_current_view(txn, uid);
     let mut views = vec![];
     let orphan_views = self
       .views
@@ -860,7 +862,7 @@ pub fn default_folder_data(uid: i64, workspace_id: &str) -> FolderData {
   FolderData {
     uid,
     workspace,
-    current_view: Uuid::nil(),
+    current_view: None,
     views: vec![],
     favorites: HashMap::new(),
     recent: HashMap::new(),
@@ -936,7 +938,7 @@ mod tests {
     let folder_data = FolderData {
       uid,
       workspace,
-      current_view: view_2.id,
+      current_view: Some(view_2.id),
       views: vec![space_view, view_1, view_2],
       favorites: Default::default(),
       recent: Default::default(),

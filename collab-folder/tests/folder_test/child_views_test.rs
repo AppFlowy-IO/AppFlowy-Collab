@@ -78,7 +78,7 @@ fn create_child_views_test() {
   assert_json_include!(
     actual: value,
     expected: json!({
-      "current_view": "00000000-0000-0000-0000-000000000000",
+      "current_view": null,
       "favorites": {},
       "views": [
         {
@@ -391,7 +391,7 @@ fn create_orphan_child_views_test() {
   assert_json_include!(
     actual: json!(folder_data),
     expected: json!({
-          "current_view": "00000000-0000-0000-0000-000000000000",
+          "current_view": null,
           "favorites": {},
           "recent": {},
           "trash": {},
