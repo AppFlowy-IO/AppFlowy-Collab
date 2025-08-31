@@ -483,21 +483,10 @@ fn move_view_across_parent_test() {
   );
   assert!(res.is_none());
   // Move view_1_child from view_1 to view_2.
-  folder.move_nested_view(
-    &v1_child_uuid,
-    &v2_uuid,
-    None,
-    uid.as_i64(),
-  );
-  let view_1 = folder
-    .get_view(&v1_uuid, uid.as_i64())
-    .unwrap();
-  let view_2 = folder
-    .get_view(&v2_uuid, uid.as_i64())
-    .unwrap();
-  let view_1_child = folder
-    .get_view(&v1_child_uuid, uid.as_i64())
-    .unwrap();
+  folder.move_nested_view(&v1_child_uuid, &v2_uuid, None, uid.as_i64());
+  let view_1 = folder.get_view(&v1_uuid, uid.as_i64()).unwrap();
+  let view_2 = folder.get_view(&v2_uuid, uid.as_i64()).unwrap();
+  let view_1_child = folder.get_view(&v1_child_uuid, uid.as_i64()).unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 1);
   assert_eq!(
@@ -514,15 +503,9 @@ fn move_view_across_parent_test() {
     None,
     uid.as_i64(),
   );
-  let view_1 = folder
-    .get_view(&v1_uuid, uid.as_i64())
-    .unwrap();
-  let view_2 = folder
-    .get_view(&v2_uuid, uid.as_i64())
-    .unwrap();
-  let view_1_child = folder
-    .get_view(&v1_child_uuid, uid.as_i64())
-    .unwrap();
+  let view_1 = folder.get_view(&v1_uuid, uid.as_i64()).unwrap();
+  let view_2 = folder.get_view(&v2_uuid, uid.as_i64()).unwrap();
+  let view_1_child = folder.get_view(&v1_child_uuid, uid.as_i64()).unwrap();
   let workspace = folder
     .get_workspace_info(&workspace_uuid, uid.as_i64())
     .unwrap();
@@ -545,15 +528,9 @@ fn move_view_across_parent_test() {
     Some(crate::util::test_uuid(view_1_id)),
     uid.as_i64(),
   );
-  let view_1 = folder
-    .get_view(&v1_uuid, uid.as_i64())
-    .unwrap();
-  let view_2 = folder
-    .get_view(&v2_uuid, uid.as_i64())
-    .unwrap();
-  let view_1_child = folder
-    .get_view(&v1_child_uuid, uid.as_i64())
-    .unwrap();
+  let view_1 = folder.get_view(&v1_uuid, uid.as_i64()).unwrap();
+  let view_2 = folder.get_view(&v2_uuid, uid.as_i64()).unwrap();
+  let view_1_child = folder.get_view(&v1_child_uuid, uid.as_i64()).unwrap();
   let workspace = folder
     .get_workspace_info(&workspace_uuid, uid.as_i64())
     .unwrap();
@@ -574,21 +551,10 @@ fn move_view_across_parent_test() {
   );
 
   // move view_1_child from current workspace to view_1
-  folder.move_nested_view(
-    &v1_child_uuid,
-    &v1_uuid,
-    None,
-    uid.as_i64(),
-  );
-  let view_1 = folder
-    .get_view(&v1_uuid, uid.as_i64())
-    .unwrap();
-  let view_2 = folder
-    .get_view(&v2_uuid, uid.as_i64())
-    .unwrap();
-  let view_1_child = folder
-    .get_view(&v1_child_uuid, uid.as_i64())
-    .unwrap();
+  folder.move_nested_view(&v1_child_uuid, &v1_uuid, None, uid.as_i64());
+  let view_1 = folder.get_view(&v1_uuid, uid.as_i64()).unwrap();
+  let view_2 = folder.get_view(&v2_uuid, uid.as_i64()).unwrap();
+  let view_1_child = folder.get_view(&v1_child_uuid, uid.as_i64()).unwrap();
   let workspace = folder
     .get_workspace_info(&workspace_uuid, uid.as_i64())
     .unwrap();

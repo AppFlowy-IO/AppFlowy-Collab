@@ -25,10 +25,7 @@ async fn test_parse_real_database_json() {
 
   let original_database_id = "0730a32c-5a52-43fb-8e68-ee73287ebf69";
   if let Some(new_database_id) = id_mapper.get_new_id(original_database_id) {
-    assert_eq!(
-      database.get_database_id().unwrap(),
-      new_database_id
-    );
+    assert_eq!(database.get_database_id().unwrap(), new_database_id);
   }
 
   let views = database.get_all_views();
@@ -94,7 +91,11 @@ async fn test_parse_real_database_json() {
     }
 
     if let Some(new_row_id) = id_mapper.get_new_id(&row_id_str) {
-      assert_ne!(row_id_str, new_row_id.to_string(), "row id should be mapped correctly");
+      assert_ne!(
+        row_id_str,
+        new_row_id.to_string(),
+        "row id should be mapped correctly"
+      );
     }
 
     assert_eq!(

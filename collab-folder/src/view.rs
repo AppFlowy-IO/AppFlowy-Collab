@@ -99,7 +99,12 @@ impl ViewsMap {
   /// Why don't we use the move method to replace dissociate_parent_child and associate_parent_child?
   /// Because the views and workspaces are stored in two separate maps, we can't directly move a view from one map to another.
   /// So, we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
-  pub fn dissociate_parent_child(&self, txn: &mut TransactionMut, parent_id: &Uuid, view_id: &Uuid) {
+  pub fn dissociate_parent_child(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &Uuid,
+    view_id: &Uuid,
+  ) {
     self.dissociate_parent_child_with_txn(txn, parent_id, view_id);
   }
 

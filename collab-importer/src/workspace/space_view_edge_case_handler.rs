@@ -36,9 +36,7 @@ impl SpaceViewEdgeCaseHandler {
     let space_view = self.create_default_space_view(&space_view_uuid)?;
     relation_map.views.insert(space_view_uuid, space_view);
 
-    id_mapper
-      .id_map
-      .insert(space_view_uuid, space_view_uuid);
+    id_mapper.id_map.insert(space_view_uuid, space_view_uuid);
     self.reparent_workspace_views(relation_map, &space_view_uuid)?;
     self.generate_space_document(&space_view_uuid, export_path)?;
 

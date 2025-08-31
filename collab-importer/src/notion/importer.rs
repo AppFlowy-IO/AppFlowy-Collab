@@ -70,9 +70,14 @@ impl NotionImporter {
       return Err(ImporterError::CannotImport);
     }
 
-    let workspace_uuid = uuid::Uuid::parse_str(&self.workspace_id)
-      .map_err(|e| ImporterError::Internal(anyhow!("Invalid workspace ID format '{}': {}", self.workspace_id, e)))?;
-    
+    let workspace_uuid = uuid::Uuid::parse_str(&self.workspace_id).map_err(|e| {
+      ImporterError::Internal(anyhow!(
+        "Invalid workspace ID format '{}': {}",
+        self.workspace_id,
+        e
+      ))
+    })?;
+
     ImportedInfo::new(
       self.uid,
       workspace_uuid,

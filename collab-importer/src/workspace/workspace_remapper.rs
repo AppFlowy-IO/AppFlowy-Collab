@@ -59,18 +59,18 @@ impl WorkspaceRemapper {
       .await
       .map_err(|e| anyhow!("failed to parse relation map: {}", e))?;
 
-    let mut id_mapper = IdMapper::new(&relation_map)
-      .map_err(|e| anyhow!("failed to create ID mapper: {}", e))?;
+    let mut id_mapper =
+      IdMapper::new(&relation_map).map_err(|e| anyhow!("failed to create ID mapper: {}", e))?;
     if let Some(ref custom_workspace_id) = custom_workspace_id {
       let custom_uuid = Uuid::parse_str(custom_workspace_id)
         .map_err(|_| anyhow!("Invalid custom workspace ID format"))?;
-      id_mapper.id_map.insert(relation_map.workspace_id, custom_uuid);
+      id_mapper
+        .id_map
+        .insert(relation_map.workspace_id, custom_uuid);
     }
 
-    let handler = SpaceViewEdgeCaseHandler::new(
-      Arc::new(id_mapper.clone()),
-      relation_map.workspace_id,
-    );
+    let handler =
+      SpaceViewEdgeCaseHandler::new(Arc::new(id_mapper.clone()), relation_map.workspace_id);
 
     handler.handle_missing_space_view(&mut relation_map, workspace_path, &mut id_mapper)?;
 
@@ -177,7 +177,8 @@ impl WorkspaceRemapper {
     let workspace_database_json = serde_json::json!({
       "databases": self.relation_map.workspace_database_meta
     });
-    let remapper = WorkspaceDatabaseRemapper::new(workspace_database_json, self.get_id_mapping_as_strings());
+    let remapper =
+      WorkspaceDatabaseRemapper::new(workspace_database_json, self.get_id_mapping_as_strings());
     let workspace_database = remapper.build_workspace_database(database_storage_id)?;
     Ok(Some(workspace_database))
   }
@@ -208,11 +209,17 @@ impl WorkspaceRemapper {
               let json_content = fs::read_to_string(&path)?;
               let document_json: serde_json::Value = serde_json::from_str(&json_content)?;
 
-              let row_uuid = Uuid::parse_str(row_document_id)
-                .map_err(|e| anyhow!("Invalid row document ID format '{}': {}", row_document_id, e))?;
+              let row_uuid = Uuid::parse_str(row_document_id).map_err(|e| {
+                anyhow!(
+                  "Invalid row document ID format '{}': {}",
+                  row_document_id,
+                  e
+                )
+              })?;
               let mapped_row_uuid = self.id_mapping.get(&row_uuid).copied().unwrap_or(row_uuid);
 
-              let remapper = DocumentCollabRemapper::new(document_json, self.get_id_mapping_as_strings());
+              let remapper =
+                DocumentCollabRemapper::new(document_json, self.get_id_mapping_as_strings());
               let document = remapper.build_document(&mapped_row_uuid)?;
               row_documents.push(document);
             }
@@ -250,7 +257,8 @@ impl WorkspaceRemapper {
   }
 
   pub fn get_id_mapping_as_strings(&self) -> HashMap<String, String> {
-    self.id_mapping
+    self
+      .id_mapping
       .iter()
       .map(|(k, v)| (k.to_string(), v.to_string()))
       .collect()

@@ -4,7 +4,6 @@ use collab_importer::workspace::folder_collab_remapper::FolderCollabRemapper;
 use collab_importer::workspace::id_mapper::IdMapper;
 use collab_importer::workspace::relation_map_parser::RelationMapParser;
 
-
 #[allow(clippy::too_many_arguments)]
 fn verify_view(
   folder: &Folder,

@@ -230,14 +230,8 @@ fn move_child_views_test() {
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_3".as_bytes()).to_string()
   );
 
-  folder
-    .body
-    .views
-    .move_child(&mut txn, &v_1.id, 2, 0);
-  folder
-    .body
-    .views
-    .move_child(&mut txn, &v_1.id, 0, 1);
+  folder.body.views.move_child(&mut txn, &v_1.id, 2, 0);
+  folder.body.views.move_child(&mut txn, &v_1.id, 0, 1);
 
   let v_1_child_views = folder
     .body
@@ -283,7 +277,10 @@ fn delete_view_test() {
     .views
     .insert(&mut txn, view_3, None, uid.as_i64());
 
-  folder.body.views.remove_child(&mut txn, &uuid::Uuid::parse_str(&workspace_id).unwrap(), 1);
+  folder
+    .body
+    .views
+    .remove_child(&mut txn, &uuid::Uuid::parse_str(&workspace_id).unwrap(), 1);
   let w_1_child_views =
     folder
       .body

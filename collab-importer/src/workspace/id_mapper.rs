@@ -78,7 +78,8 @@ impl IdMapper {
   }
 
   pub fn get_id_map_as_strings(&self) -> HashMap<String, String> {
-    self.id_map
+    self
+      .id_map
       .iter()
       .map(|(k, v)| (k.to_string(), v.to_string()))
       .collect()
@@ -98,8 +99,8 @@ impl IdMapper {
   }
 
   fn map_string_id(map: &mut HashMap<Uuid, Uuid>, old_id: &str) -> Result<Uuid> {
-    let old_uuid = Uuid::parse_str(old_id)
-      .map_err(|e| anyhow!("Invalid UUID format '{}': {}", old_id, e))?;
+    let old_uuid =
+      Uuid::parse_str(old_id).map_err(|e| anyhow!("Invalid UUID format '{}': {}", old_id, e))?;
     let new_id = Uuid::new_v4();
     Ok(*map.entry(old_uuid).or_insert(new_id))
   }

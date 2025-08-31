@@ -40,7 +40,10 @@ pub struct WorkspaceRelationMap {
   pub workspace_id: Uuid,
   pub export_timestamp: i64,
   pub views: IndexMap<Uuid, ViewMetadata>,
-  #[serde(serialize_with = "serialize_uuid_map", deserialize_with = "deserialize_uuid_map")]
+  #[serde(
+    serialize_with = "serialize_uuid_map",
+    deserialize_with = "deserialize_uuid_map"
+  )]
   pub collab_objects: HashMap<Uuid, CollabMetadata>,
   pub dependencies: Vec<ViewDependency>,
   pub workspace_database_meta: Option<Vec<WorkspaceDatabaseMeta>>,
@@ -97,16 +100,12 @@ fn serialize_uuid_map<S>(
 where
   S: serde::Serializer,
 {
-  let string_map: HashMap<String, &CollabMetadata> = map
-    .iter()
-    .map(|(k, v)| (k.to_string(), v))
-    .collect();
+  let string_map: HashMap<String, &CollabMetadata> =
+    map.iter().map(|(k, v)| (k.to_string(), v)).collect();
   string_map.serialize(serializer)
 }
 
-fn deserialize_uuid_map<'de, D>(
-  deserializer: D,
-) -> Result<HashMap<Uuid, CollabMetadata>, D::Error>
+fn deserialize_uuid_map<'de, D>(deserializer: D) -> Result<HashMap<Uuid, CollabMetadata>, D::Error>
 where
   D: serde::Deserializer<'de>,
 {

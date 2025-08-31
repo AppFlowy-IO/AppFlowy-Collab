@@ -721,9 +721,7 @@ impl FolderBody {
     uid: i64,
   ) -> Option<Arc<View>> {
     let view = self.views.get_view_with_txn(txn, view_id, uid)?;
-    self
-      .views
-      .move_child(txn, &view.parent_view_id, from, to);
+    self.views.move_child(txn, &view.parent_view_id, from, to);
     Some(view)
   }
 
@@ -756,12 +754,9 @@ impl FolderBody {
       .dissociate_parent_child_with_txn(txn, &parent_id, view_id);
     // associate the child with its new parent and place it after the prev_view_id. If the prev_view_id is None,
     // place it as the first child.
-    self.views.associate_parent_child_with_txn(
-      txn,
-      new_parent_id,
-      view_id,
-      prev_view_id,
-    );
+    self
+      .views
+      .associate_parent_child_with_txn(txn, new_parent_id, view_id, prev_view_id);
     // Update the view's parent ID.
     self
       .views

@@ -54,7 +54,6 @@ use std::sync::Arc;
 //   println!("{}", nested_view);
 // }
 
-
 #[tokio::test]
 async fn import_zip_file_contains_zip_as_attachments() {
   let (_cleaner, file_path) = sync_unzip_asset("project&task_contain_zip_attachment")
@@ -750,7 +749,11 @@ async fn import_level_test() {
 
   let uid = 1;
   let collab = Collab::new(uid, info.workspace_id, "1", default_client_id());
-  let mut folder = Folder::create(collab, None, default_folder_data(uid, &info.workspace_id.to_string()));
+  let mut folder = Folder::create(
+    collab,
+    None,
+    default_folder_data(uid, &info.workspace_id.to_string()),
+  );
 
   let view_hierarchy = info.build_nested_views().await;
   assert_eq!(view_hierarchy.flatten_views().len(), 14);

@@ -59,8 +59,13 @@ impl WorkspaceDatabaseRemapper {
 
   pub fn build_workspace_database(&self, database_storage_id: &str) -> Result<WorkspaceDatabase> {
     let workspace_database_data = self.build_workspace_database_data()?;
-    let storage_uuid = Uuid::parse_str(database_storage_id)
-      .map_err(|e| anyhow!("Invalid database storage ID format '{}': {}", database_storage_id, e))?;
+    let storage_uuid = Uuid::parse_str(database_storage_id).map_err(|e| {
+      anyhow!(
+        "Invalid database storage ID format '{}': {}",
+        database_storage_id,
+        e
+      )
+    })?;
     let options = CollabOptions::new(storage_uuid, default_client_id());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)?;
     let mut workspace_database = WorkspaceDatabase::create(collab);
