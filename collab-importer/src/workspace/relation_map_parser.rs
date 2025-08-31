@@ -19,7 +19,7 @@ impl RelationMapParser {
   }
 
   fn validate_relation_map(&self, relation_map: &WorkspaceRelationMap) -> Result<()> {
-    if relation_map.workspace_id.to_string().is_empty() {
+    if relation_map.workspace_id.is_nil() {
       return Err(anyhow!("workspace id must be non-empty"));
     }
 
@@ -54,7 +54,7 @@ impl RelationMapParser {
         }
       }
 
-      if let Some(_collab_metadata) = relation_map.collab_objects.get(&view_id.to_string()) {
+      if let Some(_collab_metadata) = relation_map.collab_objects.get(view_id) {
         // if collab_metadata.object_id != view_metadata.collab_object_id {
         //   return Err(anyhow!(format!(
         //     "view {} collab_object_id mismatch: view references {}, collab_objects has {}",

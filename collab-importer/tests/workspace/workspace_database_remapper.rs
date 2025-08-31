@@ -12,7 +12,7 @@ async fn test_workspace_database_remapper() {
     .parse_relation_map(&relation_map_path.to_string_lossy())
     .await
     .unwrap();
-  let id_mapper = IdMapper::new(&relation_map);
+  let id_mapper = IdMapper::new(&relation_map).unwrap();
 
   let view_id_mapping = id_mapper.get_id_map_as_strings();
 
@@ -53,7 +53,7 @@ async fn test_workspace_database_remapper() {
   }
 
   let workspace_database = remapper
-    .build_workspace_database("test-workspace-database-id")
+    .build_workspace_database("12345678-1234-1234-1234-123456789012")
     .unwrap();
   let all_database_meta = workspace_database.get_all_database_meta();
   assert_eq!(all_database_meta.len(), 1);

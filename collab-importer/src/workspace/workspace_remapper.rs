@@ -59,7 +59,8 @@ impl WorkspaceRemapper {
       .await
       .map_err(|e| anyhow!("failed to parse relation map: {}", e))?;
 
-    let mut id_mapper = IdMapper::new(&relation_map);
+    let mut id_mapper = IdMapper::new(&relation_map)
+      .map_err(|e| anyhow!("failed to create ID mapper: {}", e))?;
     if let Some(ref custom_workspace_id) = custom_workspace_id {
       let custom_uuid = Uuid::parse_str(custom_workspace_id)
         .map_err(|_| anyhow!("Invalid custom workspace ID format"))?;
@@ -68,7 +69,7 @@ impl WorkspaceRemapper {
 
     let handler = SpaceViewEdgeCaseHandler::new(
       Arc::new(id_mapper.clone()),
-      relation_map.workspace_id.to_string(),
+      relation_map.workspace_id,
     );
 
     handler.handle_missing_space_view(&mut relation_map, workspace_path, &mut id_mapper)?;
@@ -134,7 +135,7 @@ impl WorkspaceRemapper {
       .collect::<Vec<_>>();
 
     for (view_id, collab_metadata) in &self.relation_map.collab_objects {
-      if row_document_dependencies.contains(view_id) {
+      if row_document_dependencies.contains(&view_id.to_string()) {
         continue;
       }
 
@@ -152,10 +153,9 @@ impl WorkspaceRemapper {
         let json_content = fs::read_to_string(&json_path)?;
         let document_json: serde_json::Value = serde_json::from_str(&json_content)?;
 
-        let view_uuid = Uuid::parse_str(view_id)?;
         let mapped_view_id = self
           .id_mapping
-          .get(&view_uuid)
+          .get(view_id)
           .ok_or_else(|| anyhow!("no mapping found for view_id: {}", view_id))?;
 
         let remapper = DocumentCollabRemapper::new(document_json, self.get_id_mapping_as_strings());
@@ -191,7 +191,7 @@ impl WorkspaceRemapper {
           .workspace_path
           .join("collab_jsons")
           .join("databases")
-          .join(database_id)
+          .join(database_id.to_string())
           .join("row_documents");
 
         if row_documents_path.exists() && row_documents_path.is_dir() {
@@ -208,12 +208,9 @@ impl WorkspaceRemapper {
               let json_content = fs::read_to_string(&path)?;
               let document_json: serde_json::Value = serde_json::from_str(&json_content)?;
 
-              let row_uuid = Uuid::parse_str(row_document_id).ok();
-              let mapped_row_uuid = if let Some(uuid) = row_uuid {
-                self.id_mapping.get(&uuid).copied().unwrap_or(uuid)
-              } else {
-                Uuid::parse_str(row_document_id).unwrap_or_else(|_| Uuid::new_v4())
-              };
+              let row_uuid = Uuid::parse_str(row_document_id)
+                .map_err(|e| anyhow!("Invalid row document ID format '{}': {}", row_document_id, e))?;
+              let mapped_row_uuid = self.id_mapping.get(&row_uuid).copied().unwrap_or(row_uuid);
 
               let remapper = DocumentCollabRemapper::new(document_json, self.get_id_mapping_as_strings());
               let document = remapper.build_document(&mapped_row_uuid)?;

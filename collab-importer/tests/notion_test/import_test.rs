@@ -210,7 +210,7 @@ async fn import_two_spaces_test() {
   assert!(first_space.is_dir);
   assert_eq!(first_space.children.len(), 1);
   let blog_post_page = &first_space.children[0];
-  assert_blog_post(&info.host, &info.workspace_id, blog_post_page).await;
+  assert_blog_post(&info.host, &info.workspace_id.to_string(), blog_post_page).await;
 
   let second_space = info.views()[1].clone();
   assert_eq!(second_space.notion_name, "space two");
@@ -268,7 +268,7 @@ async fn import_blog_post_document_test() {
   assert_eq!(info.num_of_markdown(), 1);
 
   let root_view = &info.views()[0];
-  assert_blog_post(host, &info.workspace_id, root_view).await;
+  assert_blog_post(host, &info.workspace_id.to_string(), root_view).await;
 }
 
 #[tokio::test]
@@ -282,7 +282,7 @@ async fn import_blog_post_no_subpages_test() {
   assert_eq!(info.name, "blog_post_no_subpages");
 
   let root_view = &info.views()[0];
-  assert_blog_post(host, &info.workspace_id, root_view).await;
+  assert_blog_post(host, &info.workspace_id.to_string(), root_view).await;
 }
 
 #[tokio::test]
@@ -325,7 +325,7 @@ async fn import_blog_post_with_duplicate_document_test() {
   assert_eq!(views[0].notion_name, "Blog Post");
   assert_eq!(views[1].notion_name, "Blog Post");
 
-  assert_blog_post(host, &info.workspace_id, &views[0]).await;
+  assert_blog_post(host, &info.workspace_id.to_string(), &views[0]).await;
 }
 
 #[tokio::test]
@@ -754,16 +754,14 @@ async fn import_level_test() {
   assert_eq!(info.name, "import_test");
 
   let uid = 1;
-  let workspace_uuid =
-    uuid::Uuid::parse_str(&info.workspace_id).unwrap_or_else(|_| uuid::Uuid::new_v4());
-  let collab = Collab::new(uid, workspace_uuid, "1", default_client_id());
-  let mut folder = Folder::create(collab, None, default_folder_data(uid, &info.workspace_id));
+  let collab = Collab::new(uid, info.workspace_id, "1", default_client_id());
+  let mut folder = Folder::create(collab, None, default_folder_data(uid, &info.workspace_id.to_string()));
 
   let view_hierarchy = info.build_nested_views().await;
   assert_eq!(view_hierarchy.flatten_views().len(), 14);
   folder.insert_nested_views(view_hierarchy.into_inner(), uid);
 
-  let first_level_views = folder.get_views_belong_to(&parse_view_id(&info.workspace_id), uid);
+  let first_level_views = folder.get_views_belong_to(&parse_view_id(&info.workspace_id.to_string()), uid);
   assert_eq!(first_level_views.len(), 1);
   assert_eq!(first_level_views[0].children.len(), 3);
   println!("first_level_views: {:?}", first_level_views);

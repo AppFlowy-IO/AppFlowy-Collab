@@ -46,28 +46,22 @@ impl FolderCollabRemapper {
         .as_ref()
         .is_none_or(|pid| pid == &relation_map.workspace_id)
       {
-        top_level_view_ids.push(ViewIdentifier::new(
-          collab_entity::uuid_validation::view_id_from_any_string(&new_view_id.to_string()),
-        ));
+        top_level_view_ids.push(ViewIdentifier::new(new_view_id));
       }
 
       let children_ids: Vec<ViewIdentifier> = view_metadata
         .children
         .iter()
         .filter_map(|child_id| {
-          id_mapper.get_new_id_from_uuid(child_id).map(|new_id| {
-            ViewIdentifier::new(collab_entity::uuid_validation::view_id_from_any_string(
-              &new_id.to_string(),
-            ))
-          })
+          id_mapper
+            .get_new_id_from_uuid(child_id)
+            .map(|new_id| ViewIdentifier::new(new_id))
         })
         .collect();
 
-      let view_uuid = collab_entity::uuid_validation::view_id_from_any_string(&new_view_id.to_string());
-      let parent_uuid = collab_entity::uuid_validation::view_id_from_any_string(&new_parent_id.to_string());
       let mut view = View::new(
-        view_uuid,
-        parent_uuid,
+        new_view_id,
+        new_parent_id,
         view_metadata.name.clone(),
         view_metadata.layout.clone(),
         Some(uid),

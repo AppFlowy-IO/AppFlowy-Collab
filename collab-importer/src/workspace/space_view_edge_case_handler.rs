@@ -11,11 +11,11 @@ use uuid::Uuid;
 
 pub struct SpaceViewEdgeCaseHandler {
   id_mapper: Arc<IdMapper>,
-  original_workspace_id: String,
+  original_workspace_id: Uuid,
 }
 
 impl SpaceViewEdgeCaseHandler {
-  pub fn new(id_mapper: Arc<IdMapper>, original_workspace_id: String) -> Self {
+  pub fn new(id_mapper: Arc<IdMapper>, original_workspace_id: Uuid) -> Self {
     Self {
       id_mapper,
       original_workspace_id,
@@ -32,18 +32,17 @@ impl SpaceViewEdgeCaseHandler {
       return Ok(None);
     }
 
-    let space_view_id = self.id_mapper.generate_new_id();
-    let space_view_uuid = Uuid::parse_str(&space_view_id)?;
-    let space_view = self.create_default_space_view(&space_view_id)?;
+    let space_view_uuid = self.id_mapper.generate_new_uuid();
+    let space_view = self.create_default_space_view(&space_view_uuid)?;
     relation_map.views.insert(space_view_uuid, space_view);
 
     id_mapper
       .id_map
       .insert(space_view_uuid, space_view_uuid);
-    self.reparent_workspace_views(relation_map, &space_view_id)?;
-    self.generate_space_document(&space_view_id, export_path)?;
+    self.reparent_workspace_views(relation_map, &space_view_uuid.to_string())?;
+    self.generate_space_document(&space_view_uuid.to_string(), export_path)?;
 
-    Ok(Some(space_view_id))
+    Ok(Some(space_view_uuid.to_string()))
   }
 
   fn has_space_views(&self, relation_map: &WorkspaceRelationMap) -> bool {
@@ -61,7 +60,7 @@ impl SpaceViewEdgeCaseHandler {
     false
   }
 
-  fn create_default_space_view(&self, space_view_id: &str) -> Result<ViewMetadata> {
+  fn create_default_space_view(&self, space_view_uuid: &Uuid) -> Result<ViewMetadata> {
     let current_time = timestamp();
 
     let space_info = serde_json::json!({
@@ -73,12 +72,12 @@ impl SpaceViewEdgeCaseHandler {
     });
 
     let space_view = ViewMetadata {
-      view_id: Uuid::parse_str(space_view_id)?,
+      view_id: *space_view_uuid,
       name: "General".to_string(),
       layout: ViewLayout::Document,
-      parent_id: Some(Uuid::parse_str(&self.original_workspace_id)?),
+      parent_id: Some(self.original_workspace_id),
       children: Vec::new(),
-      collab_object_id: Uuid::parse_str(space_view_id)?,
+      collab_object_id: *space_view_uuid,
       created_at: current_time,
       updated_at: current_time,
       extra: Some(space_info.to_string()),
@@ -96,7 +95,7 @@ impl SpaceViewEdgeCaseHandler {
     let mut workspace_children = Vec::new();
 
     let space_view_uuid = Uuid::parse_str(space_view_id)?;
-    let original_workspace_uuid = Uuid::parse_str(&self.original_workspace_id)?;
+    let original_workspace_uuid = self.original_workspace_id;
 
     for (view_id, view_metadata) in relation_map.views.iter_mut() {
       if view_id != &space_view_uuid {

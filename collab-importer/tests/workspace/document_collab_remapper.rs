@@ -17,7 +17,7 @@ async fn test_parse_real_document_json() {
     .parse_relation_map(&relation_map_path.to_string_lossy())
     .await
     .unwrap();
-  let id_mapper = IdMapper::new(&relation_map);
+  let id_mapper = IdMapper::new(&relation_map).unwrap();
 
   let view_id_mapping = id_mapper.get_id_map_as_strings();
 

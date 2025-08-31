@@ -13,7 +13,7 @@ async fn test_id_mapper() {
     .parse_relation_map(&path.to_string_lossy())
     .await
     .unwrap();
-  let id_mapper = IdMapper::new(&relation_map);
+  let id_mapper = IdMapper::new(&relation_map).unwrap();
 
   let mut old_uuid_ids = HashSet::new();
   let mut old_string_ids = HashSet::new();
@@ -31,7 +31,7 @@ async fn test_id_mapper() {
     old_uuid_ids.insert(view.collab_object_id);
   }
   for (obj_id, obj) in &relation_map.collab_objects {
-    old_string_ids.insert(obj_id.clone());
+    old_uuid_ids.insert(*obj_id);
     old_uuid_ids.insert(obj.object_id);
   }
   for dep in &relation_map.dependencies {

@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 
 use crate::space_view::create_space_view;
-use anyhow::Error;
+use anyhow::{Error, anyhow};
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 use csv::Reader;
@@ -70,9 +70,12 @@ impl NotionImporter {
       return Err(ImporterError::CannotImport);
     }
 
+    let workspace_uuid = uuid::Uuid::parse_str(&self.workspace_id)
+      .map_err(|e| ImporterError::Internal(anyhow!("Invalid workspace ID format '{}': {}", self.workspace_id, e)))?;
+    
     ImportedInfo::new(
       self.uid,
-      self.workspace_id.clone(),
+      workspace_uuid,
       self.host.clone(),
       self.workspace_name.clone(),
       views,
@@ -139,7 +142,7 @@ impl NotionImporter {
 #[derive(Debug)]
 pub struct ImportedInfo {
   pub uid: i64,
-  pub workspace_id: String,
+  pub workspace_id: uuid::Uuid,
   pub host: String,
   pub name: String,
   views: Vec<NotionPage>,
@@ -151,17 +154,17 @@ pub type ImportedCollabInfoStream<'a> = Pin<Box<dyn Stream<Item = ImportedCollab
 impl ImportedInfo {
   pub fn new(
     uid: i64,
-    workspace_id: String,
+    workspace_id: uuid::Uuid,
     host: String,
     name: String,
     views: Vec<NotionPage>,
   ) -> Result<Self, ImporterError> {
-    let view_id = uuid::Uuid::new_v4().to_string();
+    let view_uuid = uuid::Uuid::new_v4();
     let (space_view, space_collab) = create_space_view(
       uid,
       &workspace_id,
       "Imported Space",
-      &view_id,
+      &view_uuid,
       vec![],
       SpaceInfo::default(),
     )?;
@@ -241,7 +244,7 @@ impl ImportedInfo {
     let parent_id = if space_ids.is_empty() {
       self.space_view.view.id.to_string()
     } else {
-      self.workspace_id.clone()
+      self.workspace_id.to_string()
     };
 
     let mut views: Vec<ParentChildViews> = stream::iter(&self.views)
@@ -300,13 +303,17 @@ async fn convert_notion_page_to_parent_child(
     NotionFile::CSVPart { .. } => ViewLayout::Grid,
     NotionFile::Markdown { .. } => ViewLayout::Document,
   };
+  // Note: Using Uuid::nil() as fallback for invalid parent IDs from Notion import data
+  // This is acceptable here since we're processing external import data that may have invalid formats
   let parent_uuid = uuid::Uuid::parse_str(parent_id).unwrap_or_else(|_| uuid::Uuid::nil());
   let mut view_builder = NestedChildViewBuilder::new(uid, parent_uuid)
     .with_name(&notion_page.notion_name)
     .with_layout(view_layout)
-    .with_view_id(
-      uuid::Uuid::parse_str(&notion_page.view_id).unwrap_or_else(|_| uuid::Uuid::nil()),
-    );
+    .with_view_id({
+      // Note: Using Uuid::nil() as fallback for invalid view IDs from Notion import data
+      // This is acceptable here since we're processing external import data that may have invalid formats
+      uuid::Uuid::parse_str(&notion_page.view_id).unwrap_or_else(|_| uuid::Uuid::nil())
+    });
 
   for child_notion_page in &notion_page.children {
     view_builder = view_builder

@@ -43,7 +43,7 @@ async fn test_folder_collab_remapper() {
     .parse_relation_map(&test_file_path.to_string_lossy())
     .await
     .unwrap();
-  let id_mapper = IdMapper::new(&relation_map);
+  let id_mapper = IdMapper::new(&relation_map).unwrap();
 
   let uid = 123;
 
@@ -146,7 +146,7 @@ async fn test_folder_hierarchy_structure() {
     .parse_relation_map(&test_file_path.to_string_lossy())
     .await
     .unwrap();
-  let id_mapper = IdMapper::new(&relation_map);
+  let id_mapper = IdMapper::new(&relation_map).unwrap();
 
   let uid = 456;
 
