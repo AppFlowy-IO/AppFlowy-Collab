@@ -153,7 +153,7 @@ impl SectionOperation {
     section_id_by_uid
   }
 
-  pub fn contains_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> bool {
+  pub fn contains_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &ViewId) -> bool {
     match self
       .container()
       .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
@@ -162,7 +162,7 @@ impl SectionOperation {
       Some(array) => {
         for value in array.iter(txn) {
           if let Ok(section_id) = SectionItem::try_from(&value) {
-            if section_id.id.to_string() == view_id {
+            if &section_id.id == view_id {
               return true;
             }
           }

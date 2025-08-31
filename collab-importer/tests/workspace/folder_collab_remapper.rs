@@ -1,8 +1,14 @@
 use crate::util::sync_unzip_asset;
-use collab_folder::{Folder, ViewLayout};
+use collab_folder::{Folder, ViewLayout, ViewId};
+use uuid::Uuid;
 use collab_importer::workspace::folder_collab_remapper::FolderCollabRemapper;
 use collab_importer::workspace::id_mapper::IdMapper;
 use collab_importer::workspace::relation_map_parser::RelationMapParser;
+
+/// Helper function to parse string to ViewId for tests  
+fn parse_view_id(s: &str) -> ViewId {
+  Uuid::parse_str(s).expect(&format!("Invalid UUID format: {}", s))
+}
 
 #[allow(clippy::too_many_arguments)]
 fn verify_view(
@@ -16,7 +22,7 @@ fn verify_view(
   uid: i64,
 ) {
   let new_id = id_mapper.get_new_id(old_id).unwrap();
-  let view = folder.get_view(new_id, uid).unwrap();
+  let view = folder.get_view(&parse_view_id(new_id), uid).unwrap();
 
   assert_eq!(view.name, expected_name);
   assert_eq!(
@@ -227,6 +233,6 @@ async fn test_folder_hierarchy_structure() {
     uid,
   );
 
-  let child_views = folder.get_views_belong_to(getting_started_new_id, uid);
+  let child_views = folder.get_views_belong_to(&parse_view_id(getting_started_new_id), uid);
   assert_eq!(child_views.len(), 3);
 }

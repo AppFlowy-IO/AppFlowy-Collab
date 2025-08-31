@@ -170,3 +170,8 @@ pub fn test_uuid(s: &str) -> ViewId {
   // For test purposes, use deterministic UUID generation
   uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, s.as_bytes())
 }
+
+/// Helper function to parse string to ViewId, panics if invalid (for tests only)
+pub fn parse_view_id(s: &str) -> ViewId {
+  uuid::Uuid::parse_str(s).expect(&format!("Invalid UUID format: {}", s))
+}

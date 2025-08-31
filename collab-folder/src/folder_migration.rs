@@ -72,7 +72,7 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
     .unwrap_or_default();
 
   let child_views = views
-    .get_children_with_txn(txn, &id.to_string())
+    .get_children_with_txn(txn, &id)
     .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
 

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
-use crate::util::{create_folder, make_test_view};
+use crate::util::{create_folder, make_test_view, parse_view_id};
 
 #[test]
 fn folder_json_serde() {
@@ -67,7 +67,7 @@ fn view_json_serde() {
     let views = folder
       .body
       .views
-      .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
+      .get_views_belong_to(&txn, &parse_view_id(&workspace_id), uid.as_i64());
     assert_eq!(views.len(), 2);
   }
 
@@ -332,7 +332,7 @@ fn get_all_child_view_ids<T: ReadTxn>(
   view_id: &str,
   uid: i64,
 ) -> Vec<ViewId> {
-  let child_views = folder.body.views.get_views_belong_to(txn, view_id, uid);
+  let child_views = folder.body.views.get_views_belong_to(txn, &parse_view_id(view_id), uid);
   let child_view_ids = child_views
     .iter()
     .map(|view| view.id)

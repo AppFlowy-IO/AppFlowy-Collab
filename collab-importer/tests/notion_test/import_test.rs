@@ -15,7 +15,8 @@ use collab_document::blocks::{
 use collab_document::importer::define::URL_FIELD;
 use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::ParentChildViews;
-use collab_folder::{Folder, View, default_folder_data};
+use collab_folder::{Folder, View, ViewId, default_folder_data};
+use uuid::Uuid;
 use collab_importer::error::ImporterError;
 use collab_importer::imported_collab::{ImportType, ImportedCollabInfo, import_notion_zip_file};
 use collab_importer::notion::page::NotionPage;
@@ -53,6 +54,11 @@ use std::sync::Arc;
 //   let nested_view = info.build_nested_views().await;
 //   println!("{}", nested_view);
 // }
+
+/// Helper function to parse string to ViewId for tests
+fn parse_view_id(s: &str) -> ViewId {
+  Uuid::parse_str(s).expect(&format!("Invalid UUID format: {}", s))
+}
 
 #[tokio::test]
 async fn import_zip_file_contains_zip_as_attachments() {
@@ -757,12 +763,12 @@ async fn import_level_test() {
   assert_eq!(view_hierarchy.flatten_views().len(), 14);
   folder.insert_nested_views(view_hierarchy.into_inner(), uid);
 
-  let first_level_views = folder.get_views_belong_to(&info.workspace_id, uid);
+  let first_level_views = folder.get_views_belong_to(&parse_view_id(&info.workspace_id), uid);
   assert_eq!(first_level_views.len(), 1);
   assert_eq!(first_level_views[0].children.len(), 3);
   println!("first_level_views: {:?}", first_level_views);
 
-  let second_level_views = folder.get_views_belong_to(&first_level_views[0].id.to_string(), uid);
+  let second_level_views = folder.get_views_belong_to(&first_level_views[0].id, uid);
   verify_first_level_views(&second_level_views, &mut folder, uid);
 
   // Print out the views for debugging or manual inspection
@@ -823,7 +829,7 @@ async fn import_empty_space() {
 // Helper function to verify second and third level views based on the first level view name
 fn verify_first_level_views(first_level_views: &[Arc<View>], folder: &mut Folder, uid: i64) {
   for view in first_level_views {
-    let second_level_views = folder.get_views_belong_to(&view.id.to_string(), uid);
+    let second_level_views = folder.get_views_belong_to(&view.id, uid);
     match view.name.as_str() {
       "Root2" => {
         assert_eq!(second_level_views.len(), 1);
@@ -846,7 +852,7 @@ fn verify_first_level_views(first_level_views: &[Arc<View>], folder: &mut Folder
 // Helper function to verify third level views based on the second level view name under "Root"
 fn verify_root_second_level_views(second_level_views: &[Arc<View>], folder: &mut Folder, uid: i64) {
   for view in second_level_views {
-    let third_level_views = folder.get_views_belong_to(&view.id.to_string(), uid);
+    let third_level_views = folder.get_views_belong_to(&view.id, uid);
     match view.name.as_str() {
       "root-2" => {
         assert_eq!(third_level_views.len(), 1);

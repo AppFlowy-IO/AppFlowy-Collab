@@ -1,4 +1,4 @@
-use crate::util::{create_folder, make_test_view};
+use crate::util::{create_folder, make_test_view, parse_view_id};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
 use collab_folder::{Folder, UserId};
@@ -28,7 +28,7 @@ fn replace_view_get_view() {
   folder.insert_view(v2, None, uid);
 
   let v2_id = crate::util::test_uuid("v2").to_string();
-  let old = folder.get_view(&v2_id, uid).unwrap();
+  let old = folder.get_view(&parse_view_id(&v2_id), uid).unwrap();
   assert_eq!(
     old.id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
@@ -41,7 +41,7 @@ fn replace_view_get_view() {
   );
 
   // getting old view id should return new one
-  let new = folder.get_view(&v2_id, uid).unwrap();
+  let new = folder.get_view(&parse_view_id(&v2_id), uid).unwrap();
   assert_eq!(
     new.id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string()
@@ -105,7 +105,7 @@ fn replace_view_get_view_concurrent_update() {
     .unwrap();
 
   let v2_id = crate::util::test_uuid("v2").to_string();
-  let v1 = f1.get_view(&v2_id, uid2).unwrap();
+  let v1 = f1.get_view(&parse_view_id(&v2_id), uid2).unwrap();
   assert_eq!(
     v1.id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string()
@@ -122,7 +122,7 @@ fn replace_view_get_view_concurrent_update() {
     ]
   );
 
-  let v2 = f2.get_view(&v2_id, uid1).unwrap();
+  let v2 = f2.get_view(&parse_view_id(&v2_id), uid1).unwrap();
   assert_eq!(v1, v2);
 }
 

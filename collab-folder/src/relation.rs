@@ -33,8 +33,8 @@ impl ParentChildRelations {
   /// # Arguments
   ///
   /// * `txn` - A mutable reference to a transaction.
-  /// * `parent_id` - A string slice that holds the id of the parent view.
-  /// * `view_id` - A string slice that holds the id of the child view to be dissociated from the parent.
+  /// * `parent_id` - A ViewId that holds the id of the parent view.
+  /// * `view_id` - A ViewId that holds the id of the child view to be dissociated from the parent.
   ///
   /// # Returns
   ///
@@ -45,11 +45,11 @@ impl ParentChildRelations {
   pub fn dissociate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
-    view_id: &str,
+    parent_id: &ViewId,
+    view_id: &ViewId,
   ) -> Option<ViewIdentifier> {
     let child = ViewIdentifier {
-      id: Uuid::parse_str(view_id).ok()?,
+      id: *view_id,
     };
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let index = children
@@ -79,15 +79,15 @@ impl ParentChildRelations {
   /// # Arguments
   ///
   /// * `txn` - A mutable reference to a transaction.
-  /// * `parent_id` - A string slice that holds the id of the parent view.
-  /// * `view_id` - A string slice that holds the id of the child view to be associated with the parent.
-  /// * `prev_view_id` - An `Option<String>` that holds the id of the view after which the child view will be placed.
+  /// * `parent_id` - A ViewId that holds the id of the parent view.
+  /// * `view_id` - A ViewId that holds the id of the child view to be associated with the parent.
+  /// * `prev_view_id` - An `Option<ViewId>` that holds the id of the view after which the child view will be placed.
   ///
   pub fn associate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
-    view_id: &str,
+    parent_id: &ViewId,
+    view_id: &ViewId,
     prev_view_id: Option<ViewId>,
   ) {
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
@@ -107,13 +107,13 @@ impl ParentChildRelations {
         Some(index) => (index + 1) as u32,
       };
       let child = ViewIdentifier {
-        id: Uuid::parse_str(view_id).unwrap_or_else(|_| Uuid::nil()),
+        id: *view_id,
       };
       children.insert_child_with_txn(txn, index, child);
     }
   }
 
-  pub fn move_child_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, from: u32, to: u32) {
+  pub fn move_child_with_txn(&self, txn: &mut TransactionMut, parent_id: &ViewId, from: u32, to: u32) {
     if let Some(belonging_array) = self.get_children_with_txn(txn, parent_id) {
       belonging_array.move_child_with_txn(txn, from, to);
     }
@@ -122,35 +122,30 @@ impl ParentChildRelations {
   pub fn get_children_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
-    parent_id: &str,
+    parent_id: &ViewId,
   ) -> Option<ChildrenArray> {
-    // Validate the parent_id is a valid UUID
-    let uuid_parent_id = Uuid::parse_str(parent_id).ok()?.to_string();
-    let array = self.container.get_with_txn(txn, &uuid_parent_id)?;
+    let array = self.container.get_with_txn(txn, &parent_id.to_string())?;
     Some(ChildrenArray::from_array(array))
   }
 
   pub fn get_or_create_children_with_txn(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
+    parent_id: &ViewId,
   ) -> ChildrenArray {
-    // Ensure parent_id is a valid UUID string
-    let uuid_parent_id = Uuid::parse_str(parent_id)
-      .unwrap_or_else(|_| Uuid::nil())
-      .to_string();
+    let parent_id_str = parent_id.to_string();
     let array_ref: ArrayRef = self
       .container
-      .get_with_txn(txn, &uuid_parent_id)
+      .get_with_txn(txn, &parent_id_str)
       .unwrap_or_else(|| {
         self
           .container
-          .get_or_init_array(txn, uuid_parent_id.as_str())
+          .get_or_init_array(txn, parent_id_str.as_str())
       });
     ChildrenArray::from_array(array_ref)
   }
 
-  pub fn delete_children_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, index: u32) {
+  pub fn delete_children_with_txn(&self, txn: &mut TransactionMut, parent_id: &ViewId, index: u32) {
     if let Some(belonging_array) = self.get_children_with_txn(txn, parent_id) {
       belonging_array.remove_child_with_txn(txn, index);
     }
@@ -160,7 +155,7 @@ impl ParentChildRelations {
   pub fn add_children(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
+    parent_id: &ViewId,
     children: Vec<ViewIdentifier>,
     index: Option<u32>,
   ) {

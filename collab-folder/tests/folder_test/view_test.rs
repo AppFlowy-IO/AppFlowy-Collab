@@ -1,4 +1,4 @@
-use crate::util::{create_folder_with_workspace, make_test_view, setup_log};
+use crate::util::{create_folder_with_workspace, make_test_view, setup_log, parse_view_id};
 use collab::core::collab::default_client_id;
 use collab_folder::folder_diff::FolderViewChange;
 use collab_folder::{IconType, UserId, ViewChange, ViewIcon, timestamp};
@@ -18,7 +18,7 @@ fn create_view_test() {
     .views
     .insert(&mut txn, o_view.clone(), None, uid.as_i64());
 
-  let v1_id = o_view.id.to_string();
+  let v1_id = o_view.id;
   let r_view = folder
     .body
     .views
@@ -48,7 +48,7 @@ fn create_view_with_sub_view_test() {
     .views
     .insert(&mut txn, view.clone(), None, uid.as_i64());
 
-  let v1_id = view.id.to_string();
+  let v1_id = view.id;
   let r_view = folder
     .body
     .views
@@ -61,7 +61,7 @@ fn create_view_with_sub_view_test() {
   let r_sub_view = folder
     .body
     .views
-    .get_view(&txn, &r_view.children[0].id.to_string(), uid.as_i64())
+    .get_view(&txn, &r_view.children[0].id, uid.as_i64())
     .unwrap();
   assert_eq!(child_view.name, r_sub_view.name);
   assert_eq!(child_view.parent_view_id, r_sub_view.parent_view_id);
@@ -81,9 +81,9 @@ fn delete_view_test() {
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
   let view_3 = make_test_view("v3", "w1", vec![]);
-  let v1_id = view_1.id.to_string();
-  let v2_id = view_2.id.to_string();
-  let v3_id = view_3.id.to_string();
+  let v1_id = view_1.id;
+  let v2_id = view_2.id;
+  let v3_id = view_3.id;
   folder
     .body
     .views
@@ -100,7 +100,7 @@ fn delete_view_test() {
   let views = folder
     .body
     .views
-    .get_views(&txn, &[&v1_id, &v2_id, &v3_id], uid.as_i64());
+    .get_views(&txn, &[v1_id, v2_id, v3_id], uid.as_i64());
   assert_eq!(
     views[0].id.to_string(),
     collab_entity::uuid_validation::view_id_from_any_string("v1").to_string()
@@ -117,12 +117,12 @@ fn delete_view_test() {
   folder
     .body
     .views
-    .delete_views(&mut txn, vec![v1_id.clone(), v2_id.clone(), v3_id.clone()]);
+    .delete_views(&mut txn, vec![v1_id, v2_id, v3_id]);
 
   let views = folder
     .body
     .views
-    .get_views(&txn, &[&v1_id, &v2_id, &v3_id], uid.as_i64());
+    .get_views(&txn, &[v1_id, v2_id, v3_id], uid.as_i64());
   assert_eq!(views.len(), 0);
 }
 
@@ -136,7 +136,7 @@ fn update_view_test() {
 
   let time = timestamp();
   let o_view = make_test_view("v1", "w1", vec![]);
-  let v1_id = o_view.id.to_string();
+  let v1_id = o_view.id;
   folder
     .body
     .views
@@ -178,7 +178,7 @@ fn update_view_icon_test() {
   let mut txn = folder.collab.transact_mut();
 
   let o_view = make_test_view("v1", "w1", vec![]);
-  let v1_id = o_view.id.to_string();
+  let v1_id = o_view.id;
   folder
     .body
     .views
@@ -255,7 +255,7 @@ fn different_icon_ty_test() {
   let mut txn = folder.collab.transact_mut();
 
   let o_view = make_test_view("v1", "w1", vec![]);
-  let v1_id = o_view.id.to_string();
+  let v1_id = o_view.id;
   folder
     .body
     .views
@@ -362,7 +362,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_uuid_str, uid.as_i64())
+    .get_view(&txn, &parse_view_id(&v1_uuid_str), uid.as_i64())
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 1);
 
@@ -388,7 +388,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v2_uuid_str, uid.as_i64())
+    .get_view(&txn, &parse_view_id(&v2_uuid_str), uid.as_i64())
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 0);
 
@@ -400,7 +400,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_uuid_str, uid.as_i64())
+    .get_view(&txn, &parse_view_id(&v1_uuid_str), uid.as_i64())
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
   assert_eq!(
@@ -419,7 +419,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_uuid_str, uid.as_i64())
+    .get_view(&txn, &parse_view_id(&v1_uuid_str), uid.as_i64())
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 1);
 
@@ -433,7 +433,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_uuid_str, uid.as_i64())
+    .get_view(&txn, &parse_view_id(&v1_uuid_str), uid.as_i64())
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
   assert_eq!(
@@ -473,13 +473,13 @@ fn move_view_across_parent_test() {
   let v1_child_uuid_str = crate::util::test_uuid(view_1_child_id).to_string();
 
   // Move out of the current workspace.
-  let res = folder.move_nested_view(&v1_child_uuid_str, "w2", None, uid.as_i64());
+  let res = folder.move_nested_view(&parse_view_id(&v1_child_uuid_str), &crate::util::test_uuid("w2"), None, uid.as_i64());
   assert!(res.is_none());
   // Move view_1_child from view_1 to view_2.
-  folder.move_nested_view(&v1_child_uuid_str, &v2_uuid_str, None, uid.as_i64());
-  let view_1 = folder.get_view(&v1_uuid_str, uid.as_i64()).unwrap();
-  let view_2 = folder.get_view(&v2_uuid_str, uid.as_i64()).unwrap();
-  let view_1_child = folder.get_view(&v1_child_uuid_str, uid.as_i64()).unwrap();
+  folder.move_nested_view(&parse_view_id(&v1_child_uuid_str), &parse_view_id(&v2_uuid_str), None, uid.as_i64());
+  let view_1 = folder.get_view(&parse_view_id(&v1_uuid_str), uid.as_i64()).unwrap();
+  let view_2 = folder.get_view(&parse_view_id(&v2_uuid_str), uid.as_i64()).unwrap();
+  let view_1_child = folder.get_view(&parse_view_id(&v1_child_uuid_str), uid.as_i64()).unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 1);
   assert_eq!(
@@ -490,10 +490,10 @@ fn move_view_across_parent_test() {
   // Move view_1_child from view_2 to current workspace
   let workspace_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes());
   let workspace_uuid_str = workspace_uuid.to_string();
-  folder.move_nested_view(&v1_child_uuid_str, &workspace_uuid_str, None, uid.as_i64());
-  let view_1 = folder.get_view(&v1_uuid_str, uid.as_i64()).unwrap();
-  let view_2 = folder.get_view(&v2_uuid_str, uid.as_i64()).unwrap();
-  let view_1_child = folder.get_view(&v1_child_uuid_str, uid.as_i64()).unwrap();
+  folder.move_nested_view(&parse_view_id(&v1_child_uuid_str), &parse_view_id(&workspace_uuid_str), None, uid.as_i64());
+  let view_1 = folder.get_view(&parse_view_id(&v1_uuid_str), uid.as_i64()).unwrap();
+  let view_2 = folder.get_view(&parse_view_id(&v2_uuid_str), uid.as_i64()).unwrap();
+  let view_1_child = folder.get_view(&parse_view_id(&v1_child_uuid_str), uid.as_i64()).unwrap();
   let workspace = folder
     .get_workspace_info(&workspace_uuid, uid.as_i64())
     .unwrap();
@@ -511,14 +511,14 @@ fn move_view_across_parent_test() {
 
   // Move view_1_child from position 0 to position 1 in the current workspace.
   folder.move_nested_view(
-    &v1_child_uuid_str,
-    &workspace_uuid_str,
+    &parse_view_id(&v1_child_uuid_str),
+    &parse_view_id(&workspace_uuid_str),
     Some(crate::util::test_uuid(view_1_id)),
     uid.as_i64(),
   );
-  let view_1 = folder.get_view(&v1_uuid_str, uid.as_i64()).unwrap();
-  let view_2 = folder.get_view(&v2_uuid_str, uid.as_i64()).unwrap();
-  let view_1_child = folder.get_view(&v1_child_uuid_str, uid.as_i64()).unwrap();
+  let view_1 = folder.get_view(&parse_view_id(&v1_uuid_str), uid.as_i64()).unwrap();
+  let view_2 = folder.get_view(&parse_view_id(&v2_uuid_str), uid.as_i64()).unwrap();
+  let view_1_child = folder.get_view(&parse_view_id(&v1_child_uuid_str), uid.as_i64()).unwrap();
   let workspace = folder
     .get_workspace_info(&workspace_uuid, uid.as_i64())
     .unwrap();
@@ -539,10 +539,10 @@ fn move_view_across_parent_test() {
   );
 
   // move view_1_child from current workspace to view_1
-  folder.move_nested_view(&v1_child_uuid_str, &v1_uuid_str, None, uid.as_i64());
-  let view_1 = folder.get_view(&v1_uuid_str, uid.as_i64()).unwrap();
-  let view_2 = folder.get_view(&v2_uuid_str, uid.as_i64()).unwrap();
-  let view_1_child = folder.get_view(&v1_child_uuid_str, uid.as_i64()).unwrap();
+  folder.move_nested_view(&parse_view_id(&v1_child_uuid_str), &parse_view_id(&v1_uuid_str), None, uid.as_i64());
+  let view_1 = folder.get_view(&parse_view_id(&v1_uuid_str), uid.as_i64()).unwrap();
+  let view_2 = folder.get_view(&parse_view_id(&v2_uuid_str), uid.as_i64()).unwrap();
+  let view_1_child = folder.get_view(&parse_view_id(&v1_child_uuid_str), uid.as_i64()).unwrap();
   let workspace = folder
     .get_workspace_info(&workspace_uuid, uid.as_i64())
     .unwrap();
@@ -611,7 +611,7 @@ fn create_view_test_with_index() {
   let views = folder
     .body
     .views
-    .get_views_belong_to(&txn, &workspace_uuid_str, uid.as_i64());
+    .get_views_belong_to(&txn, &parse_view_id(&workspace_uuid_str), uid.as_i64());
   assert_eq!(views.first().unwrap().id.to_string(), view_2.id.to_string());
   assert_eq!(views.get(1).unwrap().id.to_string(), view_3.id.to_string());
   assert_eq!(views.get(2).unwrap().id.to_string(), view_1.id.to_string());
@@ -639,7 +639,7 @@ fn check_created_and_edited_time_test() {
   let views = folder
     .body
     .views
-    .get_views_belong_to(&txn, &workspace_uuid_str, uid.as_i64());
+    .get_views_belong_to(&txn, &parse_view_id(&workspace_uuid_str), uid.as_i64());
   let v1 = views.first().unwrap();
   assert_eq!(v1.created_by.unwrap(), uid.as_i64());
   assert_eq!(v1.last_edited_by.unwrap(), uid.as_i64());
@@ -662,7 +662,7 @@ async fn create_view_and_then_sub_index_content_test() {
     .await
     .unwrap();
   let o_view = make_test_view("v1", "w1", vec![]);
-  let v1_id = o_view.id.to_string();
+  let v1_id = o_view.id;
   let mut folder = folder_test.folder;
 
   // subscribe the index content
@@ -715,8 +715,8 @@ fn compare_diff_view_test() {
   // insert two views
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
-  let v1_id = view_1.id.to_string();
-  let v2_id = view_2.id.to_string();
+  let v1_id = view_1.id;
+  let v2_id = view_2.id;
 
   {
     let mut txn = folder.collab.transact_mut();
@@ -749,7 +749,7 @@ fn compare_diff_view_test() {
     folder
       .body
       .views
-      .delete_views(&mut txn, vec![v1_id.clone()]);
+      .delete_views(&mut txn, vec![v1_id]);
     folder
       .body
       .views

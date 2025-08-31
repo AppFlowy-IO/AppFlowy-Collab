@@ -183,17 +183,17 @@ impl Folder {
     self.body.views.get_all_views(&txn, uid)
   }
 
-  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T], uid: i64) -> Vec<Arc<View>> {
+  pub fn get_views(&self, view_ids: &[ViewId], uid: i64) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_views(&txn, view_ids, uid)
   }
 
-  pub fn get_views_belong_to(&self, parent_id: &str, uid: i64) -> Vec<Arc<View>> {
+  pub fn get_views_belong_to(&self, parent_id: &ViewId, uid: i64) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_views_belong_to(&txn, parent_id, uid)
   }
 
-  pub fn move_view(&mut self, view_id: &str, from: u32, to: u32, uid: i64) -> Option<Arc<View>> {
+  pub fn move_view(&mut self, view_id: &ViewId, from: u32, to: u32, uid: i64) -> Option<Arc<View>> {
     let mut txn = self.collab.transact_mut();
     self.body.move_view(&mut txn, view_id, from, to, uid)
   }
@@ -217,8 +217,8 @@ impl Folder {
   ///
   pub fn move_nested_view(
     &mut self,
-    view_id: &str,
-    new_parent_id: &str,
+    view_id: &ViewId,
+    new_parent_id: &ViewId,
     prev_view_id: Option<ViewId>,
     uid: i64,
   ) -> Option<Arc<View>> {
@@ -238,7 +238,7 @@ impl Folder {
     self.body.get_current_view(&txn, uid)
   }
 
-  pub fn update_view<F>(&mut self, view_id: &str, f: F, uid: i64) -> Option<Arc<View>>
+  pub fn update_view<F>(&mut self, view_id: &ViewId, f: F, uid: i64) -> Option<Arc<View>>
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
@@ -246,7 +246,7 @@ impl Folder {
     self.body.views.update_view(&mut txn, view_id, f, uid)
   }
 
-  pub fn delete_views<T: AsRef<str>>(&mut self, views: Vec<T>) {
+  pub fn delete_views(&mut self, views: Vec<ViewId>) {
     let mut txn = self.collab.transact_mut();
     self.body.views.delete_views(&mut txn, views);
   }
@@ -297,7 +297,7 @@ impl Folder {
         self
           .body
           .views
-          .get_view_name_with_txn(&txn, &section.id.to_string())
+          .get_view_name_with_txn(&txn, &section.id)
           .map(|name| TrashInfo {
             id: section.id,
             name,
@@ -352,12 +352,12 @@ impl Folder {
     self.body.replace_view(&mut txn, from, to, uid)
   }
 
-  pub fn get_view(&self, view_id: &str, uid: i64) -> Option<Arc<View>> {
+  pub fn get_view(&self, view_id: &ViewId, uid: i64) -> Option<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_view(&txn, view_id, uid)
   }
 
-  pub fn is_view_in_section(&self, section: Section, view_id: &str, uid: i64) -> bool {
+  pub fn is_view_in_section(&self, section: Section, view_id: &ViewId, uid: i64) -> bool {
     let txn = self.collab.transact();
     if let Some(op) = self.body.section.section_op(&txn, section, uid) {
       op.contains_with_txn(&txn, view_id)
@@ -393,7 +393,7 @@ impl Folder {
   /// # Returns
   ///
   /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
-  pub fn get_view_recursively(&self, view_id: &str, uid: i64) -> Vec<View> {
+  pub fn get_view_recursively(&self, view_id: &ViewId, uid: i64) -> Vec<View> {
     let txn = self.collab.transact();
     let mut views = vec![];
     self.body.get_view_recursively_with_txn(
@@ -575,7 +575,7 @@ impl FolderBody {
   pub fn get_view_recursively_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
-    view_id: &str,
+    view_id: &ViewId,
     visited: &mut HashSet<String>,
     accumulated_views: &mut Vec<View>,
     uid: i64,
@@ -590,7 +590,7 @@ impl FolderBody {
         parent_view.children.items.iter().for_each(|child| {
           self.get_view_recursively_with_txn(
             txn,
-            &child.id.to_string(),
+            &child.id,
             visited,
             accumulated_views,
             uid,
@@ -616,7 +616,7 @@ impl FolderBody {
 
     let view = self
       .views
-      .get_view_with_txn(txn, &folder_workspace_id, uid)?;
+      .get_view_with_txn(txn, workspace_id, uid)?;
     Some(Workspace::from(view.as_ref()))
   }
 
@@ -628,13 +628,14 @@ impl FolderBody {
   ) -> Option<FolderData> {
     let folder_workspace_id = self.get_workspace_id_with_txn(txn)?;
     // Parse workspace_id as UUID, return None if invalid
-    let uuid_workspace_id = match uuid::Uuid::parse_str(workspace_id) {
-      Ok(id) => id.to_string(),
+    let workspace_uuid = match uuid::Uuid::parse_str(workspace_id) {
+      Ok(id) => id,
       Err(_) => {
         error!("Invalid workspace id format: {}", workspace_id);
         return None;
       },
     };
+    let uuid_workspace_id = workspace_uuid.to_string();
     if folder_workspace_id != uuid_workspace_id {
       error!(
         "Workspace id not match when get folder data, expected: {}, actual: {}",
@@ -645,7 +646,7 @@ impl FolderBody {
     let workspace = Workspace::from(
       self
         .views
-        .get_view_with_txn(txn, workspace_id, uid)?
+        .get_view_with_txn(txn, &workspace_uuid, uid)?
         .as_ref(),
     );
     let current_view = self.get_current_view(txn, uid);
@@ -656,11 +657,11 @@ impl FolderBody {
       .iter()
       .map(|view| view.as_ref().clone())
       .collect::<Vec<View>>();
-    for view in self.views.get_views_belong_to(txn, workspace_id, uid) {
+    for view in self.views.get_views_belong_to(txn, &workspace_uuid, uid) {
       let mut all_views_in_workspace = vec![];
       self.get_view_recursively_with_txn(
         txn,
-        &view.id.to_string(),
+        &view.id,
         &mut HashSet::default(),
         &mut all_views_in_workspace,
         uid,
@@ -722,7 +723,7 @@ impl FolderBody {
   pub fn move_view(
     &self,
     txn: &mut TransactionMut,
-    view_id: &str,
+    view_id: &ViewId,
     from: u32,
     to: u32,
     uid: i64,
@@ -737,8 +738,8 @@ impl FolderBody {
   pub fn move_nested_view(
     &self,
     txn: &mut TransactionMut,
-    view_id: &str,
-    new_parent_id: &str,
+    view_id: &ViewId,
+    new_parent_id: &ViewId,
     prev_view_id: Option<ViewId>,
     uid: i64,
   ) -> Option<Arc<View>> {
@@ -751,7 +752,8 @@ impl FolderBody {
 
     // If the new parent is not a view, it must be a workspace.
     // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
-    if new_parent_id != current_workspace_id && new_parent_view.is_none() {
+    let current_workspace_uuid = uuid::Uuid::parse_str(&current_workspace_id).ok();
+    if Some(*new_parent_id) != current_workspace_uuid && new_parent_view.is_none() {
       tracing::warn!("Unsupported move out current workspace: {}", view_id);
       return None;
     }
@@ -759,17 +761,17 @@ impl FolderBody {
     // dissociate the child from its parent
     self
       .views
-      .dissociate_parent_child_with_txn(txn, &parent_id, view_id);
+      .dissociate_parent_child_with_txn(txn, &parent_id, &view_id.to_string());
     // associate the child with its new parent and place it after the prev_view_id. If the prev_view_id is None,
     // place it as the first child.
     self
       .views
-      .associate_parent_child_with_txn(txn, new_parent_id, view_id, prev_view_id);
+      .associate_parent_child_with_txn(txn, &new_parent_id.to_string(), &view_id.to_string(), prev_view_id);
     // Update the view's parent ID.
     self
       .views
       .update_view_with_txn(UserId::from(uid), txn, view_id, |update| {
-        update.set_bid(new_parent_id).done()
+        update.set_bid(&new_parent_id.to_string()).done()
       });
     Some(view)
   }
@@ -777,10 +779,14 @@ impl FolderBody {
   pub fn get_child_of_first_public_view<T: ReadTxn>(&self, txn: &T, uid: i64) -> Option<ViewId> {
     self
       .get_workspace_id(txn)
-      .and_then(|workspace_id| self.views.get_view(txn, &workspace_id, uid))
+      .and_then(|workspace_id| {
+        uuid::Uuid::parse_str(&workspace_id)
+          .ok()
+          .and_then(|uuid| self.views.get_view(txn, &uuid, uid))
+      })
       .and_then(|root_view| {
         let first_public_space_view_id_with_child = root_view.children.iter().find(|space_id| {
-          match self.views.get_view(txn, &space_id.to_string(), uid) {
+          match self.views.get_view(txn, &space_id.id, uid) {
             Some(space_view) => {
               let is_public_space = space_view
                 .space_info()
@@ -797,7 +803,7 @@ impl FolderBody {
       .and_then(|first_public_space_view_id_with_child| {
         self
           .views
-          .get_view(txn, &first_public_space_view_id_with_child.to_string(), uid)
+          .get_view(txn, &first_public_space_view_id_with_child, uid)
       })
       .and_then(|first_public_space_view_with_child| {
         first_public_space_view_with_child
