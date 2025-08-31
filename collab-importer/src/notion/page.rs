@@ -21,6 +21,7 @@ use collab_database::template::builder::FileUrlBuilder;
 use collab_document::document_data::default_document_data;
 use collab_entity::uuid_validation::RowId;
 use percent_encoding::percent_decode_str;
+use uuid::Uuid;
 use serde::Serialize;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -182,7 +183,7 @@ impl NotionPage {
           .collect();
 
         let resource = CollabResource {
-          object_id: self.view_id.clone(),
+          object_id: Uuid::parse_str(&self.view_id).map_err(|_| ImporterError::Internal(anyhow::anyhow!("Invalid UUID format for view_id: {}", self.view_id)))?,
           files,
         };
 
@@ -514,9 +515,8 @@ impl NotionPage {
         // create csv template, we need to set the view id as csv template view id
         let mut csv_template =
           CSVTemplate::try_from_reader(content.as_bytes(), true, Some(csv_resource))?;
-        let view_uuid = uuid::Uuid::parse_str(&self.view_id).unwrap_or_else(|_| {
-          uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, self.view_id.as_bytes())
-        });
+        let view_uuid = uuid::Uuid::parse_str(&self.view_id)
+          .map_err(|err| ImporterError::Internal(err.into()))?;
         csv_template.reset_view_id(view_uuid);
         let database_id = csv_template.database_id;
 
@@ -556,7 +556,7 @@ impl NotionPage {
         }
 
         let resource = CollabResource {
-          object_id: database_id.to_string(),
+          object_id: database_id,
           files,
         };
 
@@ -666,7 +666,7 @@ impl NotionPage {
           name,
           imported_collabs: vec![imported_collab],
           resources: vec![CollabResource {
-            object_id: self.view_id.clone(),
+            object_id: Uuid::parse_str(&self.view_id).map_err(|_| ImporterError::Internal(anyhow::anyhow!("Invalid UUID format for view_id: {}", self.view_id)))?,
             files: vec![],
           }],
           import_type: ImportType::Document,
@@ -723,7 +723,7 @@ pub enum ExternalLinkType {
 
 #[derive(Debug, Clone)]
 pub struct CollabResource {
-  pub object_id: String,
+  pub object_id: Uuid,
   pub files: Vec<String>,
 }
 

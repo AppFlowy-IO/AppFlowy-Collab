@@ -221,7 +221,7 @@ impl ImportedInfo {
         name: self.name.clone(),
         imported_collabs: vec![imported_space_collab],
         resources: vec![CollabResource {
-          object_id: self.space_view.view.id.to_string(),
+          object_id: self.space_view.view.id,
           files: vec![],
         }],
         import_type: ImportType::Document,
