@@ -31,7 +31,7 @@ impl IdMapper {
     // collab objects
     for (view_id, collab_metadata) in &relation_map.collab_objects {
       Self::map_string_id(&mut id_map, view_id);
-      Self::map_string_id(&mut id_map, &collab_metadata.object_id);
+      Self::map_id(&mut id_map, &collab_metadata.object_id);
     }
 
     // dependencies
@@ -58,9 +58,9 @@ impl IdMapper {
     // workspace database meta
     if let Some(database_meta) = &relation_map.workspace_database_meta {
       for database_meta in database_meta {
-        Self::map_string_id(&mut id_map, &database_meta.database_id);
+        Self::map_id(&mut id_map, &database_meta.database_id);
         for view_id in &database_meta.view_ids {
-          Self::map_string_id(&mut id_map, view_id);
+          Self::map_id(&mut id_map, view_id);
         }
       }
     }

@@ -32,11 +32,21 @@ async fn test_id_mapper() {
   }
   for (obj_id, obj) in &relation_map.collab_objects {
     old_string_ids.insert(obj_id.clone());
-    old_string_ids.insert(obj.object_id.clone());
+    old_uuid_ids.insert(obj.object_id);
   }
   for dep in &relation_map.dependencies {
     old_string_ids.insert(dep.source_view_id.clone());
     old_string_ids.insert(dep.target_view_id.clone());
+  }
+  
+  // Add workspace database metadata IDs
+  if let Some(database_meta_list) = &relation_map.workspace_database_meta {
+    for database_meta in database_meta_list {
+      old_uuid_ids.insert(database_meta.database_id);
+      for view_id in &database_meta.view_ids {
+        old_uuid_ids.insert(*view_id);
+      }
+    }
   }
 
   for old_id in &old_uuid_ids {
