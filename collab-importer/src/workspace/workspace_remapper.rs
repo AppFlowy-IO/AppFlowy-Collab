@@ -61,14 +61,14 @@ impl WorkspaceRemapper {
     let mut id_mapper = IdMapper::new(&relation_map);
     if let Some(ref custom_workspace_id) = custom_workspace_id {
       id_mapper.id_map.insert(
-        relation_map.workspace_id.clone(),
+        relation_map.workspace_id.to_string(),
         custom_workspace_id.clone(),
       );
     }
 
     let handler = SpaceViewEdgeCaseHandler::new(
       Arc::new(id_mapper.clone()),
-      relation_map.workspace_id.clone(),
+      relation_map.workspace_id.to_string(),
     );
 
     handler.handle_missing_space_view(&mut relation_map, workspace_path, &mut id_mapper)?;

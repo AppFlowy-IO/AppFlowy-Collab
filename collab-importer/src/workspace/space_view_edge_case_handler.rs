@@ -7,6 +7,7 @@ use serde_json;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use uuid::Uuid;
 
 pub struct SpaceViewEdgeCaseHandler {
   id_mapper: Arc<IdMapper>,
@@ -32,8 +33,9 @@ impl SpaceViewEdgeCaseHandler {
     }
 
     let space_view_id = self.id_mapper.generate_new_id();
+    let space_view_uuid = Uuid::parse_str(&space_view_id)?;
     let space_view = self.create_default_space_view(&space_view_id)?;
-    relation_map.views.insert(space_view_id.clone(), space_view);
+    relation_map.views.insert(space_view_uuid, space_view);
 
     id_mapper
       .id_map
@@ -71,12 +73,12 @@ impl SpaceViewEdgeCaseHandler {
     });
 
     let space_view = ViewMetadata {
-      view_id: space_view_id.to_string(),
+      view_id: Uuid::parse_str(space_view_id)?,
       name: "General".to_string(),
       layout: ViewLayout::Document,
-      parent_id: Some(self.original_workspace_id.clone()),
+      parent_id: Some(Uuid::parse_str(&self.original_workspace_id)?),
       children: Vec::new(),
-      collab_object_id: space_view_id.to_string(),
+      collab_object_id: Uuid::parse_str(space_view_id)?,
       created_at: current_time,
       updated_at: current_time,
       extra: Some(space_info.to_string()),
@@ -93,18 +95,21 @@ impl SpaceViewEdgeCaseHandler {
   ) -> Result<()> {
     let mut workspace_children = Vec::new();
 
+    let space_view_uuid = Uuid::parse_str(space_view_id)?;
+    let original_workspace_uuid = Uuid::parse_str(&self.original_workspace_id)?;
+    
     for (view_id, view_metadata) in relation_map.views.iter_mut() {
-      if view_id != space_view_id {
+      if view_id != &space_view_uuid {
         if let Some(parent_id) = &view_metadata.parent_id {
-          if parent_id == &self.original_workspace_id {
-            view_metadata.parent_id = Some(space_view_id.to_string());
-            workspace_children.push(view_id.clone());
+          if parent_id == &original_workspace_uuid {
+            view_metadata.parent_id = Some(space_view_uuid);
+            workspace_children.push(*view_id);
           }
         }
       }
     }
 
-    if let Some(space_view) = relation_map.views.get_mut(space_view_id) {
+    if let Some(space_view) = relation_map.views.get_mut(&space_view_uuid) {
       space_view.children = workspace_children;
     }
     Ok(())

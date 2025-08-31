@@ -1,5 +1,6 @@
 use crate::util::sync_unzip_asset;
 use collab_importer::workspace::relation_map_parser::RelationMapParser;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn test_parse_with_valid_relation_map() {
@@ -13,7 +14,7 @@ async fn test_parse_with_valid_relation_map() {
   let relation_map = result.unwrap();
   assert_eq!(
     relation_map.workspace_id,
-    "87805052-485c-4d0d-a69d-e32e0428bbc0"
+    Uuid::parse_str("87805052-485c-4d0d-a69d-e32e0428bbc0").unwrap()
   );
   assert_eq!(relation_map.export_timestamp, 1752675354);
   assert_eq!(relation_map.views.len(), 7);

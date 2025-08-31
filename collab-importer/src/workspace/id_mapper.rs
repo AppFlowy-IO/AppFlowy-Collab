@@ -30,20 +30,20 @@ impl IdMapper {
 
     // collab objects
     for (view_id, collab_metadata) in &relation_map.collab_objects {
-      Self::map_id(&mut id_map, view_id);
-      Self::map_id(&mut id_map, &collab_metadata.object_id);
+      Self::map_string_id(&mut id_map, view_id);
+      Self::map_string_id(&mut id_map, &collab_metadata.object_id);
     }
 
     // dependencies
     for dependency in &relation_map.dependencies {
-      let mapped_source_view_id = Self::map_id(&mut id_map, &dependency.source_view_id);
+      let mapped_source_view_id = Self::map_string_id(&mut id_map, &dependency.source_view_id);
 
       // ignore the file attachment for target view id
       if dependency.dependency_type == DependencyType::FileAttachment {
         continue;
       }
 
-      let _mapped_target_view_id = Self::map_id(&mut id_map, &dependency.target_view_id);
+      let _mapped_target_view_id = Self::map_string_id(&mut id_map, &dependency.target_view_id);
 
       // if the dependency is database row document, we need to handle it differently
       if dependency.dependency_type == DependencyType::DatabaseRowDocument {
@@ -58,9 +58,9 @@ impl IdMapper {
     // workspace database meta
     if let Some(database_meta) = &relation_map.workspace_database_meta {
       for database_meta in database_meta {
-        Self::map_id(&mut id_map, &database_meta.database_id);
+        Self::map_string_id(&mut id_map, &database_meta.database_id);
         for view_id in &database_meta.view_ids {
-          Self::map_id(&mut id_map, view_id);
+          Self::map_string_id(&mut id_map, view_id);
         }
       }
     }
@@ -72,11 +72,23 @@ impl IdMapper {
     Some(self.id_map.get(old_id)?.as_str())
   }
 
+  pub fn get_new_id_from_uuid(&self, old_id: &Uuid) -> Option<&str> {
+    let old_id_str = old_id.to_string();
+    Some(self.id_map.get(&old_id_str)?.as_str())
+  }
+
   pub fn generate_new_id(&self) -> String {
     Uuid::new_v4().to_string()
   }
 
-  fn map_id(map: &mut HashMap<String, String>, old_id: &str) -> String {
+  fn map_id(map: &mut HashMap<String, String>, old_id: &Uuid) -> String {
+    let old_id_str = old_id.to_string();
+    let new_id = Uuid::new_v4().to_string();
+    let new_id = map.entry(old_id_str).or_insert(new_id);
+    new_id.clone()
+  }
+
+  fn map_string_id(map: &mut HashMap<String, String>, old_id: &str) -> String {
     let new_id = Uuid::new_v4().to_string();
     let new_id = map.entry(old_id.to_string()).or_insert(new_id);
     new_id.clone()

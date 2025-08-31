@@ -3,6 +3,7 @@ use collab_folder::{ViewIcon, ViewLayout};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 /// The relation map of the workspace, including views, collab objects, and dependencies.
 ///
@@ -36,9 +37,9 @@ use std::collections::HashMap;
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorkspaceRelationMap {
-  pub workspace_id: String,
+  pub workspace_id: Uuid,
   pub export_timestamp: i64,
-  pub views: IndexMap<String, ViewMetadata>,
+  pub views: IndexMap<Uuid, ViewMetadata>,
   pub collab_objects: HashMap<String, CollabMetadata>,
   pub dependencies: Vec<ViewDependency>,
   pub workspace_database_meta: Option<Vec<WorkspaceDatabaseMeta>>,
@@ -46,12 +47,12 @@ pub struct WorkspaceRelationMap {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViewMetadata {
-  pub view_id: String,
+  pub view_id: Uuid,
   pub name: String,
   pub layout: ViewLayout,
-  pub parent_id: Option<String>,
-  pub children: Vec<String>,
-  pub collab_object_id: String,
+  pub parent_id: Option<Uuid>,
+  pub children: Vec<Uuid>,
+  pub collab_object_id: Uuid,
   pub created_at: i64,
   pub updated_at: i64,
   pub extra: Option<String>,
@@ -60,13 +61,13 @@ pub struct ViewMetadata {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceDatabaseMeta {
-  pub database_id: String,
-  pub view_ids: Vec<String>,
+  pub database_id: Uuid,
+  pub view_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollabMetadata {
-  pub object_id: String,
+  pub object_id: Uuid,
   pub collab_type: CollabType,
   pub size_bytes: u64,
 }

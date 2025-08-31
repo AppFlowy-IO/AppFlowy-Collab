@@ -69,11 +69,11 @@ async fn test_space_view_edge_case_handler() {
 
   assert!(document_json.get("document").is_some());
   let document = &document_json["document"];
-  assert_eq!(document["page_id"], space_id);
+  assert_eq!(document["page_id"], space_id.to_string());
 
   let id_mapping = remapper.get_id_mapping();
   assert!(
-    id_mapping.contains_key(&space_id),
+    id_mapping.contains_key(&space_id.to_string()),
     "space view id should be in id mapping"
   );
 

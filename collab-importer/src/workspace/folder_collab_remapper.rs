@@ -20,7 +20,7 @@ impl FolderCollabRemapper {
     workspace_name: &str,
   ) -> Result<Folder> {
     let new_workspace_id = id_mapper
-      .get_new_id(&relation_map.workspace_id)
+      .get_new_id_from_uuid(&relation_map.workspace_id)
       .ok_or_else(|| anyhow!("missing mapping for workspace id"))?;
 
     let current_time = timestamp();
@@ -31,12 +31,12 @@ impl FolderCollabRemapper {
 
     for (old_view_id, view_metadata) in &relation_map.views {
       let new_view_id = id_mapper
-        .get_new_id(old_view_id)
+        .get_new_id_from_uuid(old_view_id)
         .ok_or_else(|| anyhow!("missing mapping for view id: {}", old_view_id))?;
 
       let new_parent_id = if let Some(old_parent_id) = &view_metadata.parent_id {
         id_mapper
-          .get_new_id(old_parent_id)
+          .get_new_id_from_uuid(old_parent_id)
           .ok_or_else(|| anyhow!("missing mapping for parent id: {}", old_parent_id))?
       } else {
         new_workspace_id
@@ -56,7 +56,7 @@ impl FolderCollabRemapper {
         .children
         .iter()
         .filter_map(|child_id| {
-          id_mapper.get_new_id(child_id).map(|new_id| {
+          id_mapper.get_new_id_from_uuid(child_id).map(|new_id| {
             ViewIdentifier::new(collab_entity::uuid_validation::view_id_from_any_string(
               new_id,
             ))
