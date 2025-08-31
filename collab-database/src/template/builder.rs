@@ -30,7 +30,7 @@ use std::path::Path;
 
 #[async_trait::async_trait]
 pub trait FileUrlBuilder: Send + Sync + 'static {
-  async fn build(&self, database_id: &str, path: &Path) -> Option<String>;
+  async fn build(&self, database_id: &DatabaseId, path: &Path) -> Option<String>;
 }
 
 pub struct DatabaseTemplateBuilder {
@@ -61,7 +61,7 @@ impl DatabaseTemplateBuilder {
   pub async fn create_field<F>(
     mut self,
     csv_resource: &Option<CSVResource>,
-    database_id: &str,
+    database_id: &DatabaseId,
     name: &str,
     field_type: FieldType,
     is_primary: bool,
@@ -174,7 +174,7 @@ impl FieldTemplateBuilder {
   pub async fn build(
     self,
     csv_resource: &Option<CSVResource>,
-    database_id: &str,
+    database_id: &DatabaseId,
     file_url_builder: &Option<Box<dyn FileUrlBuilder>>,
   ) -> (FieldTemplate, Vec<CellTemplateData>) {
     let field_type = self.field_type;

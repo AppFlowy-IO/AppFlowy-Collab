@@ -29,7 +29,7 @@ async fn create_template_test() {
   let template = DatabaseTemplateBuilder::new(database_id, gen_database_view_id(), None)
     .create_field(
       &None,
-      &database_id.to_string(),
+      &database_id,
       "name",
       FieldType::RichText,
       true,
@@ -43,7 +43,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id.to_string(),
+      &database_id,
       "status",
       FieldType::SingleSelect,
       false,
@@ -59,7 +59,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id.to_string(),
+      &database_id,
       "user",
       FieldType::MultiSelect,
       false,
@@ -75,7 +75,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id.to_string(),
+      &database_id,
       "time",
       FieldType::DateTime,
       false,
@@ -90,7 +90,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id.to_string(),
+      &database_id,
       "tasks",
       FieldType::Checklist,
       false,
@@ -104,7 +104,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &database_id.to_string(),
+      &database_id,
       "last modified",
       FieldType::LastEditedTime,
       false,

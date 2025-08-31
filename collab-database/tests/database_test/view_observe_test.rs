@@ -354,7 +354,7 @@ async fn observe_move_database_view_row_test() {
     let txn = collab.transact();
     let body_row_orders = db_body
       .views
-      .get_row_orders(&txn, &first_view_id.to_string());
+      .get_row_orders(&txn, &first_view_id);
     assert_eq!(body_row_orders.len(), 4);
     assert_eq!(body_row_orders[0].id, row_id_2);
     assert_eq!(body_row_orders[1].id, row_id_3);
@@ -395,7 +395,8 @@ async fn observe_move_database_view_row_test() {
     .unwrap();
 
     let txn = collab.transact();
-    let body_row_orders = db_body.views.get_row_orders(&txn, &second_view_id);
+    let second_view_uuid = collab_entity::uuid_validation::try_parse_database_view_id(&second_view_id).unwrap();
+    let body_row_orders = db_body.views.get_row_orders(&txn, &second_view_uuid);
     assert_eq!(body_row_orders.len(), 4);
     assert_eq!(body_row_orders[0].id, row_id_1);
     assert_eq!(body_row_orders[1].id, row_id_2);

@@ -98,7 +98,7 @@ impl CSVTemplate {
       builder = builder
         .create_field(
           &resource,
-          &database_id.to_string(),
+          &database_id,
           &field.name,
           field.field_type,
           field_index == 0,

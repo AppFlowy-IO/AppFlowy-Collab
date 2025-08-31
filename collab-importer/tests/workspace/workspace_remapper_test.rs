@@ -41,7 +41,8 @@ async fn test_workspace_remapper_folder_structure() {
   let folder = remapper.build_folder_collab(uid, workspace_name).unwrap();
 
   let workspace_id = folder.get_workspace_id().unwrap();
-  let workspace_info = folder.get_workspace_info(&workspace_id, uid).unwrap();
+  let workspace_uuid = uuid::Uuid::parse_str(&workspace_id).unwrap();
+  let workspace_info = folder.get_workspace_info(&workspace_uuid, uid).unwrap();
 
   assert_eq!(workspace_info.name, workspace_name);
   assert_eq!(

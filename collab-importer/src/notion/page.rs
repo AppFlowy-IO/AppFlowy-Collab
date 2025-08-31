@@ -8,6 +8,7 @@ use collab_document::document::Document;
 use collab_document::importer::define::URL_FIELD;
 use collab_document::importer::md_importer::{MDImporter, create_image_block};
 use collab_entity::CollabType;
+use collab_entity::uuid_validation::DatabaseId;
 use futures::stream::{self, StreamExt};
 
 use crate::notion::file::NotionFile;
@@ -730,12 +731,12 @@ struct FileUrlBuilderImpl {
 
 #[async_trait::async_trait]
 impl FileUrlBuilder for FileUrlBuilderImpl {
-  async fn build(&self, database_id: &str, path: &Path) -> Option<String> {
+  async fn build(&self, database_id: &DatabaseId, path: &Path) -> Option<String> {
     let file_id = FileId::from_path(&path.to_path_buf()).await.ok()?;
     Some(upload_file_url(
       &self.host,
       &self.workspace_id,
-      database_id,
+      &database_id.to_string(),
       &file_id,
     ))
   }

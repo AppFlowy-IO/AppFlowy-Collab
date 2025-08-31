@@ -63,7 +63,7 @@ async fn test_parse_real_document_json() {
     }
   }
 
-  let document = remapper.build_document("test-document-id").unwrap();
+  let document = remapper.build_document(&uuid::Uuid::new_v4().to_string()).unwrap();
   assert_eq!(document.get_page_id().unwrap(), "wl_3CTczV-");
 
   let doc_data_from_document = document.get_document_data().unwrap();

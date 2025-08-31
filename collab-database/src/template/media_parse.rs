@@ -1,6 +1,7 @@
 use crate::fields::media_type_option::{MediaCellData, MediaFile, MediaFileType, MediaUploadType};
 use crate::template::builder::FileUrlBuilder;
 use crate::template::csv::CSVResource;
+use collab_entity::uuid_validation::DatabaseId;
 use futures::stream::{FuturesOrdered, StreamExt};
 
 use std::path::PathBuf;
@@ -9,7 +10,7 @@ use std::fs::metadata;
 
 pub(crate) async fn replace_cells_with_files(
   cells: Vec<String>,
-  database_id: &str,
+  database_id: &DatabaseId,
   csv_resource: &Option<CSVResource>,
   file_url_builder: &Option<Box<dyn FileUrlBuilder>>,
 ) -> Vec<Option<MediaCellData>> {

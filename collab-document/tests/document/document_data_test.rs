@@ -28,7 +28,7 @@ fn get_default_data_test() {
 
 #[test]
 fn validate_document_data() {
-  let document_id = "1";
+  let document_id = &uuid::Uuid::new_v4().to_string();
   let document_data = default_document_data(document_id);
   let document = Document::create(document_id, document_data, default_client_id()).unwrap();
   assert!(document.validate().is_ok());

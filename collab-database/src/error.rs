@@ -9,6 +9,9 @@ pub enum DatabaseError {
   #[error("The database view's id is invalid: {0}")]
   InvalidViewID(&'static str),
 
+  #[error("The database view's id is invalid: {0}")]
+  InvalidDatabaseViewId(String),
+
   #[error("The database row's id is invalid: {0}")]
   InvalidRowID(&'static str),
 

@@ -23,7 +23,7 @@ use crate::views::{
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
 use crate::workspace_database::DatabaseMeta;
-use collab_entity::uuid_validation::RowId;
+use collab_entity::uuid_validation::{RowId, try_parse_database_view_id};
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -342,7 +342,12 @@ impl Database {
         error!("Cannot find inline view id");
         self.body.fields.get_all_field_orders(&txn)
       },
-      Some(inline_view_id) => self.body.views.get_field_orders(&txn, &inline_view_id),
+      Some(inline_view_id) => {
+        match self.body.parse_view_id(&inline_view_id) {
+          Ok(view_id) => self.body.views.get_field_orders(&txn, &view_id),
+          Err(_) => self.body.fields.get_all_field_orders(&txn),
+        }
+      },
     }
   }
 
@@ -359,7 +364,10 @@ impl Database {
 
   pub fn get_database_view_layout(&self, view_id: &str) -> DatabaseLayout {
     let txn = self.collab.transact();
-    self.body.views.get_database_view_layout(&txn, view_id)
+    match self.body.parse_view_id(view_id) {
+      Ok(view_id) => self.body.views.get_database_view_layout(&txn, &view_id),
+      Err(_) => DatabaseLayout::Grid, // Default layout on invalid ID
+    }
   }
 
   /// Return the database id with a transaction
@@ -391,7 +399,9 @@ impl Database {
     F: FnOnce(DatabaseViewUpdate),
   {
     let mut txn = self.collab.transact_mut();
-    self.body.views.update_database_view(&mut txn, view_id, f);
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self.body.views.update_database_view(&mut txn, &view_id, f);
+    }
   }
 
   pub fn contains_row(&self, view_id: &str, row_id: &RowId) -> bool {
@@ -611,12 +621,16 @@ impl Database {
 
   pub async fn get_row_order_at_index(&self, view_id: &str, index: u32) -> Option<RowOrder> {
     let txn = self.collab.transact();
-    self.body.views.get_row_order_at_index(&txn, view_id, index)
+    let view_id = self.body.parse_view_id(view_id).ok()?;
+    self.body.views.get_row_order_at_index(&txn, &view_id, index)
   }
 
   pub fn get_row_orders_for_view(&self, view_id: &str) -> Vec<RowOrder> {
     let txn = self.collab.transact();
-    self.body.views.get_row_orders(&txn, view_id)
+    match self.body.parse_view_id(view_id) {
+      Ok(view_id) => self.body.views.get_row_orders(&txn, &view_id),
+      Err(_) => vec![],
+    }
   }
 
   pub fn get_row_index(&self, view_id: &str, row_id: &RowId) -> Option<usize> {
@@ -752,22 +766,26 @@ impl Database {
 
   pub fn get_all_group_setting<T: TryFrom<GroupSettingMap>>(&self, view_id: &str) -> Vec<T> {
     let txn = self.collab.transact();
-    self
-      .body
-      .views
-      .get_view_group_setting(&txn, view_id)
-      .into_iter()
-      .flat_map(|setting| T::try_from(setting).ok())
-      .collect()
+    match self.body.parse_view_id(view_id) {
+      Ok(view_id) => self
+        .body
+        .views
+        .get_view_group_setting(&txn, &view_id)
+        .into_iter()
+        .flat_map(|setting| T::try_from(setting).ok())
+        .collect(),
+      Err(_) => vec![],
+    }
   }
 
   /// Add a group setting to the view. If the setting already exists, it will be replaced.
   pub fn insert_group_setting(&mut self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
         update.update_groups(|txn, group_update| {
           let group_setting = group_setting.into();
           let settings = if let Some(Any::String(setting_id)) = group_setting.get("id") {
@@ -778,20 +796,23 @@ impl Database {
           Any::from(group_setting).fill(txn, &settings).unwrap();
         });
       });
+    }
   }
 
   pub fn delete_group_setting(&mut self, view_id: &str, group_setting_id: &str) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
         update.update_groups(|txn, group_update| {
           if let Some(i) = group_update.index_by_id(txn, group_setting_id) {
             group_update.remove(txn, i);
           }
         });
       });
+    }
   }
 
   pub fn update_group_setting(
@@ -801,36 +822,41 @@ impl Database {
     f: impl FnOnce(&mut GroupSettingMap),
   ) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |view_update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |view_update| {
         view_update.update_groups(|txn, group_update| {
           group_update.update_map(txn, setting_id, f);
         });
       });
+    }
   }
 
   pub fn remove_group_setting(&mut self, view_id: &str, setting_id: &str) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
         update.update_groups(|txn, group_update| {
           if let Some(i) = group_update.index_by_id(txn, setting_id) {
             group_update.remove(txn, i);
           }
         });
       });
+    }
   }
 
   pub fn insert_sort(&mut self, view_id: &str, sort: impl Into<SortMap>) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
         update.update_sorts(|txn, sort_update| {
           let sort = sort.into();
           if let Some(Any::String(sort_id)) = sort.get("id") {
@@ -841,14 +867,16 @@ impl Database {
           }
         });
       });
+    }
   }
 
   pub fn move_sort(&mut self, view_id: &str, from_sort_id: &str, to_sort_id: &str) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
         update.update_sorts(|txn, sort_update| {
           if let Some(from) = sort_update.index_by_id(txn, from_sort_id) {
             if let Some(to) = sort_update.index_by_id(txn, to_sort_id) {
@@ -857,6 +885,7 @@ impl Database {
           }
         });
       });
+    }
   }
 
   pub fn get_all_sorts<T>(&self, view_id: &str) -> Vec<T>
@@ -865,19 +894,22 @@ impl Database {
     <T as TryFrom<SortMap>>::Error: Debug,
   {
     let txn = self.collab.transact();
-    self
-      .body
-      .views
-      .get_view_sorts(&txn, view_id)
-      .into_iter()
-      .flat_map(|sort| match T::try_from(sort) {
-        Ok(sort) => Some(sort),
-        Err(err) => {
-          error!("Failed to convert sort, error: {:?}", err);
-          None
-        },
-      })
-      .collect()
+    match self.body.parse_view_id(view_id) {
+      Ok(view_id) => self
+        .body
+        .views
+        .get_view_sorts(&txn, &view_id)
+        .into_iter()
+        .flat_map(|sort| match T::try_from(sort) {
+          Ok(sort) => Some(sort),
+          Err(err) => {
+            error!("Failed to convert sort, error: {:?}", err);
+            None
+          },
+        })
+        .collect(),
+      Err(_) => vec![],
+    }
   }
 
   pub fn get_sort<T>(&self, view_id: &str, sort_id: &str) -> Option<T>
@@ -887,62 +919,74 @@ impl Database {
   {
     let sort_id: Any = sort_id.into();
     let txn = self.collab.transact();
-    let mut sorts = self
-      .body
-      .views
-      .get_view_sorts(&txn, view_id)
-      .into_iter()
-      .filter(|sort_map| sort_map.get("id") == Some(&sort_id))
-      .flat_map(|value| match T::try_from(value) {
-        Ok(sort) => Some(sort),
-        Err(err) => {
-          error!("Failed to convert sort, error: {:?}", err);
+    match self.body.parse_view_id(view_id) {
+      Ok(view_id) => {
+        let mut sorts = self
+          .body
+          .views
+          .get_view_sorts(&txn, &view_id)
+          .into_iter()
+          .filter(|sort_map| sort_map.get("id") == Some(&sort_id))
+          .flat_map(|value| match T::try_from(value) {
+            Ok(sort) => Some(sort),
+            Err(err) => {
+              error!("Failed to convert sort, error: {:?}", err);
+              None
+            },
+          })
+          .collect::<Vec<T>>();
+        if sorts.is_empty() {
           None
-        },
-      })
-      .collect::<Vec<T>>();
-    if sorts.is_empty() {
-      None
-    } else {
-      Some(sorts.remove(0))
+        } else {
+          Some(sorts.remove(0))
+        }
+      },
+      Err(_) => None,
     }
   }
 
   pub fn remove_sort(&mut self, view_id: &str, sort_id: &str) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
-        update.update_sorts(|txn, sort_update| {
-          if let Some(i) = sort_update.index_by_id(txn, sort_id) {
-            sort_update.remove(txn, i);
-          }
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
+          update.update_sorts(|txn, sort_update| {
+            if let Some(i) = sort_update.index_by_id(txn, sort_id) {
+              sort_update.remove(txn, i);
+            }
+          });
         });
-      });
+    }
   }
 
   pub fn remove_all_sorts(&mut self, view_id: &str) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
         update.update_sorts(|txn, sort_update| {
           sort_update.clear(txn);
         });
       });
+    }
   }
 
   pub fn get_all_calculations<T: TryFrom<CalculationMap>>(&self, view_id: &str) -> Vec<T> {
     let txn = self.collab.transact();
-    self
-      .body
-      .views
-      .get_view_calculations(&txn, view_id)
-      .into_iter()
-      .flat_map(|calculation| T::try_from(calculation).ok())
-      .collect()
+    match self.body.parse_view_id(view_id) {
+      Ok(view_id) => self
+        .body
+        .views
+        .get_view_calculations(&txn, &view_id)
+        .into_iter()
+        .flat_map(|calculation| T::try_from(calculation).ok())
+        .collect(),
+      Err(_) => vec![],
+    }
   }
 
   pub fn get_calculation<T: TryFrom<CalculationMap>>(
@@ -952,50 +996,59 @@ impl Database {
   ) -> Option<T> {
     let field_id: Any = field_id.into();
     let txn = self.collab.transact();
-    let mut calculations = self
-      .body
-      .views
-      .get_view_calculations(&txn, view_id)
-      .into_iter()
-      .filter(|calculations_map| calculations_map.get("field_id") == Some(&field_id))
-      .flat_map(|value| T::try_from(value).ok())
-      .collect::<Vec<T>>();
+    match self.body.parse_view_id(view_id) {
+      Ok(view_id) => {
+        let mut calculations = self
+          .body
+          .views
+          .get_view_calculations(&txn, &view_id)
+          .into_iter()
+          .filter(|calculations_map| calculations_map.get("field_id") == Some(&field_id))
+          .flat_map(|value| T::try_from(value).ok())
+          .collect::<Vec<T>>();
 
-    if calculations.is_empty() {
-      None
-    } else {
-      Some(calculations.remove(0))
+        if calculations.is_empty() {
+          None
+        } else {
+          Some(calculations.remove(0))
+        }
+      },
+      Err(_) => None,
     }
   }
 
   pub fn update_calculation(&mut self, view_id: &str, calculation: impl Into<CalculationMap>) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
-        update.update_calculations(|txn, calculation_update| {
-          let calculation = calculation.into();
-          if let Some(Any::String(calculation_id)) = calculation.get("id") {
-            let map_ref: MapRef = calculation_update.upsert(txn, calculation_id);
-            Any::from(calculation).fill(txn, &map_ref).unwrap();
-          }
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
+          update.update_calculations(|txn, calculation_update| {
+            let calculation = calculation.into();
+            if let Some(Any::String(calculation_id)) = calculation.get("id") {
+              let map_ref: MapRef = calculation_update.upsert(txn, calculation_id);
+              Any::from(calculation).fill(txn, &map_ref).unwrap();
+            }
+          });
         });
-      });
+    }
   }
 
   pub fn remove_calculation(&mut self, view_id: &str, calculation_id: &str) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
         update.update_calculations(|txn, calculation_update| {
           if let Some(i) = calculation_update.index_by_id(txn, calculation_id) {
             calculation_update.remove(txn, i);
           }
         });
       });
+    }
   }
 
   pub fn get_all_filters<T>(&self, view_id: &str) -> Vec<T>
@@ -1004,19 +1057,22 @@ impl Database {
     <T as TryFrom<FilterMap>>::Error: Debug,
   {
     let txn = self.collab.transact();
-    self
-      .body
-      .views
-      .get_view_filters(&txn, view_id)
-      .into_iter()
-      .flat_map(|setting| match T::try_from(setting) {
-        Ok(filter) => Some(filter),
-        Err(err) => {
-          error!("Failed to convert filter: {:?}", err);
-          None
-        },
-      })
-      .collect()
+    match self.body.parse_view_id(view_id) {
+      Ok(view_id) => self
+        .body
+        .views
+        .get_view_filters(&txn, &view_id)
+        .into_iter()
+        .flat_map(|setting| match T::try_from(setting) {
+          Ok(filter) => Some(filter),
+          Err(err) => {
+            error!("Failed to convert filter: {:?}", err);
+            None
+          },
+        })
+        .collect(),
+      Err(_) => vec![],
+    }
   }
 
   pub fn get_filter<T>(&self, view_id: &str, filter_id: &str) -> Option<T>
@@ -1026,10 +1082,12 @@ impl Database {
   {
     let filter_id: Any = filter_id.into();
     let txn = self.collab.transact();
-    let mut filters = self
-      .body
-      .views
-      .get_view_filters(&txn, view_id)
+    match self.body.parse_view_id(view_id) {
+      Ok(view_id) => {
+        let mut filters = self
+          .body
+          .views
+          .get_view_filters(&txn, &view_id)
       .into_iter()
       .filter(|filter_map| filter_map.get("id") == Some(&filter_id))
       .flat_map(|value| match T::try_from(value) {
@@ -1040,19 +1098,23 @@ impl Database {
         },
       })
       .collect::<Vec<T>>();
-    if filters.is_empty() {
-      None
-    } else {
-      Some(filters.remove(0))
+        if filters.is_empty() {
+          None
+        } else {
+          Some(filters.remove(0))
+        }
+      },
+      Err(_) => None,
     }
   }
 
   pub fn update_filter(&mut self, view_id: &str, filter_id: &str, f: impl FnOnce(&mut FilterMap)) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |view_update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |view_update| {
         view_update.update_filters(|txn, filter_update| {
           let map: MapRef = filter_update.upsert(txn, filter_id);
           let mut filter_map = map.to_json(txn).into_map().unwrap();
@@ -1060,29 +1122,33 @@ impl Database {
           Any::from(filter_map).fill(txn, &map).unwrap();
         });
       });
+    }
   }
 
   pub fn remove_filter(&mut self, view_id: &str, filter_id: &str) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
         update.update_filters(|txn, filter_update| {
           if let Some(i) = filter_update.index_by_id(txn, filter_id) {
             filter_update.remove(txn, i);
           }
         });
       });
+    }
   }
 
   /// Add a filter to the view. If the setting already exists, it will be replaced.
   pub fn insert_filter(&mut self, view_id: &str, filter: impl Into<FilterMap>) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
         update.update_filters(|txn, filter_update| {
           let filter = filter.into();
           if let Some(Any::String(filter_id)) = filter.get("id") {
@@ -1094,6 +1160,7 @@ impl Database {
           }
         });
       });
+    }
   }
 
   /// Sets the filters of a database view. Requires two generics to work around the situation where
@@ -1107,18 +1174,20 @@ impl Database {
     U: for<'a> From<&'a T> + Into<FilterMap>,
   {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
-        update.set_filters(
-          filters
-            .iter()
-            .map(|filter| U::from(filter))
-            .map(Into::into)
-            .collect(),
-        );
-      });
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
+          update.set_filters(
+            filters
+              .iter()
+              .map(|filter| U::from(filter))
+              .map(Into::into)
+              .collect(),
+          );
+        });
+    }
   }
 
   pub fn get_layout_setting<T: From<LayoutSetting>>(
@@ -1127,7 +1196,8 @@ impl Database {
     layout_ty: &DatabaseLayout,
   ) -> Option<T> {
     let txn = self.collab.transact();
-    self.body.views.get_layout_setting(&txn, view_id, layout_ty)
+    let view_id = self.body.parse_view_id(view_id).ok()?;
+    self.body.views.get_layout_setting(&txn, &view_id, layout_ty)
   }
 
   pub fn insert_layout_setting<T: Into<LayoutSetting>>(
@@ -1137,12 +1207,14 @@ impl Database {
     layout_setting: T,
   ) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
-        update.update_layout_settings(layout_ty, layout_setting.into());
-      });
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
+          update.update_layout_settings(layout_ty, layout_setting.into());
+        });
+    }
   }
 
   /// Returns the field settings for the given field ids.
@@ -1153,10 +1225,14 @@ impl Database {
     field_ids: Option<&[String]>,
   ) -> HashMap<String, T> {
     let txn = self.collab.transact();
-    let mut field_settings_map = self
-      .body
-      .views
-      .get_view_field_settings(&txn, view_id)
+    let mut field_settings_map = if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .get_view_field_settings(&txn, &view_id)
+    } else {
+      return HashMap::new();
+    }
       .into_inner()
       .into_iter()
       .map(|(field_id, field_setting)| (field_id, T::from(field_setting)))
@@ -1175,12 +1251,14 @@ impl Database {
     field_settings_map: FieldSettingsByFieldIdMap,
   ) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
-        update.set_field_settings(field_settings_map);
-      })
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
+          update.set_field_settings(field_settings_map);
+        });
+    }
   }
 
   pub fn update_field_settings(
@@ -1198,11 +1276,12 @@ impl Database {
     );
 
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
-        let field_settings = field_settings.into();
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
+          let field_settings = field_settings.into();
         update.update_field_settings_for_fields(
           field_ids,
           |txn, field_setting_update, field_id, _layout_ty| {
@@ -1212,33 +1291,38 @@ impl Database {
               .unwrap();
           },
         );
-      })
+      });
+    }
   }
 
   pub fn remove_field_settings_for_fields(&mut self, view_id: &str, field_ids: Vec<String>) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
-        update.update_field_settings_for_fields(
-          field_ids,
-          |txn, field_setting_update, field_id, _layout_ty| {
-            field_setting_update.remove(txn, field_id);
-          },
-        );
-      })
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
+          update.update_field_settings_for_fields(
+            field_ids,
+            |txn, field_setting_update, field_id, _layout_ty| {
+              field_setting_update.remove(txn, field_id);
+            },
+          );
+        });
+    }
   }
 
   /// Update the layout type of the view.
   pub fn update_layout_type(&mut self, view_id: &str, layout_type: &DatabaseLayout) {
     let mut txn = self.collab.transact_mut();
-    self
-      .body
-      .views
-      .update_database_view(&mut txn, view_id, |update| {
-        update.set_layout_type(*layout_type);
-      });
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
+          update.set_layout_type(*layout_type);
+        });
+    }
   }
 
   /// Returns all the views that the current database has.
@@ -1258,6 +1342,7 @@ impl Database {
   pub fn create_linked_view(&mut self, params: CreateViewParams) -> Result<(), DatabaseError> {
     let mut txn = self.collab.transact_mut();
     let inline_view_id = self.body.get_inline_view_id(&txn);
+    let inline_view_id = self.body.parse_view_id(&inline_view_id)?;
     let row_orders = self.body.views.get_row_orders(&txn, &inline_view_id);
     let field_orders = self.body.views.get_field_orders(&txn, &inline_view_id);
     trace!(
@@ -1277,7 +1362,8 @@ impl Database {
   /// group, field setting, etc.
   pub fn duplicate_linked_view(&mut self, view_id: &str) -> Option<DatabaseView> {
     let mut txn = self.collab.transact_mut();
-    let view = self.body.views.get_view(&txn, view_id)?;
+    let view_id = self.body.parse_view_id(view_id).ok()?;
+    let view = self.body.views.get_view(&txn, &view_id)?;
     let timestamp = timestamp();
     let duplicated_view = DatabaseView {
       id: gen_database_view_id(),
@@ -1383,7 +1469,8 @@ impl Database {
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
     let txn = self.collab.transact();
-    self.body.views.get_view(&txn, view_id)
+    let view_id = self.body.parse_view_id(view_id).ok()?;
+    self.body.views.get_view(&txn, &view_id)
   }
 
   pub async fn to_json_value(&self) -> JsonValue {
@@ -1400,7 +1487,10 @@ impl Database {
     let row_orders = {
       let txn = self.collab.transact();
       let inline_view_id = self.body.get_inline_view_id(&txn);
-      self.body.views.get_row_orders(&txn, &inline_view_id)
+      match self.body.parse_view_id(&inline_view_id) {
+        Ok(view_id) => self.body.views.get_row_orders(&txn, &view_id),
+        Err(_) => vec![],
+      }
     };
 
     self
@@ -1417,7 +1507,10 @@ impl Database {
   pub async fn get_all_row_orders(&self) -> Vec<RowOrder> {
     let txn = self.collab.transact();
     let inline_view_id = self.body.get_inline_view_id(&txn);
-    self.body.views.get_row_orders(&txn, &inline_view_id)
+    match self.body.parse_view_id(&inline_view_id) {
+      Ok(view_id) => self.body.views.get_row_orders(&txn, &view_id),
+      Err(_) => vec![],
+    }
   }
 
   /// The inline view is the view that create with the database when initializing
@@ -1440,7 +1533,9 @@ impl Database {
       self.body.views.clear(&mut txn);
       views.into_iter().map(|view| view.id.to_string()).collect()
     } else {
-      self.body.views.delete_view(&mut txn, view_id);
+      if let Ok(view_id_uuid) = self.body.parse_view_id(view_id) {
+        self.body.views.delete_view(&mut txn, &view_id_uuid);
+      }
       vec![view_id.to_string()]
     }
   }
@@ -1584,9 +1679,10 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   let meta = MetaMap::new(metas);
 
   let inline_view_id = meta.get_inline_view_id(&txn)?;
+  let inline_view_uuid = try_parse_database_view_id(&inline_view_id)?;
   Some(
     views
-      .get_row_orders(&txn, &inline_view_id)
+      .get_row_orders(&txn, &inline_view_uuid)
       .into_iter()
       .map(|order| order.id.to_string())
       .collect(),
@@ -1864,7 +1960,8 @@ impl DatabaseBody {
   }
 
   pub fn index_of_row<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> Option<usize> {
-    let view = self.views.get_view(txn, view_id)?;
+    let view_id = self.parse_view_id(view_id).ok()?;
+    let view = self.views.get_view(txn, &view_id)?;
     view.row_orders.iter().position(|order| &order.id == row_id)
   }
 
@@ -1907,7 +2004,8 @@ impl DatabaseBody {
     view_id: &str,
     field_id: &str,
   ) -> Option<usize> {
-    let view = self.views.get_view(txn, view_id)?;
+    let view_id = self.parse_view_id(view_id).ok()?;
+    let view = self.views.get_view(txn, &view_id)?;
     view
       .field_orders
       .iter()
@@ -1922,7 +2020,10 @@ impl DatabaseBody {
     field_id: &str,
     auto_fetch: bool,
   ) -> Vec<RowCell> {
-    let row_orders = self.views.get_row_orders(txn, view_id);
+    let row_orders = match self.parse_view_id(view_id) {
+      Ok(view_id) => self.views.get_row_orders(txn, &view_id),
+      Err(_) => vec![],
+    };
     let rows = self
       .block
       .get_rows_from_row_orders(&row_orders, auto_fetch)
@@ -1942,7 +2043,11 @@ impl DatabaseBody {
     view_id: &str,
     field_ids: Option<Vec<String>>,
   ) -> Vec<Field> {
-    let field_orders = self.views.get_field_orders(txn, view_id);
+    let field_orders = if let Some(view_id_uuid) = try_parse_database_view_id(view_id) {
+      self.views.get_field_orders(txn, &view_id_uuid)
+    } else {
+      Vec::new()
+    };
     let mut all_field_map = self
       .fields
       .get_fields_with_txn(txn, field_ids)
@@ -2088,6 +2193,12 @@ impl DatabaseBody {
         });
     }
     Ok(())
+  }
+
+  /// Helper function to safely convert string view ID to DatabaseViewId
+  fn parse_view_id(&self, view_id: &str) -> Result<DatabaseViewId, DatabaseError> {
+    try_parse_database_view_id(view_id)
+      .ok_or_else(|| DatabaseError::InvalidDatabaseViewId(format!("Invalid UUID format for view_id: {}", view_id)))
   }
 }
 

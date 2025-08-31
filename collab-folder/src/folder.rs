@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use collab::core::collab::{CollabOptions, DataSource};
 pub use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -22,6 +23,7 @@ use crate::{
   FolderData, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
   ViewChangeReceiver, ViewId, ViewUpdate, ViewsMap, Workspace, impl_section_op,
 };
+use collab_entity::uuid_validation::WorkspaceId;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 #[serde(transparent)]
@@ -115,7 +117,8 @@ impl Folder {
     workspace_id: &str,
     client_id: ClientID,
   ) -> Result<Self, FolderError> {
-    let workspace_uuid = Uuid::parse_str(workspace_id).unwrap_or_else(|_| Uuid::nil());
+    let workspace_uuid = Uuid::parse_str(workspace_id)
+      .map_err(|_| FolderError::Internal(anyhow!("Invalid workspace id format")))?;
     let options = CollabOptions::new(workspace_uuid, client_id).with_data_source(collab_doc_state);
     let collab = Collab::new_with_options(origin, options)?;
     Self::open(collab, None)
@@ -165,7 +168,7 @@ impl Folder {
   /// This function fetches the ID of the current workspace from the meta object,
   /// and uses this ID to fetch the actual workspace object.
   ///
-  pub fn get_workspace_info(&self, workspace_id: &str, uid: i64) -> Option<Workspace> {
+  pub fn get_workspace_info(&self, workspace_id: &WorkspaceId, uid: i64) -> Option<Workspace> {
     let txn = self.collab.transact();
     self.body.get_workspace_info(&txn, workspace_id, uid)
   }
@@ -598,18 +601,12 @@ impl FolderBody {
   pub fn get_workspace_info<T: ReadTxn>(
     &self,
     txn: &T,
-    workspace_id: &str,
+    workspace_id: &WorkspaceId,
     uid: i64,
   ) -> Option<Workspace> {
     let folder_workspace_id: String = self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)?;
-    // Parse workspace_id as UUID, return None if invalid
-    let uuid_workspace_id = match uuid::Uuid::parse_str(workspace_id) {
-      Ok(id) => id.to_string(),
-      Err(_) => {
-        error!("Invalid workspace id format: {}", workspace_id);
-        return None;
-      },
-    };
+    // Convert workspace_id UUID to string for comparison
+    let uuid_workspace_id = workspace_id.to_string();
     if folder_workspace_id != uuid_workspace_id {
       error!("Workspace id not match when get current workspace");
       return None;

@@ -56,7 +56,8 @@ async fn test_folder_collab_remapper() {
     *id_mapper.get_new_id(&relation_map.workspace_id).unwrap()
   );
 
-  let workspace_info = folder.get_workspace_info(&workspace_id, uid).unwrap();
+  let workspace_uuid = uuid::Uuid::parse_str(&workspace_id).unwrap();
+  let workspace_info = folder.get_workspace_info(&workspace_uuid, uid).unwrap();
   assert_eq!(workspace_info.name, "My Custom Workspace");
   assert_eq!(
     workspace_info.id,
