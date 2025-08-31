@@ -87,7 +87,11 @@ impl DatabaseViews {
     });
   }
 
-  pub fn get_view_group_setting<T: ReadTxn>(&self, txn: &T, view_id: &DatabaseViewId) -> Vec<GroupSettingMap> {
+  pub fn get_view_group_setting<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &DatabaseViewId,
+  ) -> Vec<GroupSettingMap> {
     if let Some(map_ref) = self.container.get_with_txn(txn, &view_id.to_string()) {
       group_setting_from_map_ref(txn, &map_ref)
     } else {
@@ -103,7 +107,11 @@ impl DatabaseViews {
     }
   }
 
-  pub fn get_view_calculations<T: ReadTxn>(&self, txn: &T, view_id: &DatabaseViewId) -> Vec<CalculationMap> {
+  pub fn get_view_calculations<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &DatabaseViewId,
+  ) -> Vec<CalculationMap> {
     if let Some(map_ref) = self.container.get_with_txn(txn, &view_id.to_string()) {
       calculations_from_map_ref(txn, &map_ref)
     } else {
@@ -147,9 +155,7 @@ impl DatabaseViews {
   }
 
   pub fn get_view<T: ReadTxn>(&self, txn: &T, view_id: &DatabaseViewId) -> Option<DatabaseView> {
-    let map_ref = self
-      .container
-      .get_with_txn(txn, &view_id.to_string())?;
+    let map_ref = self.container.get_with_txn(txn, &view_id.to_string())?;
     view_from_map_ref(&map_ref, txn)
   }
 
@@ -169,7 +175,11 @@ impl DatabaseViews {
       .collect::<Vec<_>>()
   }
 
-  pub fn get_database_view_layout<T: ReadTxn>(&self, txn: &T, view_id: &DatabaseViewId) -> DatabaseLayout {
+  pub fn get_database_view_layout<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &DatabaseViewId,
+  ) -> DatabaseLayout {
     let layout_type = self
       .container
       .get_with_txn::<_, MapRef>(txn, &view_id.to_string())
@@ -214,8 +224,12 @@ impl DatabaseViews {
       .unwrap_or_default()
   }
 
-  pub fn update_row_orders_with_txn<F>(&self, txn: &mut TransactionMut, view_id: &DatabaseViewId, f: &mut F)
-  where
+  pub fn update_row_orders_with_txn<F>(
+    &self,
+    txn: &mut TransactionMut,
+    view_id: &DatabaseViewId,
+    f: &mut F,
+  ) where
     F: FnMut(&mut RowOrder),
   {
     if let Some(row_order_map) = self
@@ -232,10 +246,13 @@ impl DatabaseViews {
     }
   }
 
-  pub fn get_row_index<T: ReadTxn>(&self, txn: &T, view_id: &DatabaseViewId, row_id: &RowId) -> Option<u32> {
-    let map: MapRef = self
-      .container
-      .get_with_txn(txn, &view_id.to_string())?;
+  pub fn get_row_index<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &DatabaseViewId,
+    row_id: &RowId,
+  ) -> Option<u32> {
+    let map: MapRef = self.container.get_with_txn(txn, &view_id.to_string())?;
     let row_order_array: ArrayRef = map.get_with_txn(txn, DATABASE_VIEW_ROW_ORDERS)?;
     RowOrderArray::new(row_order_array).get_position_with_txn(txn, &row_id.to_string())
   }

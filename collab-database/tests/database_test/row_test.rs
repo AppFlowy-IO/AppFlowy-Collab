@@ -263,7 +263,11 @@ async fn duplicate_row_test() {
   let second_row_id = database_test.pre_define_row_ids[1];
   let third_row_id = database_test.pre_define_row_ids[2];
 
-  let params = database_test.duplicate_row(&second_row_id).await.unwrap();
+  let params = database_test
+    .duplicate_row(&second_row_id)
+    .await
+    .unwrap()
+    .unwrap();
   let (index, row_order) = database_test
     .create_row_in_view(TEST_VIEW_ID_V1, params)
     .await
@@ -289,6 +293,7 @@ async fn duplicate_last_row_test() {
   let params = database_test
     .duplicate_row(&database_test.pre_define_row_ids[2].clone())
     .await
+    .unwrap()
     .unwrap();
   let (index, row_order) = database_test
     .create_row_in_view(TEST_VIEW_ID_V1, params)
@@ -312,7 +317,7 @@ async fn document_id_of_row_test() {
     .await
     .unwrap();
 
-  let row = database_test.get_row(&row_order.id).await;
+  let row = database_test.get_row(&row_order.id).await.unwrap();
   let expected_document_id = meta_id_from_row_id(&row.id, RowMetaKey::DocumentId);
   assert_eq!(row.document_id(), expected_document_id,);
   assert_eq!(row.document_id(), expected_document_id,);

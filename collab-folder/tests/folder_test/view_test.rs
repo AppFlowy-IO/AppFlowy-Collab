@@ -488,8 +488,7 @@ fn move_view_across_parent_test() {
   );
 
   // Move view_1_child from view_2 to current workspace
-  let workspace_uuid =
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes());
+  let workspace_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes());
   let workspace_uuid_str = workspace_uuid.to_string();
   folder.move_nested_view(&v1_child_uuid_str, &workspace_uuid_str, None, uid.as_i64());
   let view_1 = folder.get_view(&v1_uuid_str, uid.as_i64()).unwrap();

@@ -150,7 +150,7 @@ pub async fn run_script(
         workspace_database_with_db(1, Arc::downgrade(&db), Some(config.clone())).await;
       let database = w_database.get_database(&database_id).await.unwrap();
 
-      let actual = database.lock().to_json_value();
+      let actual = database.lock().to_json_value().await.unwrap();
 
       assert_json_include!(actual: actual, expected: expected);
     },
@@ -159,7 +159,7 @@ pub async fn run_script(
       expected,
     } => {
       let database = workspace_database.get_database(&database_id).await.unwrap();
-      let actual = database.lock().to_json_value();
+      let actual = database.lock().to_json_value().await.unwrap();
       assert_json_diff::assert_json_include!(actual: actual, expected: expected);
     },
     DatabaseScript::IsExist {

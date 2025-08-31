@@ -21,7 +21,10 @@ pub struct WorkspaceDatabase {
   pub body: WorkspaceDatabaseBody,
 }
 
-pub fn default_workspace_database_data(object_id: &str, client_id: ClientID) -> Result<EncodedCollab, DatabaseError> {
+pub fn default_workspace_database_data(
+  object_id: &str,
+  client_id: ClientID,
+) -> Result<EncodedCollab, DatabaseError> {
   let object_uuid = Uuid::parse_str(object_id)
     .map_err(|err| DatabaseError::Internal(anyhow!("Invalid object_id UUID: {}", err)))?;
   let options = CollabOptions::new(object_uuid, client_id);

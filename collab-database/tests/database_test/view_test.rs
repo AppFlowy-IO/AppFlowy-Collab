@@ -33,7 +33,10 @@ async fn create_initial_database_test() {
     .await;
   assert_eq!(database_test.get_all_field_orders().len(), 0);
   assert_eq!(all_rows.len(), 0);
-  assert_eq!(database_test.get_database_id().to_string(), database_id);
+  assert_eq!(
+    database_test.get_database_id().unwrap().to_string(),
+    database_id
+  );
 
   let views = database_test.get_all_views();
   assert_eq!(views.len(), 1);
@@ -250,7 +253,7 @@ async fn duplicate_database_view_test() {
 async fn database_data_serde_test() {
   let database_id = uuid::Uuid::new_v4();
   let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let database_data = database_test.get_database_data(20, false).await;
+  let database_data = database_test.get_database_data(20, false).await.unwrap();
 
   let json = database_data.to_json().unwrap();
   let database_data2 = DatabaseData::from_json(&json).unwrap();

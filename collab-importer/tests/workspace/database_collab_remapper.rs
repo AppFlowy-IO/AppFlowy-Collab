@@ -25,7 +25,10 @@ async fn test_parse_real_database_json() {
 
   let original_database_id = "0730a32c-5a52-43fb-8e68-ee73287ebf69";
   if let Some(new_database_id) = id_mapper.get_new_id(original_database_id) {
-    assert_eq!(&database.get_database_id().to_string(), new_database_id);
+    assert_eq!(
+      &database.get_database_id().unwrap().to_string(),
+      new_database_id
+    );
   }
 
   let views = database.get_all_views();
@@ -43,7 +46,7 @@ async fn test_parse_real_database_json() {
   let fields = database.get_all_fields();
   assert_eq!(fields.len(), 5);
 
-  let database_data = database.get_database_data(20, false).await;
+  let database_data = database.get_database_data(20, false).await.unwrap();
   assert_eq!(database_data.rows.len(), 5);
 
   let original_uuids = [
@@ -96,7 +99,7 @@ async fn test_parse_real_database_json() {
 
     assert_eq!(
       &row.database_id.to_string(),
-      &database.get_database_id().to_string(),
+      &database.get_database_id().unwrap().to_string(),
       "row database_id should match database id"
     );
 

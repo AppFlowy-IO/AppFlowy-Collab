@@ -22,7 +22,7 @@ async fn insert_cell_test() {
     })
     .await;
 
-  let row = test.get_row(&row_id).await;
+  let row = test.get_row(&row_id).await.unwrap();
   let cell = row.cells.get("f1").unwrap();
   assert_eq!(cell.get_as::<i64>("level").unwrap(), 1);
 }
@@ -57,7 +57,7 @@ async fn update_cell_test() {
     })
     .await;
 
-  let row = test.get_row(&row_id).await;
+  let row = test.get_row(&row_id).await.unwrap();
   let cell = row.cells.get("f1").unwrap();
   let created_at: i64 = cell.get_as(CREATED_AT).unwrap();
   let modified_at: i64 = cell.get_as(LAST_MODIFIED).unwrap();
@@ -88,7 +88,7 @@ async fn update_not_exist_row_test() {
   database
     .update_row(non_existent_row_id, |_row_update| {})
     .await;
-  let row = database.get_row(&non_existent_row_id).await;
+  let row = database.get_row(&non_existent_row_id).await.unwrap();
   // If the row with the given id does not exist, the get_row method will return a empty Row
   assert!(row.is_empty())
 }

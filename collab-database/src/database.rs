@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
+use anyhow::anyhow;
+
 use crate::blocks::{Block, BlockEvent, InitRowChan};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
@@ -45,6 +47,7 @@ use collab_entity::uuid_validation::{DatabaseId, DatabaseViewId};
 use futures::stream::StreamExt;
 use futures::{Stream, stream};
 use nanoid::nanoid;
+use std::pin::Pin;
 
 use crate::database_trait::{DatabaseCollabService, DatabaseDataVariant, DatabaseRowCollabService};
 use collab::core::collab::CollabOptions;
@@ -132,7 +135,7 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let object_id = Uuid::parse_str(database_id).unwrap_or_else(|_| Uuid::new_v4());
+    let object_id = Uuid::parse_str(database_id).map_err(|e| DatabaseError::Internal(e.into()))?;
     let collab = context
       .database_collab_service
       .clone()
@@ -147,7 +150,7 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let object_id = Uuid::parse_str(database_id).unwrap_or_else(|_| Uuid::new_v4());
+    let object_id = Uuid::parse_str(database_id).map_err(|e| DatabaseError::Internal(e.into()))?;
     let database = context
       .database_collab_service
       .clone()
@@ -342,11 +345,9 @@ impl Database {
         error!("Cannot find inline view id");
         self.body.fields.get_all_field_orders(&txn)
       },
-      Some(inline_view_id) => {
-        match self.body.parse_view_id(&inline_view_id) {
-          Ok(view_id) => self.body.views.get_field_orders(&txn, &view_id),
-          Err(_) => self.body.fields.get_all_field_orders(&txn),
-        }
+      Some(inline_view_id) => match self.body.parse_view_id(&inline_view_id) {
+        Ok(view_id) => self.body.views.get_field_orders(&txn, &view_id),
+        Err(_) => self.body.fields.get_all_field_orders(&txn),
       },
     }
   }
@@ -371,7 +372,7 @@ impl Database {
   }
 
   /// Return the database id with a transaction
-  pub fn get_database_id(&self) -> DatabaseId {
+  pub fn get_database_id(&self) -> Result<DatabaseId, DatabaseError> {
     let txn = self.collab.transact();
     self.body.get_database_id(&txn)
   }
@@ -495,15 +496,18 @@ impl Database {
   }
 
   /// Return the [Row] with the given row id.
-  pub async fn get_row(&self, row_id: &RowId) -> Row {
+  pub async fn get_row(&self, row_id: &RowId) -> Result<Row, DatabaseError> {
     let row = self.body.block.get_database_row(row_id).await;
+    let database_id = self.get_database_id()?;
     match row {
-      None => Row::empty(*row_id, self.get_database_id()),
-      Some(row) => row
-        .read()
-        .await
-        .get_row()
-        .unwrap_or_else(|| Row::empty(*row_id, self.get_database_id())),
+      None => Ok(Row::empty(*row_id, database_id)),
+      Some(row) => Ok(
+        row
+          .read()
+          .await
+          .get_row()
+          .unwrap_or_else(|| Row::empty(*row_id, database_id)),
+      ),
     }
   }
 
@@ -622,7 +626,10 @@ impl Database {
   pub async fn get_row_order_at_index(&self, view_id: &str, index: u32) -> Option<RowOrder> {
     let txn = self.collab.transact();
     let view_id = self.body.parse_view_id(view_id).ok()?;
-    self.body.views.get_row_order_at_index(&txn, &view_id, index)
+    self
+      .body
+      .views
+      .get_row_order_at_index(&txn, &view_id, index)
   }
 
   pub fn get_row_orders_for_view(&self, view_id: &str) -> Vec<RowOrder> {
@@ -649,8 +656,14 @@ impl Database {
   ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_ids = row_orders.iter().map(|order| order.id).collect();
     let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token, auto_fetch);
-    let database_id = self.get_database_id();
-    rows_stream.then(move |result| {
+    let database_id = match self.get_database_id() {
+      Ok(id) => id,
+      Err(e) => {
+        return Box::pin(stream::once(async move { Err(e) }))
+          as Pin<Box<dyn Stream<Item = Result<Row, DatabaseError>> + '_>>;
+      },
+    };
+    Box::pin(rows_stream.then(move |result| {
       let database_id = database_id;
       async move {
         let row = result?;
@@ -661,7 +674,7 @@ impl Database {
           .unwrap_or_else(|| Row::empty(row_id, database_id));
         Ok(row)
       }
-    })
+    })) as Pin<Box<dyn Stream<Item = Result<Row, DatabaseError>> + '_>>
   }
 
   /// Return a list of [RowCell] for the given view and field.
@@ -786,16 +799,16 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |update| {
-        update.update_groups(|txn, group_update| {
-          let group_setting = group_setting.into();
-          let settings = if let Some(Any::String(setting_id)) = group_setting.get("id") {
-            group_update.upsert(txn, setting_id)
-          } else {
-            group_update.push_back(txn, MapPrelim::default())
-          };
-          Any::from(group_setting).fill(txn, &settings).unwrap();
+          update.update_groups(|txn, group_update| {
+            let group_setting = group_setting.into();
+            let settings = if let Some(Any::String(setting_id)) = group_setting.get("id") {
+              group_update.upsert(txn, setting_id)
+            } else {
+              group_update.push_back(txn, MapPrelim::default())
+            };
+            Any::from(group_setting).fill(txn, &settings).unwrap();
+          });
         });
-      });
     }
   }
 
@@ -806,12 +819,12 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |update| {
-        update.update_groups(|txn, group_update| {
-          if let Some(i) = group_update.index_by_id(txn, group_setting_id) {
-            group_update.remove(txn, i);
-          }
+          update.update_groups(|txn, group_update| {
+            if let Some(i) = group_update.index_by_id(txn, group_setting_id) {
+              group_update.remove(txn, i);
+            }
+          });
         });
-      });
     }
   }
 
@@ -827,10 +840,10 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |view_update| {
-        view_update.update_groups(|txn, group_update| {
-          group_update.update_map(txn, setting_id, f);
+          view_update.update_groups(|txn, group_update| {
+            group_update.update_map(txn, setting_id, f);
+          });
         });
-      });
     }
   }
 
@@ -841,12 +854,12 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |update| {
-        update.update_groups(|txn, group_update| {
-          if let Some(i) = group_update.index_by_id(txn, setting_id) {
-            group_update.remove(txn, i);
-          }
+          update.update_groups(|txn, group_update| {
+            if let Some(i) = group_update.index_by_id(txn, setting_id) {
+              group_update.remove(txn, i);
+            }
+          });
         });
-      });
     }
   }
 
@@ -857,16 +870,16 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |update| {
-        update.update_sorts(|txn, sort_update| {
-          let sort = sort.into();
-          if let Some(Any::String(sort_id)) = sort.get("id") {
-            let map_ref: MapRef = sort_update.upsert(txn, sort_id);
-            Any::from(sort).fill(txn, &map_ref).unwrap();
-          } else {
-            sort_update.push_back(txn, sort);
-          }
+          update.update_sorts(|txn, sort_update| {
+            let sort = sort.into();
+            if let Some(Any::String(sort_id)) = sort.get("id") {
+              let map_ref: MapRef = sort_update.upsert(txn, sort_id);
+              Any::from(sort).fill(txn, &map_ref).unwrap();
+            } else {
+              sort_update.push_back(txn, sort);
+            }
+          });
         });
-      });
     }
   }
 
@@ -877,14 +890,14 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |update| {
-        update.update_sorts(|txn, sort_update| {
-          if let Some(from) = sort_update.index_by_id(txn, from_sort_id) {
-            if let Some(to) = sort_update.index_by_id(txn, to_sort_id) {
-              sort_update.move_to(txn, from, to);
+          update.update_sorts(|txn, sort_update| {
+            if let Some(from) = sort_update.index_by_id(txn, from_sort_id) {
+              if let Some(to) = sort_update.index_by_id(txn, to_sort_id) {
+                sort_update.move_to(txn, from, to);
+              }
             }
-          }
+          });
         });
-      });
     }
   }
 
@@ -968,10 +981,10 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |update| {
-        update.update_sorts(|txn, sort_update| {
-          sort_update.clear(txn);
+          update.update_sorts(|txn, sort_update| {
+            sort_update.clear(txn);
+          });
         });
-      });
     }
   }
 
@@ -1042,12 +1055,12 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |update| {
-        update.update_calculations(|txn, calculation_update| {
-          if let Some(i) = calculation_update.index_by_id(txn, calculation_id) {
-            calculation_update.remove(txn, i);
-          }
+          update.update_calculations(|txn, calculation_update| {
+            if let Some(i) = calculation_update.index_by_id(txn, calculation_id) {
+              calculation_update.remove(txn, i);
+            }
+          });
         });
-      });
     }
   }
 
@@ -1088,16 +1101,16 @@ impl Database {
           .body
           .views
           .get_view_filters(&txn, &view_id)
-      .into_iter()
-      .filter(|filter_map| filter_map.get("id") == Some(&filter_id))
-      .flat_map(|value| match T::try_from(value) {
-        Ok(filter) => Some(filter),
-        Err(err) => {
-          error!("Failed to convert filter, error: {:?}", err);
-          None
-        },
-      })
-      .collect::<Vec<T>>();
+          .into_iter()
+          .filter(|filter_map| filter_map.get("id") == Some(&filter_id))
+          .flat_map(|value| match T::try_from(value) {
+            Ok(filter) => Some(filter),
+            Err(err) => {
+              error!("Failed to convert filter, error: {:?}", err);
+              None
+            },
+          })
+          .collect::<Vec<T>>();
         if filters.is_empty() {
           None
         } else {
@@ -1115,13 +1128,13 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |view_update| {
-        view_update.update_filters(|txn, filter_update| {
-          let map: MapRef = filter_update.upsert(txn, filter_id);
-          let mut filter_map = map.to_json(txn).into_map().unwrap();
-          f(&mut filter_map);
-          Any::from(filter_map).fill(txn, &map).unwrap();
+          view_update.update_filters(|txn, filter_update| {
+            let map: MapRef = filter_update.upsert(txn, filter_id);
+            let mut filter_map = map.to_json(txn).into_map().unwrap();
+            f(&mut filter_map);
+            Any::from(filter_map).fill(txn, &map).unwrap();
+          });
         });
-      });
     }
   }
 
@@ -1132,12 +1145,12 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |update| {
-        update.update_filters(|txn, filter_update| {
-          if let Some(i) = filter_update.index_by_id(txn, filter_id) {
-            filter_update.remove(txn, i);
-          }
+          update.update_filters(|txn, filter_update| {
+            if let Some(i) = filter_update.index_by_id(txn, filter_id) {
+              filter_update.remove(txn, i);
+            }
+          });
         });
-      });
     }
   }
 
@@ -1149,17 +1162,17 @@ impl Database {
         .body
         .views
         .update_database_view(&mut txn, &view_id, |update| {
-        update.update_filters(|txn, filter_update| {
-          let filter = filter.into();
-          if let Some(Any::String(filter_id)) = filter.get("id") {
-            let map_ref: MapRef = filter_update.upsert(txn, filter_id);
-            Any::from(filter).fill(txn, &map_ref).unwrap();
-          } else {
-            let map_ref = filter_update.push_back(txn, MapPrelim::default());
-            Any::from(filter).fill(txn, &map_ref).unwrap();
-          }
+          update.update_filters(|txn, filter_update| {
+            let filter = filter.into();
+            if let Some(Any::String(filter_id)) = filter.get("id") {
+              let map_ref: MapRef = filter_update.upsert(txn, filter_id);
+              Any::from(filter).fill(txn, &map_ref).unwrap();
+            } else {
+              let map_ref = filter_update.push_back(txn, MapPrelim::default());
+              Any::from(filter).fill(txn, &map_ref).unwrap();
+            }
+          });
         });
-      });
     }
   }
 
@@ -1197,7 +1210,10 @@ impl Database {
   ) -> Option<T> {
     let txn = self.collab.transact();
     let view_id = self.body.parse_view_id(view_id).ok()?;
-    self.body.views.get_layout_setting(&txn, &view_id, layout_ty)
+    self
+      .body
+      .views
+      .get_layout_setting(&txn, &view_id, layout_ty)
   }
 
   pub fn insert_layout_setting<T: Into<LayoutSetting>>(
@@ -1226,17 +1242,14 @@ impl Database {
   ) -> HashMap<String, T> {
     let txn = self.collab.transact();
     let mut field_settings_map = if let Ok(view_id) = self.body.parse_view_id(view_id) {
-      self
-        .body
-        .views
-        .get_view_field_settings(&txn, &view_id)
+      self.body.views.get_view_field_settings(&txn, &view_id)
     } else {
       return HashMap::new();
     }
-      .into_inner()
-      .into_iter()
-      .map(|(field_id, field_setting)| (field_id, T::from(field_setting)))
-      .collect::<HashMap<String, T>>();
+    .into_inner()
+    .into_iter()
+    .map(|(field_id, field_setting)| (field_id, T::from(field_setting)))
+    .collect::<HashMap<String, T>>();
 
     if let Some(field_ids) = field_ids {
       field_settings_map.retain(|field_id, _| field_ids.contains(field_id));
@@ -1282,16 +1295,16 @@ impl Database {
         .views
         .update_database_view(&mut txn, &view_id, |update| {
           let field_settings = field_settings.into();
-        update.update_field_settings_for_fields(
-          field_ids,
-          |txn, field_setting_update, field_id, _layout_ty| {
-            let map_ref: MapRef = field_setting_update.get_or_init(txn, field_id);
-            Any::from(field_settings.clone())
-              .fill(txn, &map_ref)
-              .unwrap();
-          },
-        );
-      });
+          update.update_field_settings_for_fields(
+            field_ids,
+            |txn, field_setting_update, field_id, _layout_ty| {
+              let map_ref: MapRef = field_setting_update.get_or_init(txn, field_id);
+              Any::from(field_settings.clone())
+                .fill(txn, &map_ref)
+                .unwrap();
+            },
+          );
+        });
     }
   }
 
@@ -1381,18 +1394,19 @@ impl Database {
   }
 
   /// Duplicate the row, and insert it after the original row.
-  pub async fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
-    let database_id = self.get_database_id();
-    let row = self
-      .body
-      .block
-      .get_database_row(row_id)
-      .await?
-      .read()
-      .await
-      .get_row()?;
+  pub async fn duplicate_row(
+    &self,
+    row_id: &RowId,
+  ) -> Result<Option<CreateRowParams>, DatabaseError> {
+    let database_id = self.get_database_id()?;
+    let Some(database_row) = self.body.block.get_database_row(row_id).await else {
+      return Ok(None);
+    };
+    let Some(row) = database_row.read().await.get_row() else {
+      return Ok(None);
+    };
     let timestamp = timestamp();
-    Some(CreateRowParams {
+    Ok(Some(CreateRowParams {
       id: gen_row_id(),
       database_id,
       cells: row.cells,
@@ -1402,7 +1416,7 @@ impl Database {
       created_at: timestamp,
       modified_at: timestamp,
       row_meta: None,
-    })
+    }))
   }
 
   pub fn duplicate_field(
@@ -1438,10 +1452,14 @@ impl Database {
     self.body.fields.get_all_fields(&txn)
   }
 
-  pub async fn get_database_data(&self, chunk_size: usize, auto_fetch: bool) -> DatabaseData {
+  pub async fn get_database_data(
+    &self,
+    chunk_size: usize,
+    auto_fetch: bool,
+  ) -> Result<DatabaseData, DatabaseError> {
     let txn = self.collab.transact();
 
-    let database_id = self.body.get_database_id(&txn);
+    let database_id = self.body.get_database_id(&txn)?;
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let views = self.get_all_views();
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
@@ -1458,13 +1476,13 @@ impl Database {
       }
     }
 
-    DatabaseData {
+    Ok(DatabaseData {
       database_id,
       fields,
       rows,
       views,
       row_metas,
-    }
+    })
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
@@ -1473,9 +1491,9 @@ impl Database {
     self.body.views.get_view(&txn, &view_id)
   }
 
-  pub async fn to_json_value(&self) -> JsonValue {
-    let database_data = self.get_database_data(20, false).await;
-    serde_json::to_value(&database_data).unwrap()
+  pub async fn to_json_value(&self) -> Result<JsonValue, DatabaseError> {
+    let database_data = self.get_database_data(20, false).await?;
+    Ok(serde_json::to_value(&database_data).unwrap())
   }
 
   pub async fn get_all_rows(
@@ -1941,10 +1959,14 @@ impl DatabaseBody {
     inline_view_id
   }
 
-  pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> DatabaseId {
-    let database_id_str: String = self.root.get_with_txn(txn, DATABASE_ID).unwrap();
-    collab_entity::uuid_validation::try_parse_database_id(&database_id_str)
-      .unwrap_or_else(collab_entity::uuid_validation::generate_database_id)
+  pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> Result<DatabaseId, DatabaseError> {
+    let database_id_str: String = self
+      .root
+      .get_with_txn(txn, DATABASE_ID)
+      .ok_or_else(|| DatabaseError::Internal(anyhow!("Database ID not found")))?;
+    collab_entity::uuid_validation::try_parse_database_id(&database_id_str).ok_or_else(|| {
+      DatabaseError::Internal(anyhow!("Invalid database ID format: {}", database_id_str))
+    })
   }
 
   /// Create a new row from the given view.
@@ -1974,9 +1996,13 @@ impl DatabaseBody {
     // when initializing the database
     let mut inline_view_id = self.metas.get_inline_view_id(txn);
     if inline_view_id.is_none() {
+      let db_id_display = self
+        .get_database_id(txn)
+        .map(|id| id.to_string())
+        .unwrap_or_else(|_| "<invalid>".to_string());
       error!(
         "Inline view id is not found in the database:{}",
-        self.get_database_id(txn)
+        db_id_display
       );
       let view_metas = self.views.get_all_views_meta(txn);
       inline_view_id = view_metas.first().map(|view| view.id.to_string());
@@ -2138,7 +2164,7 @@ impl DatabaseBody {
     row_orders: Vec<RowOrder>,
   ) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
-    let database_id = self.get_database_id(txn);
+    let database_id = self.get_database_id(txn)?;
     let view = DatabaseView {
       id: params.view_id,
       database_id,
@@ -2197,8 +2223,9 @@ impl DatabaseBody {
 
   /// Helper function to safely convert string view ID to DatabaseViewId
   fn parse_view_id(&self, view_id: &str) -> Result<DatabaseViewId, DatabaseError> {
-    try_parse_database_view_id(view_id)
-      .ok_or_else(|| DatabaseError::InvalidDatabaseViewId(format!("Invalid UUID format for view_id: {}", view_id)))
+    try_parse_database_view_id(view_id).ok_or_else(|| {
+      DatabaseError::InvalidDatabaseViewId(format!("Invalid UUID format for view_id: {}", view_id))
+    })
   }
 }
 

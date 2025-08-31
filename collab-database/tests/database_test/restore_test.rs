@@ -86,7 +86,7 @@ async fn assert_database_eq(database_id: &str, database_test: DatabaseTest) {
 
   assert_json_include!(
     expected: expected,
-    actual: database_test.to_json_value().await
+    actual: database_test.to_json_value().await.unwrap()
   );
 }
 
@@ -104,7 +104,7 @@ async fn open_020_history_database_test() {
     db,
   )
   .await;
-  let actual_1 = database_test.to_json_value().await;
+  let actual_1 = database_test.to_json_value().await.unwrap();
   assert_json_include!(expected: expected_json(), actual: actual_1);
 
   let bytes = std::fs::read("./tests/history_database/database_020_encode_collab").unwrap();

@@ -579,7 +579,10 @@ impl NotionPage {
     match &self.notion_file {
       NotionFile::CSV { .. } => {
         let content = self.as_database().await?;
-        let database_id = content.database.get_database_id();
+        let database_id = content
+          .database
+          .get_database_id()
+          .map_err(|e| ImporterError::Internal(e.into()))?;
         let mut resources = vec![content.resource];
         let view_ids = content
           .database
