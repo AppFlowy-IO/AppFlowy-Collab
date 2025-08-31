@@ -97,7 +97,7 @@ impl SpaceViewEdgeCaseHandler {
 
     let space_view_uuid = Uuid::parse_str(space_view_id)?;
     let original_workspace_uuid = Uuid::parse_str(&self.original_workspace_id)?;
-    
+
     for (view_id, view_metadata) in relation_map.views.iter_mut() {
       if view_id != &space_view_uuid {
         if let Some(parent_id) = &view_metadata.parent_id {

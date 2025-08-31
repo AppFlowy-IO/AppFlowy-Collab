@@ -59,7 +59,9 @@ async fn test_folder_collab_remapper() {
   assert_ne!(workspace_id, relation_map.workspace_id.to_string());
   assert_eq!(
     workspace_id,
-    *id_mapper.get_new_id_from_uuid(&relation_map.workspace_id).unwrap()
+    *id_mapper
+      .get_new_id_from_uuid(&relation_map.workspace_id)
+      .unwrap()
   );
 
   let workspace_uuid = uuid::Uuid::parse_str(&workspace_id).unwrap();
@@ -122,7 +124,9 @@ async fn test_folder_collab_remapper() {
 
     assert_eq!(view.children.len(), original_view.children.len());
     for (i, child) in view.children.iter().enumerate() {
-      let expected_child_id = id_mapper.get_new_id_from_uuid(&original_view.children[i]).unwrap();
+      let expected_child_id = id_mapper
+        .get_new_id_from_uuid(&original_view.children[i])
+        .unwrap();
       assert_eq!(
         child.id,
         collab_entity::uuid_validation::view_id_from_any_string(expected_child_id)

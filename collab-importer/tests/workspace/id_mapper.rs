@@ -17,7 +17,7 @@ async fn test_id_mapper() {
 
   let mut old_uuid_ids = HashSet::new();
   let mut old_string_ids = HashSet::new();
-  
+
   old_uuid_ids.insert(relation_map.workspace_id);
   for (view_id, view) in &relation_map.views {
     old_uuid_ids.insert(*view_id);
@@ -38,7 +38,7 @@ async fn test_id_mapper() {
     old_string_ids.insert(dep.source_view_id.clone());
     old_string_ids.insert(dep.target_view_id.clone());
   }
-  
+
   // Add workspace database metadata IDs
   if let Some(database_meta_list) = &relation_map.workspace_database_meta {
     for database_meta in database_meta_list {
@@ -67,7 +67,11 @@ async fn test_id_mapper() {
 
   for old_id in &old_uuid_ids {
     let new_id = id_mapper.get_new_id_from_uuid(old_id).unwrap();
-    assert_ne!(old_id.to_string(), new_id, "old and new IDs should be different");
+    assert_ne!(
+      old_id.to_string(),
+      new_id,
+      "old and new IDs should be different"
+    );
   }
 
   for old_id in &old_string_ids {
@@ -83,7 +87,7 @@ async fn test_id_mapper() {
   for string_id in &old_string_ids {
     all_old_ids.insert(string_id.clone());
   }
-  
+
   assert_eq!(
     id_mapper.id_map.len(),
     all_old_ids.len(),

@@ -21,7 +21,6 @@ use collab_database::template::builder::FileUrlBuilder;
 use collab_document::document_data::default_document_data;
 use collab_entity::uuid_validation::RowId;
 use percent_encoding::percent_decode_str;
-use uuid::Uuid;
 use serde::Serialize;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -31,6 +30,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
 use tracing::error;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct NotionPage {
@@ -183,7 +183,12 @@ impl NotionPage {
           .collect();
 
         let resource = CollabResource {
-          object_id: Uuid::parse_str(&self.view_id).map_err(|_| ImporterError::Internal(anyhow::anyhow!("Invalid UUID format for view_id: {}", self.view_id)))?,
+          object_id: Uuid::parse_str(&self.view_id).map_err(|_| {
+            ImporterError::Internal(anyhow::anyhow!(
+              "Invalid UUID format for view_id: {}",
+              self.view_id
+            ))
+          })?,
           files,
         };
 
@@ -666,7 +671,12 @@ impl NotionPage {
           name,
           imported_collabs: vec![imported_collab],
           resources: vec![CollabResource {
-            object_id: Uuid::parse_str(&self.view_id).map_err(|_| ImporterError::Internal(anyhow::anyhow!("Invalid UUID format for view_id: {}", self.view_id)))?,
+            object_id: Uuid::parse_str(&self.view_id).map_err(|_| {
+              ImporterError::Internal(anyhow::anyhow!(
+                "Invalid UUID format for view_id: {}",
+                self.view_id
+              ))
+            })?,
             files: vec![],
           }],
           import_type: ImportType::Document,
