@@ -738,7 +738,7 @@ impl FolderBody {
     tracing::debug!("Move nested view: {}", view_id);
     let view = self.views.get_view_with_txn(txn, view_id, uid)?;
     let current_workspace_id = self.get_workspace_id_with_txn(txn)?;
-    let parent_id = view.parent_view_id.to_string();
+    let parent_id = view.parent_view_id;
 
     let new_parent_view = self.views.get_view_with_txn(txn, new_parent_id, uid);
 
@@ -753,13 +753,13 @@ impl FolderBody {
     // dissociate the child from its parent
     self
       .views
-      .dissociate_parent_child_with_txn(txn, &parent_id, &view_id.to_string());
+      .dissociate_parent_child_with_txn(txn, &parent_id, view_id);
     // associate the child with its new parent and place it after the prev_view_id. If the prev_view_id is None,
     // place it as the first child.
     self.views.associate_parent_child_with_txn(
       txn,
-      &new_parent_id.to_string(),
-      &view_id.to_string(),
+      new_parent_id,
+      view_id,
       prev_view_id,
     );
     // Update the view's parent ID.

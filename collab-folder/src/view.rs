@@ -100,7 +100,7 @@ impl ViewsMap {
   /// Because the views and workspaces are stored in two separate maps, we can't directly move a view from one map to another.
   /// So, we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
   pub fn dissociate_parent_child(&self, txn: &mut TransactionMut, parent_id: &Uuid, view_id: &Uuid) {
-    self.dissociate_parent_child_with_txn(txn, &parent_id.to_string(), &view_id.to_string());
+    self.dissociate_parent_child_with_txn(txn, parent_id, view_id);
   }
 
   /// Establish a relationship between the parent_id and view_id, and insert the view below the prev_id.
@@ -114,40 +114,30 @@ impl ViewsMap {
     view_id: &Uuid,
     prev_id: Option<ViewId>,
   ) {
-    self.associate_parent_child_with_txn(txn, &parent_id.to_string(), &view_id.to_string(), prev_id);
+    self.associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
   }
 
   pub fn dissociate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
-    view_id: &str,
+    parent_id: &Uuid,
+    view_id: &Uuid,
   ) {
-    if let (Ok(parent_uuid), Ok(view_uuid)) = (
-      uuid::Uuid::parse_str(parent_id),
-      uuid::Uuid::parse_str(view_id),
-    ) {
-      self
-        .parent_children_relation
-        .dissociate_parent_child_with_txn(txn, &parent_uuid, &view_uuid);
-    }
+    self
+      .parent_children_relation
+      .dissociate_parent_child_with_txn(txn, parent_id, view_id);
   }
 
   pub fn associate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
-    view_id: &str,
+    parent_id: &Uuid,
+    view_id: &Uuid,
     prev_view_id: Option<ViewId>,
   ) {
-    if let (Ok(parent_uuid), Ok(view_uuid)) = (
-      uuid::Uuid::parse_str(parent_id),
-      uuid::Uuid::parse_str(view_id),
-    ) {
-      self
-        .parent_children_relation
-        .associate_parent_child_with_txn(txn, &parent_uuid, &view_uuid, prev_view_id);
-    }
+    self
+      .parent_children_relation
+      .associate_parent_child_with_txn(txn, parent_id, view_id, prev_view_id);
   }
 
   pub fn remove_child(&self, txn: &mut TransactionMut, parent_id: &Uuid, child_index: u32) {

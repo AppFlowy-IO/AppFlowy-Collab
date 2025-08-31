@@ -283,7 +283,7 @@ fn delete_view_test() {
     .views
     .insert(&mut txn, view_3, None, uid.as_i64());
 
-  folder.body.views.remove_child(&mut txn, &workspace_id, 1);
+  folder.body.views.remove_child(&mut txn, &uuid::Uuid::parse_str(&workspace_id).unwrap(), 1);
   let w_1_child_views =
     folder
       .body
