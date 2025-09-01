@@ -173,5 +173,5 @@ pub fn test_uuid(s: &str) -> ViewId {
 
 /// Helper function to parse string to ViewId, panics if invalid (for tests only)
 pub fn parse_view_id(s: &str) -> ViewId {
-  uuid::Uuid::parse_str(s).expect(&format!("Invalid UUID format: {}", s))
+  uuid::Uuid::parse_str(s).unwrap_or_else(|_| panic!("Invalid UUID format: {}", s))
 }

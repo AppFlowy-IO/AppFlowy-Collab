@@ -38,7 +38,7 @@ impl FolderCollabRemapper {
           .get_new_id_from_uuid(old_parent_id)
           .ok_or_else(|| anyhow!("missing mapping for parent id: {}", old_parent_id))?
       } else {
-        new_workspace_id.clone()
+        new_workspace_id
       };
 
       if view_metadata
@@ -55,7 +55,7 @@ impl FolderCollabRemapper {
         .filter_map(|child_id| {
           id_mapper
             .get_new_id_from_uuid(child_id)
-            .map(|new_id| ViewIdentifier::new(new_id))
+            .map(ViewIdentifier::new)
         })
         .collect();
 

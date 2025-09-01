@@ -26,7 +26,7 @@ async fn test_space_view_edge_case_handler() {
         if let Some(is_space) = space_info.get("is_space") {
           if is_space.as_bool() == Some(true) {
             found_space = true;
-            space_view_id = Some(view_id.clone());
+            space_view_id = Some(*view_id);
             assert_eq!(view_metadata.name, "General");
             assert_eq!(space_info["space_icon"], "interface_essential/home-3");
             assert_eq!(space_info["space_icon_color"], "0xFFA34AFD");

@@ -761,7 +761,7 @@ impl FolderBody {
     self
       .views
       .update_view_with_txn(UserId::from(uid), txn, view_id, |update| {
-        update.set_bid(&new_parent_id.to_string()).done()
+        update.set_bid(new_parent_id.to_string()).done()
       });
     Some(view)
   }
