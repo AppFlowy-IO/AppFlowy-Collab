@@ -269,7 +269,7 @@ impl ViewsMap {
           None
         }
       })
-      .filter(|view| view.parent_view_id == view.id)
+      .filter(|view| view.parent_view_id == view.id.to_string())
       .collect()
   }
 
@@ -344,9 +344,11 @@ impl ViewsMap {
       .get_with_txn::<_, MapRef>(txn, &view.parent_view_id.to_string())
     {
       let view_identifier = ViewIdentifier { id: view.id };
+      let parent_view_uuid =
+        uuid::Uuid::parse_str(&view.parent_view_id).unwrap_or_else(|_| uuid::Uuid::nil());
       let updated_view = ViewUpdate::new(
         UserId::from(uid),
-        &view.parent_view_id,
+        &parent_view_uuid,
         txn,
         &parent_map_ref,
         self.parent_children_relation.clone(),
@@ -510,8 +512,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   uid: i64,
   mappings: impl IntoIterator<Item = ViewId>,
 ) -> Option<View> {
-  let parent_view_id_str: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
-  let parent_view_id = Uuid::parse_str(&parent_view_id_str).ok()?;
+  let parent_view_id: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
   let id_str: String = map_ref.get_with_txn(txn, FOLDER_VIEW_ID)?;
   let id = Uuid::parse_str(&id_str).ok()?;
   let name: String = map_ref
@@ -782,8 +783,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 pub struct View {
   /// The id of the view
   pub id: collab_entity::uuid_validation::ViewId,
-  /// The id for given parent view
-  pub parent_view_id: collab_entity::uuid_validation::ViewId,
+  /// The id for given parent view  
+  pub parent_view_id: String,
   /// The name that display on the left sidebar
   pub name: String,
   /// A list of ids, each of them is the id of other view
@@ -814,7 +815,7 @@ pub struct View {
 impl View {
   pub fn new(
     view_id: ViewId,
-    parent_view_id: ViewId,
+    parent_view_id: String,
     name: String,
     layout: ViewLayout,
     created_by: Option<i64>,

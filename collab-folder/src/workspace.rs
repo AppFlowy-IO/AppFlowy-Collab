@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{RepeatedViewIdentifier, View, ViewLayout, timestamp};
 
@@ -47,7 +46,7 @@ impl From<Workspace> for View {
   fn from(value: Workspace) -> Self {
     Self {
       id: value.id,
-      parent_view_id: Uuid::nil(),
+      parent_view_id: "".to_string(),
       name: value.name,
       children: value.child_views,
       created_at: value.created_at,

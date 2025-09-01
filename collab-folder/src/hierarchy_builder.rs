@@ -203,7 +203,7 @@ impl NestedChildViewBuilder {
   pub fn build(self) -> ParentChildViews {
     let view = View {
       id: self.view_id,
-      parent_view_id: self.parent_view_id,
+      parent_view_id: self.parent_view_id.to_string(),
       name: self.name,
       created_at: timestamp(),
       is_favorite: self.is_favorite,

@@ -29,7 +29,7 @@ fn folder_json_serde() {
           },
           "views": {
             &fake_w_1_uuid: {
-              "bid": "00000000-0000-0000-0000-000000000000",
+              "bid": "",
               "created_at": time,
               "icon": "",
               "id": &fake_w_1_uuid,
@@ -99,7 +99,7 @@ fn view_json_serde() {
           },
           "views": {
             &fake_workspace_uuid: {
-              "bid": "00000000-0000-0000-0000-000000000000",
+              "bid": "",
               "created_at": time,
               "icon": "",
               "id": &fake_workspace_uuid,
@@ -198,7 +198,7 @@ fn child_view_json_serde() {
     },
     "views": {
       &fake_workspace_uuid: {
-        "bid": "00000000-0000-0000-0000-000000000000",
+        "bid": "",
         "created_at": time,
         "icon": "",
         "id": &fake_workspace_uuid,

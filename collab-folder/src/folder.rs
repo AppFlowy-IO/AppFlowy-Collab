@@ -721,7 +721,9 @@ impl FolderBody {
     uid: i64,
   ) -> Option<Arc<View>> {
     let view = self.views.get_view_with_txn(txn, view_id, uid)?;
-    self.views.move_child(txn, &view.parent_view_id, from, to);
+    if let Ok(parent_uuid) = uuid::Uuid::parse_str(&view.parent_view_id) {
+      self.views.move_child(txn, &parent_uuid, from, to);
+    }
     Some(view)
   }
 
@@ -736,7 +738,7 @@ impl FolderBody {
     tracing::debug!("Move nested view: {}", view_id);
     let view = self.views.get_view_with_txn(txn, view_id, uid)?;
     let current_workspace_id = self.get_workspace_id_with_txn(txn)?;
-    let parent_id = view.parent_view_id;
+    let parent_id = &view.parent_view_id;
 
     let new_parent_view = self.views.get_view_with_txn(txn, new_parent_id, uid);
 
@@ -749,9 +751,11 @@ impl FolderBody {
     }
 
     // dissociate the child from its parent
-    self
-      .views
-      .dissociate_parent_child_with_txn(txn, &parent_id, view_id);
+    if let Ok(parent_uuid) = uuid::Uuid::parse_str(parent_id) {
+      self
+        .views
+        .dissociate_parent_child_with_txn(txn, &parent_uuid, view_id);
+    }
     // associate the child with its new parent and place it after the prev_view_id. If the prev_view_id is None,
     // place it as the first child.
     self
@@ -889,7 +893,7 @@ mod tests {
     let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let view_1 = View::new(
       Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap(),
-      workspace_id,
+      workspace_id.to_string(),
       "View 1".to_string(),
       crate::ViewLayout::Document,
       Some(uid),
@@ -897,7 +901,7 @@ mod tests {
     let view_1_id = view_1.id;
     let view_2 = View::new(
       Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap(),
-      workspace_id,
+      workspace_id.to_string(),
       "View 2".to_string(),
       crate::ViewLayout::Document,
       Some(uid),
@@ -905,7 +909,7 @@ mod tests {
     let view_2_id = view_2.id;
     let space_view = View {
       id: Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap(),
-      parent_view_id: workspace_id,
+      parent_view_id: workspace_id.to_string(),
       name: "Space 1".to_string(),
       children: RepeatedViewIdentifier::new(vec![
         ViewIdentifier::new(view_1_id),
@@ -965,7 +969,7 @@ mod tests {
       .map(|i| {
         View::new(
           Uuid::parse_str(&format!("00000000-0000-0000-0000-00000000001{}", i)).unwrap(),
-          space_view_id,
+          space_view_id.to_string(),
           format!("View {:?}", i),
           crate::ViewLayout::Document,
           Some(uid),
@@ -974,7 +978,7 @@ mod tests {
       .collect();
     let space_view = View {
       id: space_view_id,
-      parent_view_id: Uuid::nil(),
+      parent_view_id: "".to_string(),
       name: "Space".to_string(),
       children: RepeatedViewIdentifier::new(
         views

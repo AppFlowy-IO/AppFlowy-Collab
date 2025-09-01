@@ -95,7 +95,7 @@ fn replace_view_get_view_concurrent_update() {
   );
 
   let mut v23 = make_test_view("v2.3", &workspace_id, vec![]);
-  v23.parent_view_id = collab_entity::uuid_validation::view_id_from_any_string("v2");
+  v23.parent_view_id = collab_entity::uuid_validation::view_id_from_any_string("v2").to_string();
   f2.insert_view(v23, None, uid2);
 
   // cross-sync state between f1 and f2
@@ -168,7 +168,7 @@ fn replace_view_all_views_concurrent_update() {
   );
 
   let mut v23 = make_test_view("v2.3", &workspace_id, vec![]);
-  v23.parent_view_id = collab_entity::uuid_validation::view_id_from_any_string("v2");
+  v23.parent_view_id = collab_entity::uuid_validation::view_id_from_any_string("v2").to_string();
   f2.insert_view(v23, None, uid2);
 
   // cross-sync state between f1 and f2
