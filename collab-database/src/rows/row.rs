@@ -464,8 +464,8 @@ impl Row {
   }
 }
 
-pub fn database_row_document_id_from_row_id(row_id: &RowId) -> String {
-  meta_id_from_row_id(row_id, RowMetaKey::DocumentId)
+pub fn database_row_document_id_from_row_id(row_id: &RowId) -> RowId {
+  Uuid::new_v5(row_id, RowMetaKey::DocumentId.as_str().as_bytes())
 }
 
 pub fn meta_id_from_row_id(row_id: &Uuid, key: RowMetaKey) -> String {
