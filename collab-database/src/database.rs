@@ -44,10 +44,9 @@ use collab_entity::CollabType;
 use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::uuid_validation::{DatabaseId, DatabaseViewId};
 
-use futures::stream::StreamExt;
-use futures::{Stream, stream};
+use futures::stream::{BoxStream, StreamExt};
+use futures::stream;
 use nanoid::nanoid;
-use std::pin::Pin;
 
 use crate::database_trait::{DatabaseCollabService, DatabaseDataVariant, DatabaseRowCollabService};
 use collab::core::collab::CollabOptions;
@@ -549,7 +548,7 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> impl Stream<Item = Result<Arc<RwLock<DatabaseRow>>, DatabaseError>> + 'a {
+  ) -> BoxStream<'a, Result<Arc<RwLock<DatabaseRow>>, DatabaseError>> {
     let row_ids_chunk_stream = stream::iter(
       row_ids
         .into_iter()
@@ -584,6 +583,7 @@ impl Database {
         }
       })
       .flatten()
+      .boxed()
   }
 
   /// Return None if the row is not initialized.
@@ -616,7 +616,7 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> Result<impl Stream<Item = Result<Row, DatabaseError>> + '_, DatabaseError> {
+  ) -> Result<BoxStream<'_, Result<Row, DatabaseError>>, DatabaseError> {
     let row_orders = self.get_row_orders_for_view(view_id);
     self
       .get_rows_from_row_orders(row_orders, chunk_size, cancel_token, auto_fetch)
@@ -653,11 +653,11 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> Result<impl Stream<Item = Result<Row, DatabaseError>> + '_, DatabaseError> {
+  ) -> Result<BoxStream<'_, Result<Row, DatabaseError>>, DatabaseError> {
     let row_ids = row_orders.iter().map(|order| order.id).collect();
     let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token, auto_fetch);
     let database_id = self.get_database_id()?;
-    Ok(Box::pin(rows_stream.then(move |result| {
+    Ok(rows_stream.then(move |result| {
       let database_id = database_id;
       async move {
         let row = result?;
@@ -668,10 +668,7 @@ impl Database {
           .unwrap_or_else(|| Row::empty(row_id, database_id));
         Ok(row)
       }
-    }))
-      as Pin<
-        Box<dyn Stream<Item = Result<Row, DatabaseError>> + '_>,
-      >)
+    }).boxed())
   }
 
   /// Return a list of [RowCell] for the given view and field.
@@ -1498,7 +1495,7 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> Result<impl Stream<Item = Result<Row, DatabaseError>> + '_, DatabaseError> {
+  ) -> Result<BoxStream<'_, Result<Row, DatabaseError>>, DatabaseError> {
     let row_orders = {
       let txn = self.collab.transact();
       let inline_view_id = self.body.get_inline_view_id(&txn);
