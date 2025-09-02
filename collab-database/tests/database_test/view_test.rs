@@ -28,6 +28,7 @@ async fn create_initial_database_test() {
   let all_rows: Vec<Row> = database_test
     .get_all_rows(20, None, false)
     .await
+    .unwrap()
     .filter_map(|result| async move { result.ok() })
     .collect()
     .await;

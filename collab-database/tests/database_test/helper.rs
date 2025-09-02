@@ -39,7 +39,8 @@ impl DatabaseTest {
     let rows_stream = self
       .database
       .get_rows_for_view(view_id, 10, None, false)
-      .await;
+      .await
+      .unwrap();
     let rows: Vec<Row> = rows_stream
       .filter_map(|result| async move { result.ok() })
       .collect()

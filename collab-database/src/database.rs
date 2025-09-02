@@ -616,7 +616,7 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
+  ) -> Result<impl Stream<Item = Result<Row, DatabaseError>> + '_, DatabaseError> {
     let row_orders = self.get_row_orders_for_view(view_id);
     self
       .get_rows_from_row_orders(row_orders, chunk_size, cancel_token, auto_fetch)
@@ -653,17 +653,11 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
+  ) -> Result<impl Stream<Item = Result<Row, DatabaseError>> + '_, DatabaseError> {
     let row_ids = row_orders.iter().map(|order| order.id).collect();
     let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token, auto_fetch);
-    let database_id = match self.get_database_id() {
-      Ok(id) => id,
-      Err(e) => {
-        return Box::pin(stream::once(async move { Err(e) }))
-          as Pin<Box<dyn Stream<Item = Result<Row, DatabaseError>> + '_>>;
-      },
-    };
-    Box::pin(rows_stream.then(move |result| {
+    let database_id = self.get_database_id()?;
+    Ok(Box::pin(rows_stream.then(move |result| {
       let database_id = database_id;
       async move {
         let row = result?;
@@ -674,7 +668,10 @@ impl Database {
           .unwrap_or_else(|| Row::empty(row_id, database_id));
         Ok(row)
       }
-    })) as Pin<Box<dyn Stream<Item = Result<Row, DatabaseError>> + '_>>
+    }))
+      as Pin<
+        Box<dyn Stream<Item = Result<Row, DatabaseError>> + '_>,
+      >)
   }
 
   /// Return a list of [RowCell] for the given view and field.
@@ -1463,7 +1460,7 @@ impl Database {
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let views = self.get_all_views();
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
-    let rows_stream = self.get_all_rows(chunk_size, None, auto_fetch).await;
+    let rows_stream = self.get_all_rows(chunk_size, None, auto_fetch).await?;
     let rows: Vec<Row> = rows_stream
       .filter_map(|result| async move { result.ok() })
       .collect()
@@ -1501,7 +1498,7 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
+  ) -> Result<impl Stream<Item = Result<Row, DatabaseError>> + '_, DatabaseError> {
     let row_orders = {
       let txn = self.collab.transact();
       let inline_view_id = self.body.get_inline_view_id(&txn);
@@ -1516,9 +1513,12 @@ impl Database {
       .await
   }
 
-  pub async fn collect_all_rows(&self, auto_fetch: bool) -> Vec<Result<Row, DatabaseError>> {
-    let rows_stream = self.get_all_rows(20, None, auto_fetch).await;
-    rows_stream.collect::<Vec<_>>().await
+  pub async fn collect_all_rows(
+    &self,
+    auto_fetch: bool,
+  ) -> Result<Vec<Result<Row, DatabaseError>>, DatabaseError> {
+    let rows_stream = self.get_all_rows(20, None, auto_fetch).await?;
+    Ok(rows_stream.collect::<Vec<_>>().await)
   }
 
   /// Return row orders of the inline database view

@@ -380,7 +380,7 @@ impl ViewsMap {
       let last_edited_time = self.normalize_timestamp(view.last_edited_time);
       update
         .set_name(view.name)
-        .set_bid(view.parent_view_id.to_string())
+        .set_bid(&view.parent_view_id)
         .set_layout(view.layout)
         .set_created_at(created_at)
         .set_children(view.children)

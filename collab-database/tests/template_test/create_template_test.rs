@@ -150,6 +150,7 @@ async fn create_template_test() {
   let rows: Vec<Row> = database
     .get_all_rows(10, None, false)
     .await
+    .unwrap()
     .filter_map(|result| async move { result.ok() })
     .collect()
     .await;

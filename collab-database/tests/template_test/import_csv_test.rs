@@ -31,6 +31,7 @@ async fn import_csv_test() {
   let rows: Vec<Row> = database
     .get_all_rows(20, None, false)
     .await
+    .unwrap()
     .filter_map(|result| async move { result.ok() })
     .collect()
     .await;
