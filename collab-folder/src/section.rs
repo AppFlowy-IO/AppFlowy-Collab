@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::{UserId, ViewId, timestamp};
 use anyhow::bail;
@@ -9,6 +10,7 @@ use collab::preclude::{
 use collab::preclude::{ArrayRef, MapExt, deserialize_i64_from_numeric};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
+use uuid::Uuid;
 
 pub struct SectionMap {
   container: MapRef,
@@ -151,7 +153,7 @@ impl SectionOperation {
     section_id_by_uid
   }
 
-  pub fn contains_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> bool {
+  pub fn contains_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &ViewId) -> bool {
     match self
       .container()
       .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
@@ -160,7 +162,7 @@ impl SectionOperation {
       Some(array) => {
         for value in array.iter(txn) {
           if let Ok(section_id) = SectionItem::try_from(&value) {
-            if section_id.id.as_ref() == view_id {
+            if &section_id.id == view_id {
               return true;
             }
           }
@@ -203,13 +205,13 @@ impl SectionOperation {
     let id = id.as_ref();
     let old_pos = section_items
       .iter()
-      .position(|item| item.id.as_ref() == id)
+      .position(|item| item.id.to_string() == id)
       .map(|pos| pos as u32);
     let new_pos = prev_id
       .and_then(|prev_id| {
         section_items
           .iter()
-          .position(|item| item.id.as_ref() == prev_id.as_ref())
+          .position(|item| item.id.to_string() == prev_id.as_ref())
           .map(|pos| pos as u32 + 1)
       })
       .unwrap_or(0);
@@ -239,7 +241,7 @@ impl SectionOperation {
         if let Some(pos) = self
           .get_all_section_item(txn)
           .into_iter()
-          .position(|item| item.id.as_ref() == id.as_ref())
+          .position(|item| item.id.to_string() == id.as_ref())
         {
           fav_array.remove(txn, pos as u32);
         }
@@ -251,7 +253,10 @@ impl SectionOperation {
           Section::Recent => {},
           Section::Trash => {
             let _ = change_tx.send(SectionChange::Trash(TrashSectionChange::TrashItemRemoved {
-              ids: ids.into_iter().map(|id| id.as_ref().into()).collect(),
+              ids: ids
+                .into_iter()
+                .filter_map(|id| Uuid::parse_str(id.as_ref()).ok())
+                .collect(),
             }));
           },
           Section::Custom(_) => {},
@@ -262,7 +267,7 @@ impl SectionOperation {
   }
 
   pub fn add_sections_item(&self, txn: &mut TransactionMut, items: Vec<SectionItem>) {
-    let item_ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+    let item_ids = items.iter().map(|item| item.id).collect::<Vec<_>>();
     self.add_sections_for_user_with_txn(txn, self.uid(), items);
     if let Some(change_tx) = self.change_tx.as_ref() {
       match self.section {
@@ -332,7 +337,10 @@ impl TryFrom<Any> for SectionItem {
 impl From<SectionItem> for HashMap<String, AnyMut> {
   fn from(item: SectionItem) -> Self {
     HashMap::from([
-      ("id".to_string(), AnyMut::String(item.id)),
+      (
+        "id".to_string(),
+        AnyMut::String(Arc::from(item.id.to_string())),
+      ),
       (
         "timestamp".to_string(),
         AnyMut::Number(item.timestamp as f64),

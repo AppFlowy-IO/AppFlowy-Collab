@@ -49,11 +49,13 @@ impl CollabPersistenceTest {
   }
 
   pub async fn create_document_with_collab_db(&mut self, id: String, db: Arc<CollabKVDB>) {
+    let object_id =
+      Uuid::parse_str(&id).unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, id.as_bytes()));
     let disk_plugin = disk_plugin_with_db(
       self.uid,
       self.workspace_id.clone(),
       db,
-      &id,
+      &object_id.to_string(),
       CollabType::Unknown,
     );
     let data_source = KVDBCollabPersistenceImpl {
@@ -63,7 +65,7 @@ impl CollabPersistenceTest {
     };
 
     let options =
-      CollabOptions::new(id.clone(), default_client_id()).with_data_source(data_source.into());
+      CollabOptions::new(object_id, default_client_id()).with_data_source(data_source.into());
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
@@ -71,11 +73,13 @@ impl CollabPersistenceTest {
   }
 
   pub async fn open_document_with_disk_plugin(&mut self, id: String) {
+    let object_id =
+      Uuid::parse_str(&id).unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, id.as_bytes()));
     let disk_plugin = disk_plugin_with_db(
       self.uid,
       self.workspace_id.clone(),
       self.db.clone(),
-      &id,
+      &object_id.to_string(),
       CollabType::Unknown,
     );
     let data_source = KVDBCollabPersistenceImpl {
@@ -85,7 +89,7 @@ impl CollabPersistenceTest {
     };
 
     let options =
-      CollabOptions::new(id.clone(), default_client_id()).with_data_source(data_source.into());
+      CollabOptions::new(object_id, default_client_id()).with_data_source(data_source.into());
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
@@ -97,9 +101,12 @@ impl CollabPersistenceTest {
   }
 
   pub async fn delete_document(&mut self, id: String) {
+    let object_id = Uuid::parse_str(&id)
+      .unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, id.as_bytes()))
+      .to_string();
     self
       .db
-      .with_write_txn(|store| store.delete_doc(self.uid, &self.workspace_id, &id))
+      .with_write_txn(|store| store.delete_doc(self.uid, &self.workspace_id, &object_id))
       .unwrap();
   }
 
@@ -118,15 +125,18 @@ impl CollabPersistenceTest {
   }
 
   pub async fn assert_update_len(&mut self, id: String, expected: usize) {
+    let object_id = Uuid::parse_str(&id)
+      .unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, id.as_bytes()))
+      .to_string();
     let updates = self
       .db
       .read_txn()
-      .get_decoded_v1_updates(self.uid, &self.workspace_id, &id)
+      .get_decoded_v1_updates(self.uid, &self.workspace_id, &object_id)
       .unwrap();
     assert_eq!(updates.len(), expected);
   }
 
-  pub async fn assert_ids(&mut self, mut expected: Vec<String>) {
+  pub async fn assert_ids(&mut self, expected: Vec<String>) {
     let mut docs = self
       .db
       .read_txn()
@@ -134,16 +144,29 @@ impl CollabPersistenceTest {
       .map(|iter| iter.collect::<Vec<String>>())
       .unwrap_or_default();
     docs.sort();
-    expected.sort();
-    assert_eq!(docs, expected);
+
+    // Convert expected IDs to UUIDs (same logic as in other functions)
+    let mut expected_uuids: Vec<String> = expected
+      .iter()
+      .map(|id| {
+        Uuid::parse_str(id)
+          .unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, id.as_bytes()))
+          .to_string()
+      })
+      .collect();
+    expected_uuids.sort();
+
+    assert_eq!(docs, expected_uuids);
   }
 
   pub async fn create_collab(&mut self, doc_id: String) {
+    let object_id = Uuid::parse_str(&doc_id)
+      .unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, doc_id.as_bytes()));
     let disk_plugin = disk_plugin_with_db(
       self.uid,
       self.workspace_id.clone(),
       self.db.clone(),
-      &doc_id,
+      &object_id.to_string(),
       CollabType::Unknown,
     );
     let data_source = KVDBCollabPersistenceImpl {
@@ -153,7 +176,7 @@ impl CollabPersistenceTest {
     };
 
     let options =
-      CollabOptions::new(doc_id.clone(), default_client_id()).with_data_source(data_source.into());
+      CollabOptions::new(object_id, default_client_id()).with_data_source(data_source.into());
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
@@ -185,11 +208,13 @@ impl CollabPersistenceTest {
   }
 
   pub async fn assert_collab(&mut self, id: &str, expected: JsonValue) {
+    let object_id =
+      Uuid::parse_str(id).unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, id.as_bytes()));
     let disk_plugin = disk_plugin_with_db(
       self.uid,
       self.workspace_id.clone(),
       self.db.clone(),
-      id,
+      &object_id.to_string(),
       CollabType::Document,
     );
     let data_source = KVDBCollabPersistenceImpl {
@@ -199,7 +224,7 @@ impl CollabPersistenceTest {
     };
 
     let options =
-      CollabOptions::new(id.to_string(), default_client_id()).with_data_source(data_source.into());
+      CollabOptions::new(object_id, default_client_id()).with_data_source(data_source.into());
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();

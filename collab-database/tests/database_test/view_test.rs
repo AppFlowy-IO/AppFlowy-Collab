@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use uuid::Uuid;
 
 use assert_json_diff::assert_json_eq;
 use collab::core::collab::{CollabOptions, default_client_id};
@@ -14,7 +15,8 @@ use futures::StreamExt;
 use nanoid::nanoid;
 
 use crate::database_test::helper::{
-  create_database, create_database_with_default_data, default_field_settings_by_layout,
+  TEST_VIEW_ID_V1, create_database, create_database_with_default_data,
+  default_field_settings_by_layout,
 };
 use crate::helper::TestFilter;
 
@@ -26,24 +28,28 @@ async fn create_initial_database_test() {
   let all_rows: Vec<Row> = database_test
     .get_all_rows(20, None, false)
     .await
+    .unwrap()
     .filter_map(|result| async move { result.ok() })
     .collect()
     .await;
   assert_eq!(database_test.get_all_field_orders().len(), 0);
   assert_eq!(all_rows.len(), 0);
-  assert_eq!(database_test.get_database_id(), database_id);
+  assert_eq!(
+    database_test.get_database_id().unwrap().to_string(),
+    database_id
+  );
 
   let views = database_test.get_all_views();
   assert_eq!(views.len(), 1);
-  assert_eq!(views[0].database_id, database_id);
-  assert_ne!(views[0].database_id, views[0].id);
+  assert_eq!(views[0].database_id.to_string(), database_id);
+  assert_ne!(views[0].database_id.to_string(), views[0].id.to_string());
   assert_eq!(views[0].name, "my first database view".to_string());
 
   let encoded_collab = database_test
     .encode_collab_v1(|_| Ok::<_, anyhow::Error>(()))
     .unwrap();
   let options =
-    CollabOptions::new("".to_string(), default_client_id()).with_data_source(encoded_collab.into());
+    CollabOptions::new(Uuid::new_v4(), default_client_id()).with_data_source(encoded_collab.into());
   let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let database_id_from_collab = DatabaseBody::database_id_from_collab(&collab).unwrap();
   assert_eq!(database_id_from_collab, database_id);
@@ -53,7 +59,7 @@ async fn create_initial_database_test() {
 async fn create_database_with_single_view_test() {
   let database_id = uuid::Uuid::new_v4();
   let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   assert_eq!(view.row_orders.len(), 3);
   assert_eq!(view.field_orders.len(), 3);
 }
@@ -64,7 +70,7 @@ async fn get_database_views_meta_test() {
   let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let views = database_test.get_all_database_views_meta();
   assert_eq!(views.len(), 1);
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   assert_eq!(view.name, "my first database view");
 }
 
@@ -73,14 +79,14 @@ async fn create_same_database_view_twice_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let params = CreateViewParams {
-    database_id: database_id.to_string(),
-    view_id: "v1".to_string(),
+    database_id,
+    view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
     name: "my second grid".to_string(),
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
 
   assert_eq!(view.name, "my second grid");
 }
@@ -91,11 +97,14 @@ async fn create_database_row_test() {
   let mut database_test = create_database_with_default_data(1, &database_id).await;
   let row_id = gen_row_id();
   database_test
-    .create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(
+      row_id,
+      collab_entity::uuid_validation::try_parse_database_id(&database_id).unwrap(),
+    ))
     .await
     .unwrap();
 
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   assert_json_eq!(view.row_orders.last().unwrap().id, row_id);
 }
 
@@ -116,7 +125,7 @@ async fn create_database_field_test() {
     default_field_settings_by_layout(),
   );
 
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   assert_json_eq!(view.field_orders.last().unwrap().id, field_id);
 }
 
@@ -141,8 +150,8 @@ async fn create_database_view_with_filter_test() {
   };
 
   let params = CreateViewParams {
-    database_id: database_id.to_string(),
-    view_id: "v1".to_string(),
+    database_id,
+    view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
     name: "my first grid".to_string(),
     filters: vec![filter_1.into(), filter_2.into()],
     layout: DatabaseLayout::Grid,
@@ -150,7 +159,7 @@ async fn create_database_view_with_filter_test() {
   };
   database_test.create_linked_view(params).unwrap();
 
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   let filters = view
     .filters
     .into_iter()
@@ -169,8 +178,8 @@ async fn create_database_view_with_layout_setting_test() {
     LayoutSettingBuilder::from([("1".into(), 123.into()), ("2".into(), "abc".into())]);
 
   let params = CreateViewParams {
-    database_id: database_id.to_string(),
-    view_id: "v1".to_string(),
+    database_id,
+    view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V1).unwrap(),
     name: "my first grid".to_string(),
     layout: DatabaseLayout::Grid,
     ..Default::default()
@@ -178,7 +187,7 @@ async fn create_database_view_with_layout_setting_test() {
   .with_layout_setting(grid_setting);
   database_test.create_linked_view(params).unwrap();
 
-  let view = database_test.get_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
   let grid_layout_setting = view.layout_settings.get(&DatabaseLayout::Grid).unwrap();
   assert_eq!(grid_layout_setting.get_as::<i64>("1").unwrap(), 123);
   assert_eq!(
@@ -191,10 +200,15 @@ async fn create_database_view_with_layout_setting_test() {
 async fn delete_database_view_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  for i in 2..5 {
+  let view_ids = vec![
+    uuid::Uuid::new_v4(),
+    uuid::Uuid::new_v4(),
+    uuid::Uuid::new_v4(),
+  ];
+  for view_id in &view_ids {
     let params = CreateViewParams {
-      database_id: database_id.to_string(),
-      view_id: format!("v{}", i),
+      database_id,
+      view_id: *view_id,
       ..Default::default()
     };
     database_test.create_linked_view(params).unwrap();
@@ -203,12 +217,13 @@ async fn delete_database_view_test() {
   let views = database_test.get_all_views();
   assert_eq!(views.len(), 4);
 
-  let deleted_view_id = "v3".to_string();
+  let deleted_view_id = view_ids[1].to_string();
   database_test.delete_view(&deleted_view_id);
   let views = database_test
     .get_all_views()
     .iter()
-    .map(|view| view.id.clone())
+    .map(|view| view.id)
+    .map(|id| id.to_string())
     .collect::<Vec<String>>();
   assert_eq!(views.len(), 3);
   assert!(!views.contains(&deleted_view_id));
@@ -222,8 +237,10 @@ async fn duplicate_database_view_test() {
   let views = database_test.get_all_views();
   assert_eq!(views.len(), 1);
 
-  let view = database_test.get_view("v1").unwrap();
-  let duplicated_view = database_test.duplicate_linked_view("v1").unwrap();
+  let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
+  let duplicated_view = database_test
+    .duplicate_linked_view(TEST_VIEW_ID_V1)
+    .unwrap();
 
   let views = database_test.get_all_views();
   assert_eq!(views.len(), 2);
@@ -237,7 +254,7 @@ async fn duplicate_database_view_test() {
 async fn database_data_serde_test() {
   let database_id = uuid::Uuid::new_v4();
   let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let database_data = database_test.get_database_data(20, false).await;
+  let database_data = database_test.get_database_data(20, false).await.unwrap();
 
   let json = database_data.to_json().unwrap();
   let database_data2 = DatabaseData::from_json(&json).unwrap();
@@ -250,7 +267,7 @@ async fn get_database_view_layout_test() {
   let database_id = uuid::Uuid::new_v4();
   let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
 
-  let layout = database_test.get_database_view_layout("v1");
+  let layout = database_test.get_database_view_layout(TEST_VIEW_ID_V1);
   assert_eq!(layout, DatabaseLayout::Grid);
 }
 
@@ -258,11 +275,11 @@ async fn get_database_view_layout_test() {
 async fn update_database_view_layout_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  database_test.update_database_view("v1", |update| {
+  database_test.update_database_view(TEST_VIEW_ID_V1, |update| {
     update.set_layout_type(DatabaseLayout::Calendar);
   });
 
-  let layout = database_test.get_database_view_layout("v1");
+  let layout = database_test.get_database_view_layout(TEST_VIEW_ID_V1);
   assert_eq!(layout, DatabaseLayout::Calendar);
 }
 

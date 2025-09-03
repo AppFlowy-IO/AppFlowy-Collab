@@ -60,7 +60,7 @@ impl RemoteCollab {
   ) -> Self {
     let is_init_sync_finish = Arc::new(AtomicBool::new(false));
     let sync_state = Arc::new(watch::channel(SyncState::InitSyncBegin).0);
-    let options = CollabOptions::new(object.object_id.clone(), default_client_id());
+    let options = CollabOptions::new(object.object_id, default_client_id());
     let collab = Arc::new(RwLock::from(
       Collab::new_with_options(CollabOrigin::Server, options).unwrap(),
     ));
@@ -146,7 +146,9 @@ impl RemoteCollab {
                 match storage.send_init_sync(&object, msg_id, payload).await {
                   Ok(_) => {
                     if let Some(collab_sink) = weak_collab_sink.upgrade() {
-                      collab_sink.ack_msg(&object.object_id, msg_id).await;
+                      collab_sink
+                        .ack_msg(&object.object_id.to_string(), msg_id)
+                        .await;
                       cloned_is_init_sync_finish.store(true, std::sync::atomic::Ordering::SeqCst);
                     }
                   },
@@ -165,7 +167,9 @@ impl RemoteCollab {
                   Ok(_) => {
                     tracing::debug!("ack update {}:{}", object, msg_id);
                     if let Some(collab_sink) = weak_collab_sink.upgrade() {
-                      collab_sink.ack_msg(&object.object_id, msg_id).await;
+                      collab_sink
+                        .ack_msg(&object.object_id.to_string(), msg_id)
+                        .await;
                     }
                   },
                   Err(e) => tracing::error!(
@@ -304,6 +308,7 @@ impl RemoteCollab {
         object: self.object.clone(),
         payloads: vec![encode_update],
         meta: MessageMeta::Init { msg_id },
+        object_id_string: self.object.object_id.to_string(),
       });
     }
     Ok(remote_update)
@@ -321,6 +326,7 @@ impl RemoteCollab {
         object: self.object.clone(),
         payloads: vec![update.to_vec()],
         meta: MessageMeta::Update { msg_id },
+        object_id_string: self.object.object_id.to_string(),
       });
     }
 
@@ -478,6 +484,7 @@ struct Message {
   object: CollabObject,
   meta: MessageMeta,
   payloads: Vec<Vec<u8>>,
+  object_id_string: String,
 }
 
 impl Message {
@@ -503,7 +510,7 @@ impl Message {
 
 impl CollabSinkMessage for Message {
   fn object_id(&self) -> &str {
-    self.object.object_id.as_str()
+    &self.object_id_string
   }
 
   fn length(&self) -> usize {
@@ -600,7 +607,7 @@ impl RngMsgIdCounter {
       .as_millis() as u64;
 
     let random: u64 = (random::<u16>() as u64) & RANDOM_MASK;
-    let value = timestamp << 16 | random;
+    let value = (timestamp << 16) | random;
     Self(AtomicU64::new(value))
   }
 }

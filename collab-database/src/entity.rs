@@ -22,6 +22,7 @@ use crate::views::{
 
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
+use collab_entity::uuid_validation::{DatabaseId, DatabaseViewId};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
@@ -51,8 +52,8 @@ pub struct EncodedCollabInfo {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct DatabaseView {
-  pub id: String,
-  pub database_id: String,
+  pub id: DatabaseViewId,
+  pub database_id: DatabaseId,
   pub name: String,
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
@@ -69,7 +70,12 @@ pub struct DatabaseView {
 }
 
 impl DatabaseView {
-  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
+  pub fn new(
+    database_id: DatabaseId,
+    view_id: DatabaseViewId,
+    name: String,
+    layout: DatabaseLayout,
+  ) -> Self {
     let timestamp = timestamp();
     Self {
       id: view_id,
@@ -86,15 +92,15 @@ impl DatabaseView {
 /// A meta of [DatabaseView]
 #[derive(Debug, Clone)]
 pub struct DatabaseViewMeta {
-  pub id: String,
+  pub id: DatabaseViewId,
   pub name: String,
   pub is_inline: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateViewParams {
-  pub database_id: String,
-  pub view_id: String,
+  pub database_id: DatabaseId,
+  pub view_id: DatabaseViewId,
   pub name: String,
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
@@ -126,7 +132,12 @@ impl CreateViewParams {
 }
 
 impl CreateViewParams {
-  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
+  pub fn new(
+    database_id: DatabaseId,
+    view_id: DatabaseViewId,
+    name: String,
+    layout: DatabaseLayout,
+  ) -> Self {
     Self {
       database_id,
       view_id,
@@ -188,21 +199,13 @@ pub(crate) struct CreateViewParamsValidator;
 
 impl CreateViewParamsValidator {
   pub(crate) fn validate(params: CreateViewParams) -> Result<CreateViewParams, DatabaseError> {
-    if params.database_id.is_empty() {
-      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
-    }
-
-    if params.view_id.is_empty() {
-      return Err(DatabaseError::InvalidViewID("view_id is empty"));
-    }
-
     Ok(params)
   }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateDatabaseParams {
-  pub database_id: String,
+  pub database_id: DatabaseId,
   pub fields: Vec<Field>,
   pub rows: Vec<CreateRowParams>,
   pub views: Vec<CreateViewParams>,
@@ -215,8 +218,8 @@ impl CreateDatabaseParams {
   /// `row_id`s will all be regenerated.
   pub fn from_database_data(
     data: DatabaseData,
-    database_view_id: &str,
-    new_database_view_id: &str,
+    database_view_id: DatabaseViewId,
+    new_database_view_id: DatabaseViewId,
   ) -> Self {
     let database_id = gen_database_id();
     let timestamp = timestamp();
@@ -228,7 +231,7 @@ impl CreateDatabaseParams {
         let row_meta = data.row_metas.get(&row.id).cloned();
         CreateRowParams {
           id: gen_row_id(),
-          database_id: database_id.clone(),
+          database_id,
           created_at: timestamp,
           modified_at: timestamp,
           cells: row.cells,
@@ -244,9 +247,9 @@ impl CreateDatabaseParams {
       .views
       .into_iter()
       .map(|view| CreateViewParams {
-        database_id: database_id.clone(),
+        database_id,
         view_id: if view.id == database_view_id {
-          new_database_view_id.to_string()
+          new_database_view_id
         } else {
           gen_database_view_id()
         },

@@ -5,32 +5,34 @@ use collab_folder::{Folder, FolderData, UserId, ViewId, timestamp};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use uuid::Uuid;
 
-use crate::util::{create_folder, make_test_view};
+use crate::util::{create_folder, make_test_view, parse_view_id};
 
 #[test]
 fn folder_json_serde() {
-  let folder_test = create_folder(1.into(), "fake_w_1");
+  let folder_test = create_folder(UserId::from(1), "fake_w_1");
   let time = timestamp();
+  let fake_w_1_uuid =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_w_1".as_bytes()).to_string();
   assert_json_diff::assert_json_include!(
     actual: folder_test.to_json_value(),
     expected: json!({
           "meta": {
-            "current_view": "",
-            "current_workspace": "fake_w_1"
+            "current_workspace": &fake_w_1_uuid
           },
           "relation": {
-            "fake_w_1": []
+            &fake_w_1_uuid: []
           },
           "section": {
             "favorite": {}
           },
           "views": {
-            "fake_w_1": {
+            &fake_w_1_uuid: {
               "bid": "",
               "created_at": time,
               "icon": "",
-              "id": "fake_w_1",
+              "id": &fake_w_1_uuid,
               "layout": 0,
               "name": ""
             }
@@ -62,57 +64,61 @@ fn view_json_serde() {
       .views
       .insert(&mut txn, view_2, None, uid.as_i64());
 
-    let views = folder
-      .body
-      .views
-      .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
+    let views =
+      folder
+        .body
+        .views
+        .get_views_belong_to(&txn, &parse_view_id(&workspace_id), uid.as_i64());
     assert_eq!(views.len(), 2);
   }
 
+  let fake_workspace_uuid =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_workspace_id".as_bytes()).to_string();
+  let v1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string();
+  let v2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string();
   assert_json_diff::assert_json_include!(
     actual: folder.to_json_value(),
     expected: json!({
           "meta": {
-            "current_view": "",
-            "current_workspace": "fake_workspace_id"
+            "current_workspace": &fake_workspace_uuid
           },
           "relation": {
-            "fake_workspace_id": [
+            &fake_workspace_uuid: [
               {
-                "id": "v1"
+                "id": &v1_uuid
               },
               {
-                "id": "v2"
+                "id": &v2_uuid
               }
             ],
-            "v1": [],
-            "v2": []
+            &v1_uuid: [],
+            &v2_uuid: []
           },
           "section": {
             "favorite": {}
           },
           "views": {
-            "fake_workspace_id": {
+            &fake_workspace_uuid: {
               "bid": "",
               "created_at": time,
               "icon": "",
-              "id": "fake_workspace_id",
+              "id": &fake_workspace_uuid,
               "layout": 0,
               "name": ""
             },
-            "v1": {
-              "bid": "fake_workspace_id",
+            &v1_uuid: {
+              "bid": &fake_workspace_uuid,
               "created_at": time,
               "icon": "",
-              "id": "v1",
+              "id": &v1_uuid,
               "layout": 0,
               "name": ""
             },
-            "v2": {
-              "bid": "fake_workspace_id",
+            &v2_uuid: {
+              "bid": &fake_workspace_uuid,
               "created_at": time,
               "icon": "",
-              "id": "v2",
+              "id": &v2_uuid,
               "layout": 0,
               "name": ""
             }
@@ -156,73 +162,78 @@ fn child_view_json_serde() {
       .insert(&mut txn, view_2_2, None, uid.as_i64());
   }
   // folder_test.workspaces.create_workspace(workspace);
+  let fake_workspace_uuid =
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_workspace_id".as_bytes()).to_string();
+  let v1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string();
+  let v2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string();
+  let v2_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2.1".as_bytes()).to_string();
+  let v2_2_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2.2".as_bytes()).to_string();
   assert_json_diff::assert_json_include!(actual: folder.to_json_value(), expected: json!({
     "meta": {
-      "current_view": "",
-      "current_workspace": "fake_workspace_id"
+      "current_workspace": &fake_workspace_uuid
     },
     "relation": {
-      "fake_workspace_id": [
+      &fake_workspace_uuid: [
         {
-          "id": "v1"
+          "id": &v1_uuid
         },
         {
-          "id": "v2"
+          "id": &v2_uuid
         }
       ],
-      "v1": [],
-      "v2": [
+      &v1_uuid: [],
+      &v2_uuid: [
         {
-          "id": "v2.1"
+          "id": &v2_1_uuid
         },
         {
-          "id": "v2.2"
+          "id": &v2_2_uuid
         }
       ],
-      "v2.1": [],
-      "v2.2": []
+      &v2_1_uuid: [],
+      &v2_2_uuid: []
     },
     "section": {
       "favorite": {}
     },
     "views": {
-      "fake_workspace_id": {
+      &fake_workspace_uuid: {
         "bid": "",
         "created_at": time,
         "icon": "",
-        "id": "fake_workspace_id",
+        "id": &fake_workspace_uuid,
         "layout": 0,
         "name": ""
       },
-      "v1": {
-        "bid": "fake_workspace_id",
+      &v1_uuid: {
+        "bid": &fake_workspace_uuid,
         "created_at": time,
         "icon": "",
-        "id": "v1",
+        "id": &v1_uuid,
         "layout": 0,
         "name": ""
       },
-      "v2": {
-        "bid": "fake_workspace_id",
+      &v2_uuid: {
+        "bid": &fake_workspace_uuid,
         "created_at": time,
         "icon": "",
-        "id": "v2",
+        "id": &v2_uuid,
         "layout": 0,
         "name": ""
       },
-      "v2.1": {
-        "bid": "v2",
+      &v2_1_uuid: {
+        "bid": &v2_uuid,
         "created_at": time,
         "icon": "",
-        "id": "v2.1",
+        "id": &v2_1_uuid,
         "layout": 0,
         "name": ""
       },
-      "v2.2": {
-        "bid": "v2",
+      &v2_2_uuid: {
+        "bid": &v2_uuid,
         "created_at": time,
         "icon": "",
-        "id": "v2.2",
+        "id": &v2_2_uuid,
         "layout": 0,
         "name": ""
       }
@@ -234,7 +245,7 @@ fn child_view_json_serde() {
 async fn deserialize_folder_data() {
   let json = include_str!("../folder_test/history_folder/folder_data.json");
   let folder_data: FolderData = serde_json::from_str(json).unwrap();
-  let options = CollabOptions::new("1".to_string(), default_client_id());
+  let options = CollabOptions::new(Uuid::new_v4(), default_client_id());
   let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let uid = UserId::from(folder_data.uid);
   let folder = Arc::new(Folder::create(collab, None, folder_data));
@@ -306,7 +317,12 @@ fn get_all_trash_ids(folder: &Folder, uid: i64) -> Vec<ViewId> {
   let mut all_trash_ids = trash_ids.clone();
   let txn = folder.collab.transact();
   for trash_id in trash_ids {
-    all_trash_ids.extend(get_all_child_view_ids(folder, &txn, &trash_id, uid));
+    all_trash_ids.extend(get_all_child_view_ids(
+      folder,
+      &txn,
+      &trash_id.to_string(),
+      uid,
+    ));
   }
   all_trash_ids
 }
@@ -317,16 +333,22 @@ fn get_all_child_view_ids<T: ReadTxn>(
   view_id: &str,
   uid: i64,
 ) -> Vec<ViewId> {
-  let child_view_ids = folder
+  let child_views = folder
     .body
     .views
-    .get_views_belong_to(txn, view_id, uid)
-    .into_iter()
-    .map(|view| view.id.clone())
-    .collect::<Vec<_>>();
+    .get_views_belong_to(txn, &parse_view_id(view_id), uid);
+  let child_view_ids = child_views
+    .iter()
+    .map(|view| view.id)
+    .collect::<Vec<ViewId>>();
   let mut all_child_view_ids = child_view_ids.clone();
-  for child_view_id in child_view_ids {
-    all_child_view_ids.extend(get_all_child_view_ids(folder, txn, &child_view_id, uid));
+  for child_view in child_views {
+    all_child_view_ids.extend(get_all_child_view_ids(
+      folder,
+      txn,
+      &child_view.id.to_string(),
+      uid,
+    ));
   }
   all_child_view_ids
 }

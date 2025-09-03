@@ -13,13 +13,13 @@ use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
 use collab_entity::CollabType;
 use collab_entity::define::DATABASE_ROW_DATA;
+use collab_entity::uuid_validation::{DatabaseId, RowId};
 
 use crate::database::timestamp;
 
 use crate::error::DatabaseError;
 use crate::rows::{
-  Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta, RowMetaUpdate,
-  subscribe_row_data_change,
+  Cell, Cells, CellsUpdate, RowChangeSender, RowMeta, RowMetaUpdate, subscribe_row_data_change,
 };
 
 use crate::util::encoded_collab;
@@ -61,10 +61,10 @@ pub fn default_database_row_data(row: Row, client_id: ClientID) -> EncodedCollab
 }
 
 pub fn default_database_row_collab(row: Row, client_id: ClientID) -> Collab {
-  let row_id = row.id.clone();
-  let options = CollabOptions::new(row_id.to_string(), client_id);
+  let row_id = row.id;
+  let options = CollabOptions::new(row_id, client_id);
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
-  let _ = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
+  let _ = DatabaseRowBody::create(row_id, &mut collab, row);
   collab
 }
 
@@ -81,9 +81,9 @@ impl DatabaseRow {
     mut collab: Collab,
     change_tx: Option<RowChangeSender>,
   ) -> Result<Self, DatabaseError> {
-    let body = DatabaseRowBody::open(row_id.clone(), &mut collab)?;
+    let body = DatabaseRowBody::open(row_id, &mut collab)?;
     if let Some(change_tx) = change_tx {
-      subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
+      subscribe_row_data_change(row_id, &body.data, change_tx);
     }
     Ok(Self {
       row_id,
@@ -98,9 +98,9 @@ impl DatabaseRow {
     change_tx: Option<RowChangeSender>,
     row: Row,
   ) -> Self {
-    let body = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
+    let body = DatabaseRowBody::create(row_id, &mut collab, row);
     if let Some(change_tx) = change_tx {
-      subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
+      subscribe_row_data_change(row_id, &body.data, change_tx);
     }
     Self {
       row_id,
@@ -126,14 +126,14 @@ impl DatabaseRow {
 
   pub fn get_row_meta(&self) -> Option<RowMeta> {
     let txn = self.collab.transact();
-    let row_id = Uuid::parse_str(&self.body.row_id).ok()?;
+    let row_id = self.body.row_id;
     Some(RowMeta::from_map_ref(&txn, &row_id, &self.body.meta))
   }
 
   pub fn get_row_detail(&self) -> Option<RowDetail> {
     let txn = self.collab.transact();
     let row = row_from_map_ref(&self.body.data, &txn)?;
-    let row_id = Uuid::parse_str(&self.body.row_id).ok()?;
+    let row_id = self.body.row_id;
     let meta = RowMeta::from_map_ref(&txn, &row_id, &self.body.meta);
     RowDetail::new(row, meta)
   }
@@ -160,7 +160,7 @@ impl DatabaseRow {
 
     // updates the row_id in case it has changed
     if let Some(row_id) = row_id_from_map_ref(&txn, &data) {
-      self.body.row_id = row_id.clone();
+      self.body.row_id = row_id;
       self.row_id = row_id;
     };
   }
@@ -171,13 +171,9 @@ impl DatabaseRow {
   {
     let meta = self.body.meta.clone();
     let mut txn = self.collab.transact_mut();
-    match Uuid::parse_str(&self.body.row_id) {
-      Ok(row_id) => {
-        let update = RowMetaUpdate::new(&mut txn, meta, row_id);
-        f(update)
-      },
-      Err(e) => error!("🔴 can't update the row meta: {}", e),
-    }
+    let row_id = self.body.row_id;
+    let update = RowMetaUpdate::new(&mut txn, meta, row_id);
+    f(update)
   }
 }
 
@@ -278,7 +274,7 @@ impl DatabaseRowBody {
     new_row_id: RowId,
   ) -> Result<(), DatabaseError> {
     self.update(txn, |update| {
-      update.set_row_id(new_row_id.clone());
+      update.set_row_id(new_row_id);
     });
     self.row_id = new_row_id;
     Ok(())
@@ -287,7 +283,7 @@ impl DatabaseRowBody {
   /// Attempts to get the document id for the row.
   /// Returns None if there is no document.
   pub fn document_id<T: ReadTxn>(&self, txn: &T) -> Result<Option<String>, DatabaseError> {
-    let row_uuid = Uuid::parse_str(&self.row_id)?;
+    let row_uuid = self.row_id;
     let is_doc_empty_key = meta_id_from_row_id(&row_uuid, RowMetaKey::IsDocumentEmpty);
     let is_doc_empty = self.meta.get(txn, &is_doc_empty_key);
     if let Some(yrs::Out::Any(Any::Bool(is_doc_empty))) = is_doc_empty {
@@ -330,8 +326,7 @@ pub struct RowDetail {
 
 impl RowDetail {
   pub fn new(row: Row, meta: RowMeta) -> Option<Self> {
-    let row_id = Uuid::parse_str(&row.id).ok()?;
-    let document_id = meta_id_from_row_id(&row_id, RowMetaKey::DocumentId);
+    let document_id = meta_id_from_row_id(&row.id, RowMetaKey::DocumentId);
     Some(Self {
       row,
       meta,
@@ -344,9 +339,9 @@ impl RowDetail {
     let meta: MapRef = collab.get_with_txn(&txn, META)?.cast().ok()?;
     let row = row_from_map_ref(&data, &txn)?;
 
-    let row_id = Uuid::parse_str(&row.id).ok()?;
-    let meta = RowMeta::from_map_ref(&txn, &row_id, &meta);
-    let row_document_id = meta_id_from_row_id(&row_id, RowMetaKey::DocumentId);
+    let row_uuid = row.id;
+    let meta = RowMeta::from_map_ref(&txn, &row_uuid, &meta);
+    let row_document_id = meta_id_from_row_id(&row_uuid, RowMetaKey::DocumentId);
     Some(Self {
       row,
       meta,
@@ -363,7 +358,7 @@ impl RowDetail {
 pub struct Row {
   pub id: RowId,
   #[serde(default)]
-  pub database_id: String,
+  pub database_id: DatabaseId,
   pub cells: Cells,
   pub height: i32,
   #[serde(default = "default_visibility")]
@@ -427,11 +422,11 @@ impl Row {
   /// The default height of a [Row] is 60
   /// The default visibility of a [Row] is true
   /// The default created_at of a [Row] is the current timestamp
-  pub fn new<R: Into<RowId>>(id: R, database_id: &str) -> Self {
+  pub fn new(id: RowId, database_id: DatabaseId) -> Self {
     let timestamp = timestamp();
     Row {
-      id: id.into(),
-      database_id: database_id.to_string(),
+      id,
+      database_id,
       cells: HashMap::new(),
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
@@ -440,10 +435,10 @@ impl Row {
     }
   }
 
-  pub fn empty(row_id: RowId, database_id: &str) -> Self {
+  pub fn empty(row_id: RowId, database_id: DatabaseId) -> Self {
     Self {
       id: row_id,
-      database_id: database_id.to_string(),
+      database_id,
       cells: HashMap::new(),
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
@@ -457,32 +452,20 @@ impl Row {
   }
 
   pub fn document_id(&self) -> String {
-    meta_id_from_meta_type(self.id.as_str(), RowMetaKey::DocumentId)
+    meta_id_from_row_id(&self.id, RowMetaKey::DocumentId)
   }
 
   pub fn icon_id(&self) -> String {
-    meta_id_from_meta_type(self.id.as_str(), RowMetaKey::IconId)
+    meta_id_from_row_id(&self.id, RowMetaKey::IconId)
   }
 
   pub fn cover_id(&self) -> String {
-    meta_id_from_meta_type(self.id.as_str(), RowMetaKey::CoverId)
+    meta_id_from_row_id(&self.id, RowMetaKey::CoverId)
   }
 }
 
-pub fn database_row_document_id_from_row_id(row_id: &str) -> String {
-  meta_id_from_meta_type(row_id, RowMetaKey::DocumentId)
-}
-
-fn meta_id_from_meta_type(row_id: &str, key: RowMetaKey) -> String {
-  match Uuid::parse_str(row_id) {
-    Ok(row_id_uuid) => meta_id_from_row_id(&row_id_uuid, key),
-    Err(e) => {
-      // This should never happen. Because the row_id generated by gen_row_id() is always
-      // a valid uuid.
-      error!("🔴Invalid row_id: {}, error:{:?}", row_id, e);
-      Uuid::new_v4().to_string()
-    },
-  }
+pub fn database_row_document_id_from_row_id(row_id: &RowId) -> RowId {
+  Uuid::new_v5(row_id, RowMetaKey::DocumentId.as_str().as_bytes())
 }
 
 pub fn meta_id_from_row_id(row_id: &Uuid, key: RowMetaKey) -> String {
@@ -540,8 +523,10 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
     LAST_MODIFIED
   );
 
-  pub fn set_database_id(self, database_id: String) -> Self {
-    self.map_ref.insert(self.txn, ROW_DATABASE_ID, database_id);
+  pub fn set_database_id(self, database_id: DatabaseId) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, ROW_DATABASE_ID, database_id.to_string());
     self
   }
 
@@ -550,27 +535,19 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
       Some(row_id) => row_id,
       None => {
         // no row id found, so we just insert the new id
-        self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
+        self
+          .map_ref
+          .insert(self.txn, ROW_ID, new_row_id.to_string());
         return self;
       },
     };
-    let old_row_uuid = match old_row_id.parse::<Uuid>() {
-      Ok(uuid) => uuid,
-      Err(err) => {
-        error!("uuid parse error: {}, old_row_id: {}", err, old_row_id);
-        return self;
-      },
-    };
-    let new_row_uuid = match new_row_id.parse::<Uuid>() {
-      Ok(uuid) => uuid,
-      Err(err) => {
-        error!("uuid parse error: {}, new_row_id: {}", err, new_row_id);
-        return self;
-      },
-    };
+    let old_row_uuid = old_row_id;
+    let new_row_uuid = new_row_id;
 
     // update to new row id
-    self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
+    self
+      .map_ref
+      .insert(self.txn, ROW_ID, new_row_id.to_string());
 
     // update meta key derived from new row id
     // this exhaustively iterates over all meta keys
@@ -631,7 +608,8 @@ pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(Row
 
 /// Return a [RowOrder] and created_at from a [YrsValue]
 pub fn row_order_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<(RowOrder, i64)> {
-  let id = RowId::from(map_ref.get_with_txn::<_, String>(txn, ROW_ID)?);
+  let row_id_str: String = map_ref.get_with_txn(txn, ROW_ID)?;
+  let id = uuid::Uuid::parse_str(&row_id_str).ok()?;
   let height: i64 = map_ref.get_with_txn(txn, ROW_HEIGHT).unwrap_or(60);
   let crated_at: i64 = map_ref.get_with_txn(txn, CREATED_AT).unwrap_or_default();
   Some((RowOrder::new(id, height as i32), crated_at))
@@ -647,7 +625,7 @@ pub fn cell_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T, field_id: &str) 
 
 pub fn row_id_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowId> {
   let row_id: String = map_ref.get_with_txn(txn, ROW_ID)?;
-  Some(RowId::from(row_id))
+  uuid::Uuid::parse_str(&row_id).ok()
 }
 
 /// Return a [Row] from a [MapRef]
@@ -665,7 +643,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CreateRowParams {
   pub id: RowId,
-  pub database_id: String,
+  pub database_id: DatabaseId,
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
@@ -681,9 +659,7 @@ pub(crate) struct CreateRowParamsValidator;
 
 impl CreateRowParamsValidator {
   pub(crate) fn validate(mut params: CreateRowParams) -> Result<CreateRowParams, DatabaseError> {
-    if params.id.is_empty() {
-      return Err(DatabaseError::InvalidRowID("row_id is empty"));
-    }
+    // RowId is always valid since it's a UUID type
 
     let timestamp = timestamp();
     if params.created_at == 0 {
@@ -698,10 +674,10 @@ impl CreateRowParamsValidator {
 }
 
 impl CreateRowParams {
-  pub fn new<T: Into<RowId>>(id: T, database_id: String) -> Self {
+  pub fn new(id: RowId, database_id: DatabaseId) -> Self {
     let timestamp = timestamp();
     Self {
-      id: id.into(),
+      id,
       database_id,
       cells: Default::default(),
       height: 60,
@@ -771,9 +747,12 @@ mod tests {
 
   #[test]
   fn test_create_row() {
+    let row_id = "550e8400-e29b-41d4-a716-446655440000";
+    let database_id = "650e8400-e29b-41d4-a716-446655440001";
+
     let input_with_numbers = json!({
-      "id": "abcd",
-      "database_id": "database_id",
+      "id": row_id,
+      "database_id": database_id,
       "cells": {},
       "height": 100,
       "visibility": false,
@@ -784,8 +763,8 @@ mod tests {
       .expect("Failed to deserialize row with number as i64");
     assert_eq!(row.created_at, 1678901234);
     let input_with_string = json!({
-      "id": "abcd",
-      "database_id": "database_id",
+      "id": row_id,
+      "database_id": database_id,
       "cells": {},
       "height": 100,
       "visibility": false,

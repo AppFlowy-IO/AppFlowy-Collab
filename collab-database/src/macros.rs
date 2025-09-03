@@ -202,7 +202,7 @@ macro_rules! impl_order_update {
         .map(|array_ref| $array_ty::new(array_ref))
       {
         for mut row_order in array.get_objects_with_txn(self.txn) {
-          array.remove_with_txn(self.txn, row_order.id.as_str());
+          array.remove_with_txn(self.txn, &row_order.id.to_string());
           f(&mut row_order);
           array.push_back(self.txn, row_order);
         }

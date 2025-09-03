@@ -6,7 +6,7 @@ use crate::{SectionsByUid, View, ViewId, Workspace};
 pub struct FolderData {
   pub uid: i64,
   pub workspace: Workspace,
-  pub current_view: ViewId,
+  pub current_view: Option<ViewId>,
   pub views: Vec<View>,
   #[serde(default)]
   pub favorites: SectionsByUid,
@@ -23,7 +23,7 @@ impl FolderData {
     Self {
       uid,
       workspace,
-      current_view: "".into(),
+      current_view: None,
       views: vec![],
       favorites: SectionsByUid::new(),
       recent: SectionsByUid::new(),
@@ -39,8 +39,5 @@ pub struct TrashInfo {
   pub name: String,
   pub created_at: i64,
 }
-impl AsRef<str> for TrashInfo {
-  fn as_ref(&self) -> &str {
-    &self.id
-  }
-}
+// TrashInfo no longer implements AsRef<str> since id is now a UUID
+// If needed, callers should use id.to_string() explicitly

@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use collab::core::collab::CollabOptions;
 use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
@@ -12,6 +13,7 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::vec;
+use uuid::Uuid;
 
 use crate::block_parser::DocumentParser;
 use crate::block_parser::OutputFormat;
@@ -61,8 +63,9 @@ impl Document {
     document_id: &str,
     client_id: ClientID,
   ) -> Result<Self, DocumentError> {
-    let options =
-      CollabOptions::new(document_id.to_string(), client_id).with_data_source(doc_state);
+    let document_uuid = Uuid::parse_str(document_id)
+      .map_err(|_| DocumentError::Internal(anyhow!("Invalid document id:")))?;
+    let options = CollabOptions::new(document_uuid, client_id).with_data_source(doc_state);
     let collab = Collab::new_with_options(origin, options)?;
     Document::open(collab)
   }
@@ -77,7 +80,9 @@ impl Document {
     data: DocumentData,
     client_id: ClientID,
   ) -> Result<Self, DocumentError> {
-    let options = CollabOptions::new(document_id.to_string(), client_id);
+    let document_uuid = Uuid::parse_str(document_id)
+      .map_err(|_| DocumentError::Internal(anyhow!("Invalid document id:")))?;
+    let options = CollabOptions::new(document_uuid, client_id);
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)?;
     Self::create_with_data(collab, data)
   }
@@ -989,8 +994,4 @@ impl From<&Document> for DocumentIndexContent {
 
     Self { page_id, text }
   }
-}
-
-pub fn gen_document_id() -> String {
-  uuid::Uuid::new_v4().to_string()
 }

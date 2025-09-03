@@ -1,5 +1,5 @@
-use crate::rows::RowId;
 use collab_entity::CollabValidateError;
+use collab_entity::uuid_validation::RowId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {
@@ -8,6 +8,9 @@ pub enum DatabaseError {
 
   #[error("The database view's id is invalid: {0}")]
   InvalidViewID(&'static str),
+
+  #[error("The database view's id is invalid: {0}")]
+  InvalidDatabaseViewId(String),
 
   #[error("The database row's id is invalid: {0}")]
   InvalidRowID(&'static str),

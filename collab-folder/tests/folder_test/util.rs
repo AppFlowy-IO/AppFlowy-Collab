@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
+use uuid::Uuid;
 
 use collab::core::collab::{CollabOptions, DataSource, default_client_id};
 use collab::core::origin::{CollabClient, CollabOrigin};
@@ -31,7 +32,12 @@ pub struct FolderTest {
 }
 
 pub fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
-  let mut workspace = Workspace::new(workspace_id.into(), "".to_string(), uid.as_i64());
+  let mut workspace = Workspace::new(
+    uuid::Uuid::parse_str(workspace_id)
+      .unwrap_or_else(|_| uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes())),
+    "".to_string(),
+    uid.as_i64(),
+  );
   workspace.created_at = 0;
   let folder_data = FolderData::new(uid.as_i64(), workspace);
   create_folder_with_data(uid, workspace_id, folder_data)
@@ -55,8 +61,11 @@ pub fn create_folder_with_data(
   );
   let cleaner: Cleaner = Cleaner::new(path);
 
-  let options = CollabOptions::new(workspace_id.to_string(), default_client_id())
-    .with_data_source(DataSource::Disk(None));
+  let options = CollabOptions::new(
+    Uuid::parse_str(workspace_id).unwrap_or_else(|_| Uuid::new_v4()),
+    default_client_id(),
+  )
+  .with_data_source(DataSource::Disk(None));
   let client = CollabClient::new(uid.as_i64(), "1");
   let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
   collab.add_plugin(Box::new(disk_plugin));
@@ -89,8 +98,9 @@ pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<ViewI
     .map(ViewIdentifier::new)
     .collect::<Vec<ViewIdentifier>>();
   View {
-    id: view_id.into(),
-    parent_view_id: parent_view_id.into(),
+    id: collab_entity::uuid_validation::view_id_from_any_string(view_id),
+    parent_view_id: collab_entity::uuid_validation::view_id_from_any_string(parent_view_id)
+      .to_string(),
     name: "".to_string(),
     children: RepeatedViewIdentifier::new(belongings),
     created_at: 0,
@@ -154,4 +164,15 @@ pub fn setup_log() {
       .finish();
     subscriber.try_init().unwrap();
   });
+}
+
+/// Helper function for tests to create deterministic UUIDs from strings
+pub fn test_uuid(s: &str) -> ViewId {
+  // For test purposes, use deterministic UUID generation
+  uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, s.as_bytes())
+}
+
+/// Helper function to parse string to ViewId, panics if invalid (for tests only)
+pub fn parse_view_id(s: &str) -> ViewId {
+  uuid::Uuid::parse_str(s).unwrap_or_else(|_| panic!("Invalid UUID format: {}", s))
 }

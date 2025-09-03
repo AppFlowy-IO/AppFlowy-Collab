@@ -2,6 +2,7 @@ use crate::database::{gen_field_id, gen_row_id};
 use crate::template::entity::{
   CELL_DATA, CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, RowTemplate,
 };
+use collab_entity::uuid_validation::{DatabaseId, DatabaseViewId};
 
 use crate::entity::FieldType;
 use crate::fields::checkbox_type_option::CheckboxTypeOption;
@@ -29,13 +30,13 @@ use std::path::Path;
 
 #[async_trait::async_trait]
 pub trait FileUrlBuilder: Send + Sync + 'static {
-  async fn build(&self, database_id: &str, path: &Path) -> Option<String>;
+  async fn build(&self, database_id: &DatabaseId, path: &Path) -> Option<String>;
 }
 
 pub struct DatabaseTemplateBuilder {
   #[allow(dead_code)]
-  database_id: String,
-  view_id: String,
+  database_id: DatabaseId,
+  view_id: DatabaseViewId,
   columns: Vec<Vec<CellTemplateData>>,
   fields: Vec<FieldTemplate>,
   file_url_builder: Option<Box<dyn FileUrlBuilder>>,
@@ -43,8 +44,8 @@ pub struct DatabaseTemplateBuilder {
 
 impl DatabaseTemplateBuilder {
   pub fn new(
-    database_id: String,
-    view_id: String,
+    database_id: DatabaseId,
+    view_id: DatabaseViewId,
     file_url_builder: Option<Box<dyn FileUrlBuilder>>,
   ) -> Self {
     Self {
@@ -60,7 +61,7 @@ impl DatabaseTemplateBuilder {
   pub async fn create_field<F>(
     mut self,
     csv_resource: &Option<CSVResource>,
-    database_id: &str,
+    database_id: &DatabaseId,
     name: &str,
     field_type: FieldType,
     is_primary: bool,
@@ -173,7 +174,7 @@ impl FieldTemplateBuilder {
   pub async fn build(
     self,
     csv_resource: &Option<CSVResource>,
-    database_id: &str,
+    database_id: &DatabaseId,
     file_url_builder: &Option<Box<dyn FileUrlBuilder>>,
   ) -> (FieldTemplate, Vec<CellTemplateData>) {
     let field_type = self.field_type;

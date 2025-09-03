@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use crate::ViewId;
 use collab::preclude::{Any, MapExt, MapRef, YrsValue};
 use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
+use collab_entity::define::ViewId;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Used to keep track of the view hierarchy.
 /// Parent-child relationship is stored in the map and each child is stored in an array.
@@ -32,8 +33,8 @@ impl ParentChildRelations {
   /// # Arguments
   ///
   /// * `txn` - A mutable reference to a transaction.
-  /// * `parent_id` - A string slice that holds the id of the parent view.
-  /// * `view_id` - A string slice that holds the id of the child view to be dissociated from the parent.
+  /// * `parent_id` - A ViewId that holds the id of the parent view.
+  /// * `view_id` - A ViewId that holds the id of the child view to be dissociated from the parent.
   ///
   /// # Returns
   ///
@@ -44,16 +45,16 @@ impl ParentChildRelations {
   pub fn dissociate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
-    view_id: &str,
+    parent_id: &ViewId,
+    view_id: &ViewId,
   ) -> Option<ViewIdentifier> {
-    let child = ViewIdentifier { id: view_id.into() };
+    let child = ViewIdentifier { id: *view_id };
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let index = children
         .get_children_with_txn(txn)
         .items
         .iter()
-        .position(|i| i.id.as_ref() == view_id);
+        .position(|i| i.id == child.id);
       match index {
         None => {
           tracing::warn!("🟡 The view {} is not in parent {}.", view_id, parent_id);
@@ -76,36 +77,45 @@ impl ParentChildRelations {
   /// # Arguments
   ///
   /// * `txn` - A mutable reference to a transaction.
-  /// * `parent_id` - A string slice that holds the id of the parent view.
-  /// * `view_id` - A string slice that holds the id of the child view to be associated with the parent.
-  /// * `prev_view_id` - An `Option<String>` that holds the id of the view after which the child view will be placed.
+  /// * `parent_id` - A ViewId that holds the id of the parent view.
+  /// * `view_id` - A ViewId that holds the id of the child view to be associated with the parent.
+  /// * `prev_view_id` - An `Option<ViewId>` that holds the id of the view after which the child view will be placed.
   ///
   pub fn associate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
-    view_id: &str,
+    parent_id: &ViewId,
+    view_id: &ViewId,
     prev_view_id: Option<ViewId>,
   ) {
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let prev_index = match prev_view_id {
         None => None,
-        Some(prev_id) => children
-          .get_children_with_txn(txn)
-          .items
-          .iter()
-          .position(|i| i.id == prev_id),
+        Some(prev_id) => {
+          let prev_child = ViewIdentifier { id: prev_id };
+          children
+            .get_children_with_txn(txn)
+            .items
+            .iter()
+            .position(|i| i.id == prev_child.id)
+        },
       };
       let index = match prev_index {
         None => 0,
         Some(index) => (index + 1) as u32,
       };
-      let child = ViewIdentifier { id: view_id.into() };
+      let child = ViewIdentifier { id: *view_id };
       children.insert_child_with_txn(txn, index, child);
     }
   }
 
-  pub fn move_child_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, from: u32, to: u32) {
+  pub fn move_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &ViewId,
+    from: u32,
+    to: u32,
+  ) {
     if let Some(belonging_array) = self.get_children_with_txn(txn, parent_id) {
       belonging_array.move_child_with_txn(txn, from, to);
     }
@@ -114,25 +124,30 @@ impl ParentChildRelations {
   pub fn get_children_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
-    parent_id: &str,
+    parent_id: &ViewId,
   ) -> Option<ChildrenArray> {
-    let array = self.container.get_with_txn(txn, parent_id)?;
+    let array = self.container.get_with_txn(txn, &parent_id.to_string())?;
     Some(ChildrenArray::from_array(array))
   }
 
   pub fn get_or_create_children_with_txn(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
+    parent_id: &ViewId,
   ) -> ChildrenArray {
+    let parent_id_str = parent_id.to_string();
     let array_ref: ArrayRef = self
       .container
-      .get_with_txn(txn, parent_id)
-      .unwrap_or_else(|| self.container.get_or_init_array(txn, parent_id));
+      .get_with_txn(txn, &parent_id_str)
+      .unwrap_or_else(|| {
+        self
+          .container
+          .get_or_init_array(txn, parent_id_str.as_str())
+      });
     ChildrenArray::from_array(array_ref)
   }
 
-  pub fn delete_children_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, index: u32) {
+  pub fn delete_children_with_txn(&self, txn: &mut TransactionMut, parent_id: &ViewId, index: u32) {
     if let Some(belonging_array) = self.get_children_with_txn(txn, parent_id) {
       belonging_array.remove_child_with_txn(txn, index);
     }
@@ -142,7 +157,7 @@ impl ParentChildRelations {
   pub fn add_children(
     &self,
     txn: &mut TransactionMut,
-    parent_id: &str,
+    parent_id: &ViewId,
     children: Vec<ViewIdentifier>,
     index: Option<u32>,
   ) {
@@ -236,7 +251,7 @@ impl ChildrenArray {
     let values = children.into_iter().filter(|child| {
       let contains_child = existing_children_ids.contains(&child.id);
       if !contains_child {
-        existing_children_ids.push(child.id.clone());
+        existing_children_ids.push(child.id);
       }
       !contains_child
     });
@@ -318,11 +333,11 @@ impl From<RepeatedViewIdentifier> for Vec<Any> {
 #[repr(transparent)]
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
 pub struct ViewIdentifier {
-  pub id: ViewId,
+  pub id: collab_entity::uuid_validation::ViewId,
 }
 
 impl Deref for ViewIdentifier {
-  type Target = str;
+  type Target = collab_entity::uuid_validation::ViewId;
 
   fn deref(&self) -> &Self::Target {
     &self.id
@@ -330,12 +345,15 @@ impl Deref for ViewIdentifier {
 }
 
 impl ViewIdentifier {
-  pub fn new<S: Into<Arc<str>>>(id: S) -> Self {
-    Self { id: id.into() }
+  pub fn new(id: collab_entity::uuid_validation::ViewId) -> Self {
+    Self { id }
   }
+
   pub fn from_map(map: &HashMap<String, Any>) -> Option<Self> {
     if let Any::String(id) = map.get("id")? {
-      return Some(Self { id: id.clone() });
+      return Some(Self {
+        id: Uuid::parse_str(id).ok()?,
+      });
     }
 
     None
@@ -345,7 +363,10 @@ impl ViewIdentifier {
 impl From<ViewIdentifier> for Any {
   fn from(value: ViewIdentifier) -> Self {
     let mut map = HashMap::new();
-    map.insert("id".to_string(), Any::String(value.id.clone()));
+    map.insert(
+      "id".to_string(),
+      Any::String(Arc::from(value.id.to_string())),
+    );
     Any::Map(Arc::new(map))
   }
 }

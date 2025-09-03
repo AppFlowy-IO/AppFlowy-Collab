@@ -19,7 +19,7 @@ impl RelationMapParser {
   }
 
   fn validate_relation_map(&self, relation_map: &WorkspaceRelationMap) -> Result<()> {
-    if relation_map.workspace_id.to_string().is_empty() {
+    if relation_map.workspace_id.is_nil() {
       return Err(anyhow!("workspace id must be non-empty"));
     }
 

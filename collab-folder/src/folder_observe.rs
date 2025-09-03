@@ -42,9 +42,37 @@ pub(crate) fn subscribe_view_change(
             match c {
               EntryChange::Inserted(v) => {
                 if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view_id) = map_ref.get_with_txn(txn, FOLDER_VIEW_ID) {
-                    let (view_id, mappings) = revision_mapping.mappings(txn, view_id);
-                    if let Some(YrsValue::YMap(map_ref)) = r.get(txn, &view_id) {
+                  if let Some(view_id_str) = map_ref.get_with_txn::<_, String>(txn, FOLDER_VIEW_ID)
+                  {
+                    if let Ok(view_uuid) = uuid::Uuid::parse_str(&view_id_str) {
+                      let (view_id, mappings) = revision_mapping.mappings(txn, view_uuid);
+                      if let Some(YrsValue::YMap(map_ref)) = r.get(txn, &view_id.to_string()) {
+                        if let Some(view) = view_from_map_ref(
+                          &map_ref,
+                          txn,
+                          &view_relations,
+                          &section_map,
+                          uid,
+                          mappings,
+                        ) {
+                          deletion_cache.insert(view.id, Arc::new(view.clone()));
+
+                          // Send indexing view
+                          let _ = change_tx.send(ViewChange::DidCreateView { view });
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              EntryChange::Updated(_, _) => {
+                if let Some(view_id_str) = event
+                  .target()
+                  .get_with_txn::<_, String>(txn, FOLDER_VIEW_ID)
+                {
+                  if let Ok(view_uuid) = uuid::Uuid::parse_str(&view_id_str) {
+                    let (view_id, mappings) = revision_mapping.mappings(txn, view_uuid);
+                    if let Some(YrsValue::YMap(map_ref)) = r.get(txn, &view_id.to_string()) {
                       if let Some(view) = view_from_map_ref(
                         &map_ref,
                         txn,
@@ -53,25 +81,10 @@ pub(crate) fn subscribe_view_change(
                         uid,
                         mappings,
                       ) {
-                        deletion_cache.insert(view.id.clone(), Arc::new(view.clone()));
-
-                        // Send indexing view
-                        let _ = change_tx.send(ViewChange::DidCreateView { view });
+                        // Update deletion cache with the updated view
+                        deletion_cache.insert(view.id, Arc::new(view.clone()));
+                        let _ = change_tx.send(ViewChange::DidUpdate { view });
                       }
-                    }
-                  }
-                }
-              },
-              EntryChange::Updated(_, _) => {
-                if let Some(view_id) = event.target().get_with_txn(txn, FOLDER_VIEW_ID) {
-                  let (view_id, mappings) = revision_mapping.mappings(txn, view_id);
-                  if let Some(YrsValue::YMap(map_ref)) = r.get(txn, &view_id) {
-                    if let Some(view) =
-                      view_from_map_ref(&map_ref, txn, &view_relations, &section_map, uid, mappings)
-                    {
-                      // Update deletion cache with the updated view
-                      deletion_cache.insert(view.id.clone(), Arc::new(view.clone()));
-                      let _ = change_tx.send(ViewChange::DidUpdate { view });
                     }
                   }
                 }
@@ -80,7 +93,11 @@ pub(crate) fn subscribe_view_change(
                 let deleted_views: Vec<Arc<View>> = event
                   .keys(txn)
                   .iter()
-                  .filter_map(|(k, _)| deletion_cache.remove(&**k).map(|v| v.1))
+                  .filter_map(|(k, _)| {
+                    uuid::Uuid::parse_str(k)
+                      .ok()
+                      .and_then(|uuid| deletion_cache.remove(&uuid).map(|v| v.1))
+                  })
                   .collect();
 
                 let delete_ids: Vec<String> = event

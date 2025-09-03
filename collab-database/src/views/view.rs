@@ -47,6 +47,18 @@ pub enum OrderObjectPosition {
   End,
 }
 
+impl OrderObjectPosition {
+  /// Create an After position with a RowId
+  pub fn after_row(row_id: &collab_entity::uuid_validation::RowId) -> Self {
+    OrderObjectPosition::After(row_id.to_string())
+  }
+
+  /// Create a Before position with a RowId
+  pub fn before_row(row_id: &collab_entity::uuid_validation::RowId) -> Self {
+    OrderObjectPosition::Before(row_id.to_string())
+  }
+}
+
 pub struct DatabaseViewUpdate<'a, 'b> {
   map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
@@ -288,7 +300,8 @@ pub fn view_meta_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Data
   let name: String = map_ref.get_with_txn(txn, VIEW_NAME).unwrap_or_default();
   let is_inline = map_ref.get_with_txn(txn, IS_INLINE).unwrap_or_default();
   Some(DatabaseViewMeta {
-    id,
+    id: collab_entity::uuid_validation::try_parse_database_view_id(&id)
+      .unwrap_or_else(collab_entity::uuid_validation::generate_database_view_id),
     name,
     is_inline,
   })
@@ -418,8 +431,10 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
   let is_inline: bool = map_ref.get_with_txn(txn, IS_INLINE).unwrap_or(false);
 
   Some(DatabaseView {
-    id,
-    database_id,
+    id: collab_entity::uuid_validation::try_parse_database_view_id(&id)
+      .unwrap_or_else(collab_entity::uuid_validation::generate_database_view_id),
+    database_id: collab_entity::uuid_validation::try_parse_database_id(&database_id)
+      .unwrap_or_else(collab_entity::uuid_validation::generate_database_id),
     name,
     layout,
     layout_settings,

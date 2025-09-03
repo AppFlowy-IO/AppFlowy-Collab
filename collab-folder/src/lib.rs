@@ -5,6 +5,7 @@ pub use folder_observe::*;
 pub use relation::*;
 pub use section::*;
 // pub use trash::*;
+pub use collab_entity::define::ViewId;
 pub use space_info::*;
 pub use view::*;
 pub use workspace::*;
