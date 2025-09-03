@@ -1,20 +1,20 @@
+use crate::util::{create_folder, make_test_view, parse_view_id};
 use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, ReadTxn};
+use collab_entity::uuid_validation::view_id_from_any_string;
 use collab_folder::{Folder, FolderData, UserId, ViewId, timestamp};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
-use crate::util::{create_folder, make_test_view, parse_view_id};
-
 #[test]
 fn folder_json_serde() {
-  let folder_test = create_folder(UserId::from(1), "fake_w_1");
+  let fake_w_1 = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_w_1".as_bytes());
+  let folder_test = create_folder(UserId::from(1), fake_w_1);
+  let fake_w_1_uuid = fake_w_1.to_string();
   let time = timestamp();
-  let fake_w_1_uuid =
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "fake_w_1".as_bytes()).to_string();
   assert_json_diff::assert_json_include!(
     actual: folder_test.to_json_value(),
     expected: json!({
@@ -44,13 +44,13 @@ fn folder_json_serde() {
 #[test]
 fn view_json_serde() {
   let uid = UserId::from(1);
-  let folder_test = create_folder(uid.clone(), "fake_workspace_id");
+  let folder_test = create_folder(uid.clone(), view_id_from_any_string("fake_workspace_id"));
   let workspace_id = folder_test.get_workspace_id().unwrap();
 
   let mut folder = folder_test.folder;
 
-  let view_1 = make_test_view("v1", &workspace_id, vec![]);
-  let view_2 = make_test_view("v2", &workspace_id, vec![]);
+  let view_1 = make_test_view("v1", workspace_id, vec![]);
+  let view_2 = make_test_view("v2", workspace_id, vec![]);
   let time = timestamp();
   {
     let mut txn = folder.collab.transact_mut();
@@ -64,11 +64,10 @@ fn view_json_serde() {
       .views
       .insert(&mut txn, view_2, None, uid.as_i64());
 
-    let views =
-      folder
-        .body
-        .views
-        .get_views_belong_to(&txn, &parse_view_id(&workspace_id), uid.as_i64());
+    let views = folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
     assert_eq!(views.len(), 2);
   }
 
@@ -130,15 +129,15 @@ fn view_json_serde() {
 #[test]
 fn child_view_json_serde() {
   let uid = UserId::from(1);
-  let folder_test = create_folder(uid.clone(), "fake_workspace_id");
+  let folder_test = create_folder(uid.clone(), view_id_from_any_string("fake_workspace_id"));
   let workspace_id = folder_test.get_workspace_id().unwrap();
 
   let mut folder = folder_test.folder;
 
-  let view_1 = make_test_view("v1", &workspace_id, vec![]);
-  let view_2 = make_test_view("v2", &workspace_id, vec![]);
-  let view_2_1 = make_test_view("v2.1", "v2", vec![]);
-  let view_2_2 = make_test_view("v2.2", "v2", vec![]);
+  let view_1 = make_test_view("v1", workspace_id, vec![]);
+  let view_2 = make_test_view("v2", workspace_id, vec![]);
+  let view_2_1 = make_test_view("v2.1", view_id_from_any_string("v2"), vec![]);
+  let view_2_2 = make_test_view("v2.2", view_id_from_any_string("v2"), vec![]);
 
   let time = timestamp();
   {

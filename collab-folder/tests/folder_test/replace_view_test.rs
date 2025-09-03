@@ -1,22 +1,23 @@
 use crate::util::{create_folder, make_test_view, parse_view_id};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
+use collab_entity::uuid_validation::view_id_from_any_string;
 use collab_folder::{Folder, UserId};
 use uuid::Uuid;
 
 #[test]
 fn replace_view_get_view() {
   let uid = 1i64;
-  let mut folder = create_folder(UserId::from(uid), "fake_workspace_id");
+  let mut folder = create_folder(UserId::from(uid), view_id_from_any_string("w1"));
   let workspace_id = folder.get_workspace_id().unwrap();
 
   // Create initial views
-  let v1 = make_test_view("v1", &workspace_id, vec![]);
-  let v21 = make_test_view("v2.1", &workspace_id, vec![]);
-  let v22 = make_test_view("v2.2", &workspace_id, vec![]);
+  let v1 = make_test_view("v1", workspace_id, vec![]);
+  let v21 = make_test_view("v2.1", workspace_id, vec![]);
+  let v22 = make_test_view("v2.2", workspace_id, vec![]);
   let v2 = make_test_view(
     "v2",
-    &workspace_id,
+    workspace_id,
     vec![
       crate::util::test_uuid("v2.1"),
       crate::util::test_uuid("v2.2"),
@@ -57,16 +58,16 @@ fn replace_view_get_view() {
 fn replace_view_get_view_concurrent_update() {
   let uid1 = 1i64;
   let uid2 = 1i64;
-  let mut f1 = create_folder(UserId::from(uid1), "fake_workspace_id");
+  let mut f1 = create_folder(UserId::from(uid1), view_id_from_any_string("w1"));
   let workspace_id = f1.get_workspace_id().unwrap();
 
   // Create initial views
-  let v1 = make_test_view("v1", &workspace_id, vec![]);
-  let v21 = make_test_view("v2.1", &workspace_id, vec![]);
-  let v22 = make_test_view("v2.2", &workspace_id, vec![]);
+  let v1 = make_test_view("v1", workspace_id, vec![]);
+  let v21 = make_test_view("v2.1", workspace_id, vec![]);
+  let v22 = make_test_view("v2.2", workspace_id, vec![]);
   let v2 = make_test_view(
     "v2",
-    &workspace_id,
+    workspace_id,
     vec![
       crate::util::test_uuid("v2.1"),
       crate::util::test_uuid("v2.2"),
@@ -94,7 +95,7 @@ fn replace_view_get_view_concurrent_update() {
     uid1,
   );
 
-  let mut v23 = make_test_view("v2.3", &workspace_id, vec![]);
+  let mut v23 = make_test_view("v2.3", workspace_id, vec![]);
   v23.parent_view_id = Some(collab_entity::uuid_validation::view_id_from_any_string(
     "v2",
   ));
@@ -132,16 +133,16 @@ fn replace_view_get_view_concurrent_update() {
 fn replace_view_all_views_concurrent_update() {
   let uid1 = 1i64;
   let uid2 = 1i64;
-  let mut f1 = create_folder(UserId::from(uid1), "fake_workspace_id");
+  let mut f1 = create_folder(UserId::from(uid1), view_id_from_any_string("w1"));
   let workspace_id = f1.get_workspace_id().unwrap();
 
   // Create initial views
-  let v1 = make_test_view("v1", &workspace_id, vec![]);
-  let v21 = make_test_view("v2.1", &workspace_id, vec![]);
-  let v22 = make_test_view("v2.2", &workspace_id, vec![]);
+  let v1 = make_test_view("v1", workspace_id, vec![]);
+  let v21 = make_test_view("v2.1", workspace_id, vec![]);
+  let v22 = make_test_view("v2.2", workspace_id, vec![]);
   let v2 = make_test_view(
     "v2",
-    &workspace_id,
+    workspace_id,
     vec![
       crate::util::test_uuid("v2.1"),
       crate::util::test_uuid("v2.2"),
@@ -169,7 +170,7 @@ fn replace_view_all_views_concurrent_update() {
     uid1,
   );
 
-  let mut v23 = make_test_view("v2.3", &workspace_id, vec![]);
+  let mut v23 = make_test_view("v2.3", workspace_id, vec![]);
   v23.parent_view_id = Some(collab_entity::uuid_validation::view_id_from_any_string(
     "v2",
   ));

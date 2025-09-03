@@ -173,9 +173,9 @@ impl Folder {
     self.body.get_workspace_info(&txn, workspace_id, uid)
   }
 
-  pub fn get_workspace_id(&self) -> Option<String> {
+  pub fn get_workspace_id(&self) -> Option<ViewId> {
     let txn = self.collab.transact();
-    self.body.get_workspace_id(&txn)
+    self.body.get_workspace_id(&txn)?.parse().ok()
   }
 
   pub fn get_all_views(&self, uid: i64) -> Vec<Arc<View>> {

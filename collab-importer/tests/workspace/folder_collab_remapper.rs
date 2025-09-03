@@ -52,22 +52,18 @@ async fn test_folder_collab_remapper() {
   .unwrap();
 
   let workspace_id = folder.get_workspace_id().unwrap();
-  assert_ne!(workspace_id, relation_map.workspace_id.to_string());
+  assert_ne!(workspace_id, relation_map.workspace_id);
   assert_eq!(
     workspace_id,
     id_mapper
       .get_new_id_from_uuid(&relation_map.workspace_id)
       .unwrap()
-      .to_string()
   );
 
-  let workspace_uuid = uuid::Uuid::parse_str(&workspace_id).unwrap();
+  let workspace_uuid = &workspace_id;
   let workspace_info = folder.get_workspace_info(&workspace_uuid, uid).unwrap();
   assert_eq!(workspace_info.name, "My Custom Workspace");
-  assert_eq!(
-    workspace_info.id,
-    uuid::Uuid::parse_str(&workspace_id).unwrap()
-  );
+  assert_eq!(workspace_info.id, workspace_id);
 
   let top_level_views_count = relation_map
     .views
@@ -86,7 +82,7 @@ async fn test_folder_collab_remapper() {
   assert_eq!(all_views.len(), relation_map.views.len() + 1);
 
   for view in &all_views {
-    if view.id.to_string() == workspace_id {
+    if view.id == workspace_id {
       continue;
     }
 
@@ -110,10 +106,7 @@ async fn test_folder_collab_remapper() {
       let expected_parent_id = id_mapper.get_new_id_from_uuid(original_parent_id);
       assert_eq!(view.parent_view_id, expected_parent_id);
     } else {
-      assert_eq!(
-        view.parent_view_id,
-        uuid::Uuid::parse_str(&workspace_id).ok()
-      );
+      assert_eq!(view.parent_view_id, Some(workspace_id));
     }
 
     assert_eq!(view.children.len(), original_view.children.len());
@@ -165,7 +158,7 @@ async fn test_folder_hierarchy_structure() {
     &id_mapper,
     "2f226c0f-51e7-4d04-9243-c61fb509b2e0",
     "General",
-    &workspace_id,
+    &workspace_id.to_string(),
     2,
     ViewLayout::Document,
     uid,
@@ -225,7 +218,7 @@ async fn test_folder_hierarchy_structure() {
     &id_mapper,
     "84baa901-8ebc-46e3-bad5-aaa29bd00830",
     "Shared",
-    &workspace_id,
+    &workspace_id.to_string(),
     0,
     ViewLayout::Document,
     uid,

@@ -84,8 +84,7 @@ async fn test_space_view_edge_case_handler() {
   let folder_workspace_id = folder.get_workspace_id().unwrap();
   let expected_workspace_id = uuid::Uuid::parse_str(&custom_workspace_id).unwrap();
   assert_eq!(
-    folder_workspace_id,
-    expected_workspace_id.to_string(),
+    folder_workspace_id, expected_workspace_id,
     "folder should use custom workspace id"
   );
 
