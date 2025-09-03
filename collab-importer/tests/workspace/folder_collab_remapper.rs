@@ -60,8 +60,7 @@ async fn test_folder_collab_remapper() {
       .unwrap()
   );
 
-  let workspace_uuid = &workspace_id;
-  let workspace_info = folder.get_workspace_info(&workspace_uuid, uid).unwrap();
+  let workspace_info = folder.get_workspace_info(&workspace_id, uid).unwrap();
   assert_eq!(workspace_info.name, "My Custom Workspace");
   assert_eq!(workspace_info.id, workspace_id);
 
