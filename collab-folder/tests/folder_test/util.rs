@@ -31,13 +31,8 @@ pub struct FolderTest {
   pub(crate) section_rx: Option<SectionChangeReceiver>,
 }
 
-pub fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
-  let mut workspace = Workspace::new(
-    uuid::Uuid::parse_str(workspace_id)
-      .unwrap_or_else(|_| uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes())),
-    "".to_string(),
-    uid.as_i64(),
-  );
+pub fn create_folder(uid: UserId, workspace_id: Uuid) -> FolderTest {
+  let mut workspace = Workspace::new(workspace_id, "".to_string(), uid.as_i64());
   workspace.created_at = 0;
   let folder_data = FolderData::new(uid.as_i64(), workspace);
   create_folder_with_data(uid, workspace_id, folder_data)
@@ -45,7 +40,7 @@ pub fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
 
 pub fn create_folder_with_data(
   uid: UserId,
-  workspace_id: &str,
+  workspace_id: Uuid,
   folder_data: FolderData,
 ) -> FolderTest {
   let tempdir = TempDir::new().unwrap();
@@ -61,11 +56,8 @@ pub fn create_folder_with_data(
   );
   let cleaner: Cleaner = Cleaner::new(path);
 
-  let options = CollabOptions::new(
-    Uuid::parse_str(workspace_id).unwrap_or_else(|_| Uuid::new_v4()),
-    default_client_id(),
-  )
-  .with_data_source(DataSource::Disk(None));
+  let options =
+    CollabOptions::new(workspace_id, default_client_id()).with_data_source(DataSource::Disk(None));
   let client = CollabClient::new(uid.as_i64(), "1");
   let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
   collab.add_plugin(Box::new(disk_plugin));
@@ -88,20 +80,18 @@ pub fn create_folder_with_data(
   }
 }
 
-pub fn create_folder_with_workspace(uid: UserId, workspace_id: &str) -> FolderTest {
+pub fn create_folder_with_workspace(uid: UserId, workspace_id: Uuid) -> FolderTest {
   create_folder(uid, workspace_id)
 }
 
-pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<ViewId>) -> View {
+pub fn make_test_view(view_id: &str, parent_view_id: Uuid, belongings: Vec<ViewId>) -> View {
   let belongings = belongings
     .into_iter()
     .map(ViewIdentifier::new)
     .collect::<Vec<ViewIdentifier>>();
   View {
     id: collab_entity::uuid_validation::view_id_from_any_string(view_id),
-    parent_view_id: Some(collab_entity::uuid_validation::view_id_from_any_string(
-      parent_view_id,
-    )),
+    parent_view_id: Some(parent_view_id),
     name: "".to_string(),
     children: RepeatedViewIdentifier::new(belongings),
     created_at: 0,
