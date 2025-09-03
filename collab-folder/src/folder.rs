@@ -722,7 +722,7 @@ impl FolderBody {
   ) -> Option<Arc<View>> {
     let view = self.views.get_view_with_txn(txn, view_id, uid)?;
     if let Some(parent_uuid) = &view.parent_view_id {
-      self.views.move_child(txn, &parent_uuid, from, to);
+      self.views.move_child(txn, parent_uuid, from, to);
     }
     Some(view)
   }
