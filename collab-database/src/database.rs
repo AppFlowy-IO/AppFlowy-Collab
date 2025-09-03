@@ -44,8 +44,8 @@ use collab_entity::CollabType;
 use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::uuid_validation::{DatabaseId, DatabaseViewId};
 
-use futures::stream::{BoxStream, StreamExt};
 use futures::stream;
+use futures::stream::{BoxStream, StreamExt};
 use nanoid::nanoid;
 
 use crate::database_trait::{DatabaseCollabService, DatabaseDataVariant, DatabaseRowCollabService};
@@ -657,18 +657,22 @@ impl Database {
     let row_ids = row_orders.iter().map(|order| order.id).collect();
     let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token, auto_fetch);
     let database_id = self.get_database_id()?;
-    Ok(rows_stream.then(move |result| {
-      let database_id = database_id;
-      async move {
-        let row = result?;
-        let read_guard = row.read().await;
-        let row_id = read_guard.row_id;
-        let row = read_guard
-          .get_row()
-          .unwrap_or_else(|| Row::empty(row_id, database_id));
-        Ok(row)
-      }
-    }).boxed())
+    Ok(
+      rows_stream
+        .then(move |result| {
+          let database_id = database_id;
+          async move {
+            let row = result?;
+            let read_guard = row.read().await;
+            let row_id = read_guard.row_id;
+            let row = read_guard
+              .get_row()
+              .unwrap_or_else(|| Row::empty(row_id, database_id));
+            Ok(row)
+          }
+        })
+        .boxed(),
+    )
   }
 
   /// Return a list of [RowCell] for the given view and field.
