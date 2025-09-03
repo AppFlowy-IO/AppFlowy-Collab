@@ -61,7 +61,7 @@ impl FolderCollabRemapper {
 
       let mut view = View::new(
         new_view_id,
-        new_parent_id.to_string(),
+        new_parent_id,
         view_metadata.name.clone(),
         view_metadata.layout.clone(),
         Some(uid),

@@ -490,8 +490,11 @@ fn move_view_across_parent_test() {
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 1);
   assert_eq!(
-    view_1_child.parent_view_id.to_string(),
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_2_id.as_bytes()).to_string()
+    view_1_child.parent_view_id,
+    Some(uuid::Uuid::new_v5(
+      &uuid::Uuid::NAMESPACE_OID,
+      view_2_id.as_bytes()
+    ))
   );
 
   // Move view_1_child from view_2 to current workspace
@@ -512,8 +515,11 @@ fn move_view_across_parent_test() {
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 0);
   assert_eq!(
-    view_1_child.parent_view_id.to_string(),
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string()
+    view_1_child.parent_view_id,
+    Some(uuid::Uuid::new_v5(
+      &uuid::Uuid::NAMESPACE_OID,
+      workspace_id.as_bytes()
+    ))
   );
   assert_eq!(workspace.child_views.items.len(), 3);
   assert_eq!(
@@ -537,8 +543,11 @@ fn move_view_across_parent_test() {
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 0);
   assert_eq!(
-    view_1_child.parent_view_id.to_string(),
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string()
+    view_1_child.parent_view_id,
+    Some(uuid::Uuid::new_v5(
+      &uuid::Uuid::NAMESPACE_OID,
+      workspace_id.as_bytes()
+    ))
   );
   assert_eq!(workspace.child_views.items.len(), 3);
   assert_eq!(
@@ -564,8 +573,11 @@ fn move_view_across_parent_test() {
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_1_child_id.as_bytes()).to_string()
   );
   assert_eq!(
-    view_1_child.parent_view_id.to_string(),
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, view_1_id.as_bytes()).to_string()
+    view_1_child.parent_view_id,
+    Some(uuid::Uuid::new_v5(
+      &uuid::Uuid::NAMESPACE_OID,
+      view_1_id.as_bytes()
+    ))
   );
   assert_eq!(view_2.children.items.iter().len(), 0);
   assert_eq!(workspace.child_views.items.len(), 2);

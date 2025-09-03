@@ -21,7 +21,9 @@ fn verify_view(
   assert_eq!(view.name, expected_name);
   assert_eq!(
     view.parent_view_id,
-    collab_entity::uuid_validation::view_id_from_any_string(expected_parent_id).to_string()
+    Some(collab_entity::uuid_validation::view_id_from_any_string(
+      expected_parent_id
+    ))
   );
   assert_eq!(view.children.len(), expected_children_len);
   assert_eq!(view.layout, expected_layout);
@@ -105,10 +107,13 @@ async fn test_folder_collab_remapper() {
     assert!(view.last_edited_time > 0);
 
     if let Some(original_parent_id) = &original_view.parent_id {
-      let expected_parent_id = id_mapper.get_new_id_from_uuid(original_parent_id).unwrap();
-      assert_eq!(view.parent_view_id, expected_parent_id.to_string());
+      let expected_parent_id = id_mapper.get_new_id_from_uuid(original_parent_id);
+      assert_eq!(view.parent_view_id, expected_parent_id);
     } else {
-      assert_eq!(view.parent_view_id, workspace_id);
+      assert_eq!(
+        view.parent_view_id,
+        uuid::Uuid::parse_str(&workspace_id).ok()
+      );
     }
 
     assert_eq!(view.children.len(), original_view.children.len());
