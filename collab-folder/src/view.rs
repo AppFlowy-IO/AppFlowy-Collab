@@ -269,7 +269,7 @@ impl ViewsMap {
           None
         }
       })
-      .filter(|view| view.parent_view_id == view.id.to_string())
+      .filter(|view| view.parent_view_id == Some(view.id))
       .collect()
   }
 
@@ -339,13 +339,15 @@ impl ViewsMap {
   pub fn insert(&self, txn: &mut TransactionMut, view: View, index: Option<u32>, uid: i64) {
     let time = timestamp();
 
-    if let Some(parent_map_ref) = self
-      .container
-      .get_with_txn::<_, MapRef>(txn, &view.parent_view_id.to_string())
-    {
+    if let Some(parent_map_ref) = self.container.get_with_txn::<_, MapRef>(
+      txn,
+      &view
+        .parent_view_id
+        .map(|v| v.to_string())
+        .unwrap_or_default(),
+    ) {
       let view_identifier = ViewIdentifier { id: view.id };
-      let parent_view_uuid =
-        uuid::Uuid::parse_str(&view.parent_view_id).unwrap_or_else(|_| uuid::Uuid::nil());
+      let parent_view_uuid = view.parent_view_id.unwrap_or_else(|| uuid::Uuid::nil());
       let updated_view = ViewUpdate::new(
         UserId::from(uid),
         &parent_view_uuid,
@@ -380,7 +382,12 @@ impl ViewsMap {
       let last_edited_time = self.normalize_timestamp(view.last_edited_time);
       update
         .set_name(view.name)
-        .set_bid(&view.parent_view_id)
+        .set_bid(
+          view
+            .parent_view_id
+            .map(|v| v.to_string())
+            .unwrap_or_default(),
+        )
         .set_layout(view.layout)
         .set_created_at(created_at)
         .set_children(view.children)
@@ -513,6 +520,11 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   mappings: impl IntoIterator<Item = ViewId>,
 ) -> Option<View> {
   let parent_view_id: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
+  let parent_view_id = if parent_view_id.is_empty() {
+    None
+  } else {
+    Uuid::parse_str(&parent_view_id).ok()
+  };
   let id_str: String = map_ref.get_with_txn(txn, FOLDER_VIEW_ID)?;
   let id = Uuid::parse_str(&id_str).ok()?;
   let name: String = map_ref
@@ -782,9 +794,9 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct View {
   /// The id of the view
-  pub id: collab_entity::uuid_validation::ViewId,
+  pub id: ViewId,
   /// The id for given parent view  
-  pub parent_view_id: String,
+  pub parent_view_id: Option<ViewId>,
   /// The name that display on the left sidebar
   pub name: String,
   /// A list of ids, each of them is the id of other view
@@ -815,14 +827,14 @@ pub struct View {
 impl View {
   pub fn new(
     view_id: ViewId,
-    parent_view_id: String,
+    parent_view_id: ViewId,
     name: String,
     layout: ViewLayout,
     created_by: Option<i64>,
   ) -> Self {
     Self {
       id: view_id,
-      parent_view_id,
+      parent_view_id: Some(parent_view_id),
       name,
       children: Default::default(),
       created_at: timestamp(),
