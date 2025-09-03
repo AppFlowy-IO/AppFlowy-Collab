@@ -1,20 +1,20 @@
+use crate::util::{create_folder_with_workspace, make_test_view, parse_view_id};
 use assert_json_diff::assert_json_include;
+use collab_entity::uuid_validation::view_id_from_any_string;
 use collab_folder::{UserId, timestamp};
 use serde_json::json;
-
-use crate::util::{create_folder_with_workspace, make_test_view, parse_view_id};
 
 #[test]
 fn create_child_views_test() {
   let uid = UserId::from(1);
-  let workspace_id = "fake_w_1".to_string();
-  let folder_test = create_folder_with_workspace(uid.clone(), &workspace_id);
-  let v_1_1 = make_test_view("1_1", "1", vec![]);
-  let v_1_2 = make_test_view("1_2", "1", vec![]);
-  let v_1_2_1 = make_test_view("1_2_1", "1_2", vec![]);
-  let v_1_2_2 = make_test_view("1_2_2", "1_2", vec![]);
-  let v_1_3 = make_test_view("1_3", "1", vec![]);
-  let v_1 = make_test_view("1", &workspace_id, vec![]);
+  let workspace_id = view_id_from_any_string("fake_w_1");
+  let folder_test = create_folder_with_workspace(uid.clone(), workspace_id);
+  let v_1_1 = make_test_view("1_1", view_id_from_any_string("1"), vec![]);
+  let v_1_2 = make_test_view("1_2", view_id_from_any_string("1"), vec![]);
+  let v_1_2_1 = make_test_view("1_2_1", view_id_from_any_string("1_2"), vec![]);
+  let v_1_2_2 = make_test_view("1_2_2", view_id_from_any_string("1_2"), vec![]);
+  let v_1_3 = make_test_view("1_3", view_id_from_any_string("1"), vec![]);
+  let v_1 = make_test_view("1", workspace_id, vec![]);
 
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
@@ -57,8 +57,7 @@ fn create_child_views_test() {
     .get_views_belong_to(&txn, &v_1_2.id, uid.as_i64());
   assert_eq!(v_1_2_child_views.len(), 2);
 
-  let workspace_uuid_str =
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
+  let workspace_uuid_str = workspace_id.to_string();
   let folder_data = folder
     .body
     .get_folder_data(&txn, &workspace_uuid_str, uid.as_i64())
@@ -187,11 +186,13 @@ fn create_child_views_test() {
 #[test]
 fn move_child_views_test() {
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "w1");
-  let v_1_1 = make_test_view("1_1", "1", vec![]);
-  let v_1_2 = make_test_view("1_2", "1", vec![]);
-  let v_1_3 = make_test_view("1_3", "1", vec![]);
-  let v_1 = make_test_view("1", "w1", vec![]);
+  let workspace_id = view_id_from_any_string("w1");
+  let v_1_id = view_id_from_any_string("1");
+  let folder_test = create_folder_with_workspace(uid.clone(), workspace_id);
+  let v_1_1 = make_test_view("1_1", v_1_id, vec![]);
+  let v_1_2 = make_test_view("1_2", v_1_id, vec![]);
+  let v_1_3 = make_test_view("1_3", v_1_id, vec![]);
+  let v_1 = make_test_view("1", workspace_id, vec![]);
 
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
@@ -255,11 +256,12 @@ fn move_child_views_test() {
 #[test]
 fn delete_view_test() {
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "w1");
+  let workspace_id = view_id_from_any_string("w1");
+  let folder_test = create_folder_with_workspace(uid.clone(), workspace_id);
   let workspace_id = folder_test.get_workspace_id().unwrap();
-  let view_1 = make_test_view("1_1", "w1", vec![]);
-  let view_2 = make_test_view("1_2", "w1", vec![]);
-  let view_3 = make_test_view("1_3", "w1", vec![]);
+  let view_1 = make_test_view("1_1", workspace_id, vec![]);
+  let view_2 = make_test_view("1_2", workspace_id, vec![]);
+  let view_3 = make_test_view("1_3", workspace_id, vec![]);
 
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
@@ -277,15 +279,11 @@ fn delete_view_test() {
     .views
     .insert(&mut txn, view_3, None, uid.as_i64());
 
-  folder
+  folder.body.views.remove_child(&mut txn, &workspace_id, 1);
+  let w_1_child_views = folder
     .body
     .views
-    .remove_child(&mut txn, &uuid::Uuid::parse_str(&workspace_id).unwrap(), 1);
-  let w_1_child_views =
-    folder
-      .body
-      .views
-      .get_views_belong_to(&txn, &parse_view_id(&workspace_id), uid.as_i64());
+    .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
   assert_eq!(
     w_1_child_views[0].id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_1".as_bytes()).to_string()
@@ -299,12 +297,13 @@ fn delete_view_test() {
 #[test]
 fn delete_child_view_test() {
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "w1");
-  let view_1 = make_test_view("v1", "w1", vec![]);
+  let workspace_id = view_id_from_any_string("w1");
+  let folder_test = create_folder_with_workspace(uid.clone(), workspace_id);
+  let view_1 = make_test_view("v1", workspace_id, vec![]);
   let view_1_id = view_1.id.to_string();
-  let view_1_1 = make_test_view("v1_1", "v1", vec![]);
+  let view_1_1 = make_test_view("v1_1", view_id_from_any_string("v1"), vec![]);
   let view_1_1_id = view_1_1.id;
-  let view_2 = make_test_view("v2", "w1", vec![]);
+  let view_2 = make_test_view("v2", workspace_id, vec![]);
 
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
@@ -339,12 +338,12 @@ fn delete_child_view_test() {
 #[test]
 fn create_orphan_child_views_test() {
   let uid = UserId::from(1);
-  let workspace_id = "fake_w_1".to_string();
-  let folder_test = create_folder_with_workspace(uid.clone(), &workspace_id);
-  let view_1 = make_test_view("1", &workspace_id, vec![]);
+  let workspace_id = view_id_from_any_string("fake_w_1");
+  let folder_test = create_folder_with_workspace(uid.clone(), workspace_id);
+  let view_1 = make_test_view("1", workspace_id, vec![]);
 
   // The orphan view: the parent_view_id equal to the view_id
-  let view_2 = make_test_view("2", "2", vec![]);
+  let view_2 = make_test_view("2", view_id_from_any_string("2"), vec![]);
 
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();
@@ -358,13 +357,11 @@ fn create_orphan_child_views_test() {
     .views
     .insert(&mut txn, view_2.clone(), None, uid.as_i64());
 
-  let workspace_uuid_str =
-    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, workspace_id.as_bytes()).to_string();
-  let child_views =
-    folder
-      .body
-      .views
-      .get_views_belong_to(&txn, &parse_view_id(&workspace_uuid_str), uid.as_i64());
+  let workspace_uuid_str = workspace_id.to_string();
+  let child_views = folder
+    .body
+    .views
+    .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
   assert_eq!(child_views.len(), 1);
 
   let orphan_views = folder
