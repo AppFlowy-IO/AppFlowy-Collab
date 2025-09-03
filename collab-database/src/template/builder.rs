@@ -219,7 +219,7 @@ impl FieldTemplateBuilder {
           .collect::<Vec<CellTemplateData>>();
 
         let mut type_option = DateTypeOption::new();
-        type_option.date_format = DateFormat::FriendlyFull;
+        type_option.date_format = Some(DateFormat::FriendlyFull);
 
         field_template
           .type_options

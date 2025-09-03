@@ -10,7 +10,7 @@ use collab_database::database::{DatabaseBody, DatabaseData, gen_row_id};
 use collab_database::entity::CreateViewParams;
 use collab_database::fields::Field;
 use collab_database::rows::{CreateRowParams, Row};
-use collab_database::views::{DatabaseLayout, LayoutSettingBuilder, OrderObjectPosition};
+use collab_database::views::{DatabaseLayout, LayoutSetting, OrderObjectPosition};
 use futures::StreamExt;
 use nanoid::nanoid;
 
@@ -174,8 +174,7 @@ async fn create_database_view_with_filter_test() {
 async fn create_database_view_with_layout_setting_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let grid_setting =
-    LayoutSettingBuilder::from([("1".into(), 123.into()), ("2".into(), "abc".into())]);
+  let grid_setting = LayoutSetting::from([("1".into(), 123.into()), ("2".into(), "abc".into())]);
 
   let params = CreateViewParams {
     database_id,
