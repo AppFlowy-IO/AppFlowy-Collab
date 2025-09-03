@@ -347,7 +347,7 @@ impl ViewsMap {
         .unwrap_or_default(),
     ) {
       let view_identifier = ViewIdentifier { id: view.id };
-      let parent_view_uuid = view.parent_view_id.unwrap_or_else(|| uuid::Uuid::nil());
+      let parent_view_uuid = view.parent_view_id.unwrap_or_else(Uuid::nil);
       let updated_view = ViewUpdate::new(
         UserId::from(uid),
         &parent_view_uuid,
