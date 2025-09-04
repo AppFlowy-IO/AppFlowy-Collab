@@ -381,7 +381,7 @@ impl Collab {
     let mut txn = self.context.transact_mut();
     let removed = self
       .revisions
-      .remove_where(&mut txn, |rev| rev.id() == revision_id)?;
+      .remove_where(&mut txn, |rev| &rev.id == revision_id)?;
     Ok(removed == 1)
   }
 
