@@ -75,6 +75,7 @@ pub fn default_document_data(document_id: &str) -> DocumentData {
   DocumentData {
     page_id,
     blocks,
+    revisions: Default::default(),
     meta: DocumentMeta {
       children_map,
       text_map: Some(text_map),

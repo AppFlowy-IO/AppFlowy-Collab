@@ -45,6 +45,7 @@ impl MDImporter {
     let mut document_data = DocumentData {
       page_id: document_id.to_string(),
       blocks: HashMap::new(),
+      revisions: Default::default(),
       meta: DocumentMeta {
         children_map: HashMap::new(),
         text_map: Some(HashMap::new()),

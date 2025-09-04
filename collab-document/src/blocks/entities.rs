@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 use std::ops::Deref;
 
+use collab::core::revisions::Revision;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -43,6 +44,9 @@ pub struct DocumentData {
   pub blocks: HashMap<String, Block>,
   /// Document meta.
   pub meta: DocumentMeta,
+  /// Document history.
+  #[serde(default)]
+  pub revisions: Vec<Revision>,
 }
 
 /// Operate block action.

@@ -120,6 +120,7 @@ impl BlockTestCore {
       page_id,
       blocks,
       meta,
+      revisions: vec![],
     }
   }
 

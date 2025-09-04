@@ -1,20 +1,3 @@
-use anyhow::anyhow;
-use collab::core::collab::CollabOptions;
-use collab::core::collab::DataSource;
-use collab::core::origin::CollabOrigin;
-use collab::entity::EncodedCollab;
-use collab::preclude::block::ClientID;
-use collab::preclude::*;
-use collab_entity::CollabType;
-use collab_entity::define::DOCUMENT_ROOT;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::borrow::{Borrow, BorrowMut};
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::vec;
-use uuid::Uuid;
-
 use crate::block_parser::DocumentParser;
 use crate::block_parser::OutputFormat;
 use crate::blocks::BlockType;
@@ -25,6 +8,23 @@ use crate::blocks::{
 };
 use crate::document_awareness::DocumentAwarenessState;
 use crate::error::DocumentError;
+use anyhow::anyhow;
+use collab::core::collab::CollabOptions;
+use collab::core::collab::DataSource;
+use collab::core::origin::CollabOrigin;
+use collab::core::revisions::Revisions;
+use collab::entity::EncodedCollab;
+use collab::preclude::block::ClientID;
+use collab::preclude::*;
+use collab_entity::CollabType;
+use collab_entity::define::DOCUMENT_ROOT;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::borrow::{Borrow, BorrowMut};
+use std::collections::{BTreeMap, HashMap};
+use std::ops::{Deref, DerefMut};
+use std::vec;
+use uuid::Uuid;
 
 /// The page_id is a reference that points to the block's id.
 /// The block that is referenced by this page_id is the first block of the document.
@@ -489,6 +489,7 @@ pub struct DocumentBody {
   pub children_operation: ChildrenOperation,
   pub block_operation: BlockOperation,
   pub text_operation: TextOperation,
+  pub revisions: Revisions,
 }
 
 impl DocumentBody {
@@ -500,6 +501,7 @@ impl DocumentBody {
     collab: &mut Collab,
     data: Option<DocumentData>,
   ) -> Result<Self, DocumentError> {
+    let revisions = collab.revisions().clone();
     let mut txn = collab.context.transact_mut();
     // { document: {:} }
     let root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
@@ -534,6 +536,7 @@ impl DocumentBody {
       block_operation,
       children_operation,
       text_operation,
+      revisions,
     })
   }
 
@@ -584,12 +587,14 @@ impl DocumentBody {
     let children_operation = ChildrenOperation::new(children_map);
     let text_operation = TextOperation::new(text_map);
     let block_operation = BlockOperation::new(blocks, children_operation.clone());
+    let revisions = collab.revisions().clone();
 
     Some(Self {
       root,
       block_operation,
       children_operation,
       text_operation,
+      revisions,
     })
   }
 
@@ -796,9 +801,13 @@ impl DocumentBody {
     let blocks = self.block_operation.get_all_blocks(txn);
     let children_map = self.children_operation.get_all_children(txn);
     let text_map = self.text_operation.serialize_all_text_delta(txn);
+
+    let revisions = self.revisions.as_vec(txn)?;
+
     let document_data = DocumentData {
       page_id,
       blocks,
+      revisions,
       meta: DocumentMeta {
         children_map,
         text_map: Some(text_map),

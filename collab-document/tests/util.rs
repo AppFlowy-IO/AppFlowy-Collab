@@ -108,6 +108,7 @@ impl DocumentTest {
       page_id,
       blocks,
       meta,
+      revisions: vec![],
     };
     let mut document = Document::create_with_data(collab, document_data).unwrap();
     document.initialize();
