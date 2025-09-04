@@ -21,7 +21,7 @@ use collab_entity::define::DOCUMENT_ROOT;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::{Borrow, BorrowMut};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::vec;
 use uuid::Uuid;
