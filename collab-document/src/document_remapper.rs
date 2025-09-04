@@ -85,6 +85,7 @@ impl DocumentCollabRemapper {
       page_id: document_data.page_id,
       blocks: remapped_blocks,
       meta: remapped_meta,
+      revisions: document_data.revisions,
     })
   }
 

@@ -11,11 +11,11 @@ use yrs::{Array, ArrayRef, Out, ReadTxn, Snapshot, TransactionMut};
 pub type RevisionId = Uuid;
 
 /// Revision is a record of a collab state at a specific point in time.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Revision {
-  id: RevisionId,
-  name: Option<String>,
-  snapshot_state: Vec<u8>,
+  pub id: RevisionId,
+  pub name: Option<String>,
+  pub snapshot_state: Vec<u8>,
 }
 
 impl Revision {
@@ -28,21 +28,11 @@ impl Revision {
     }
   }
 
-  /// Globally unique identifier for the revision.
-  pub fn id(&self) -> &RevisionId {
-    &self.id
-  }
-
   /// Returns the timestamp when the revision was created.
   pub fn created_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
     let timestamp = self.id.get_timestamp()?;
     let (seconds, nanos) = timestamp.to_unix();
     chrono::DateTime::<chrono::Utc>::from_timestamp(seconds as i64, nanos)
-  }
-
-  /// Returns the name of the revision, if it exists.
-  pub fn name(&self) -> Option<&str> {
-    self.name.as_deref()
   }
 
   /// Deserializes revision's snapshot state into a yrs [Snapshot].
@@ -56,6 +46,7 @@ impl Revision {
 ///
 /// Revisions are not compatible with garbage collection, so they must be created with
 /// garbage collection disabled.
+#[derive(Debug, Clone)]
 pub struct Revisions {
   revisions: ArrayRef,
 }
@@ -163,6 +154,10 @@ impl Revisions {
   pub fn iter<'a, T: ReadTxn>(&self, txn: &'a T) -> RevisionsIter<'a, T> {
     let iter = self.revisions.iter(txn);
     RevisionsIter { iter }
+  }
+
+  pub fn as_vec(&self, txn: &impl ReadTxn) -> Result<Vec<Revision>, CollabError> {
+    self.iter(txn).collect()
   }
 
   /// Performs garbage collection on the document, removing all data that is no longer
