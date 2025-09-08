@@ -1,4 +1,4 @@
-use collab::core::collab::{CollabOptions, DataSource};
+use collab::core::collab::{CollabOptions, CollabVersion, DataSource, VersionedData};
 use collab::core::origin::CollabOrigin;
 use collab::document::document::Document;
 use collab::document::document_remapper::DocumentCollabRemapper;
@@ -7,13 +7,21 @@ use std::collections::HashMap;
 use std::fs;
 use uuid::Uuid;
 
-fn doc_state_to_document(doc_state: &[u8], doc_id: &str, user_id: &str) -> Document {
+fn doc_state_to_document(
+  doc_state: &[u8],
+  doc_id: &str,
+  user_id: &str,
+  version: Option<&CollabVersion>,
+) -> Document {
   let client_id = user_id.parse::<u64>().unwrap_or(0);
   let options = CollabOptions::new(
     Uuid::parse_str(doc_id).unwrap_or_else(|_| Uuid::new_v4()),
     client_id,
   )
-  .with_data_source(DataSource::DocStateV1(doc_state.to_owned()));
+  .with_data_source(DataSource::DocStateV1(VersionedData::new(
+    doc_state,
+    version.copied(),
+  )));
   let collab =
     Collab::new_with_options(CollabOrigin::Empty, options).expect("Failed to create collab");
   Document::open(collab).expect("Failed to open document")
@@ -60,7 +68,7 @@ fn test_remap_collab_with_mentioned_page_ids() {
     .remap_collab_doc_state(doc_id, user_id, &doc_state)
     .unwrap();
 
-  let remapped_doc = doc_state_to_document(&remapped_state, doc_id, user_id);
+  let remapped_doc = doc_state_to_document(&remapped_state, doc_id, user_id, None);
   let remapped_data = remapped_doc.get_document_data().unwrap();
 
   let mut found_remapped_mentions = 0;
@@ -120,7 +128,7 @@ fn test_remap_collab_with_inline_database() {
   let remapped_state = remapper
     .remap_collab_doc_state(doc_id, user_id, &doc_state)
     .unwrap();
-  let remapped_doc = doc_state_to_document(&remapped_state, doc_id, user_id);
+  let remapped_doc = doc_state_to_document(&remapped_state, doc_id, user_id, None);
   let remapped_data = remapped_doc.get_document_data().unwrap();
 
   let mut found_remapped_database_parent_id = false;

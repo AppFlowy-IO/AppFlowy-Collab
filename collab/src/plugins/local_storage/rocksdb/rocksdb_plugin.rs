@@ -125,7 +125,13 @@ impl CollabPlugin for RocksdbDiskPlugin {
     self.write_to_disk(collab);
   }
 
-  fn receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
+  fn receive_update(
+    &self,
+    object_id: &str,
+    _txn: &TransactionMut,
+    update: &[u8],
+    collab_version: Option<&CollabVersion>,
+  ) {
     // Only push update if the doc is loaded
     if !self.did_init.load(SeqCst) {
       return;

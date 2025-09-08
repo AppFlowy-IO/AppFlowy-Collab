@@ -18,12 +18,11 @@ pub fn create_space_view(
 ) -> Result<(ParentChildViews, Collab), CollabError> {
   let client_id = default_client_id();
   let import_container_doc_state = default_document_collab_data(&view_id.to_string(), client_id)
-    .map_err(|err| CollabError::Internal(err.into()))?
-    .doc_state
-    .to_vec();
+    .map_err(|err| CollabError::Internal(err.into()))?;
 
-  let options = CollabOptions::new(*view_id, client_id)
-    .with_data_source(DataSource::DocStateV1(import_container_doc_state));
+  let data = VersionedData::new(encoded_collab.doc_state, encoded_collab.collab_version);
+  let options =
+    CollabOptions::new(*view_id, client_id).with_data_source(DataSource::DocStateV1(data));
   let collab = Collab::new_with_options(CollabOrigin::Empty, options)
     .map_err(|err| CollabError::Internal(err.into()))?;
 

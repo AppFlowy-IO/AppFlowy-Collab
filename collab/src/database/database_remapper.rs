@@ -1,5 +1,5 @@
-use crate::core::collab::{CollabOptions, DataSource};
-use crate::core::origin::CollabOrigin;
+use collab::core::collab::{CollabOptions, CollabVersion, DataSource, VersionedData};
+use collab::core::origin::CollabOrigin;
 
 use crate::preclude::*;
 use std::collections::HashMap;
@@ -49,9 +49,10 @@ impl DatabaseCollabRemapper {
     database_id: &str,
     user_id: &str,
     db_state: &[u8],
+    version: Option<&CollabVersion>,
   ) -> Result<Vec<u8>, CollabError> {
     let database_data = self
-      .collab_bytes_to_database_data(database_id, user_id, db_state)
+      .collab_bytes_to_database_data(database_id, user_id, db_state, version)
       .await?;
     let remapped_data = self.remap_database_data(database_data)?;
     let remapped_bytes = self
@@ -66,9 +67,10 @@ impl DatabaseCollabRemapper {
     database_id: &str,
     user_id: &str,
     db_state: &[u8],
+    version: Option<&CollabVersion>,
   ) -> Result<DatabaseData, CollabError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
-    let data_source = DataSource::DocStateV1(db_state.to_owned());
+    let data_source = DataSource::DocStateV1(VersionedData::new(db_state, version.copied()));
 
     let database_uuid =
       Uuid::parse_str(database_id).map_err(|err| CollabError::Internal(err.into()))?;
