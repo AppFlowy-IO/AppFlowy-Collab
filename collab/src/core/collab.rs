@@ -336,8 +336,8 @@ impl Collab {
     Ok(this)
   }
 
-  pub fn version(&self) -> Option<Uuid> {
-    self.version
+  pub fn version(&self) -> Option<&Uuid> {
+    self.version.as_ref()
   }
 
   /// Each collab can have only one cloud plugin
@@ -423,6 +423,7 @@ impl Collab {
       self.object_id.to_string(),
       self.plugins.clone(),
       self.origin().clone(),
+      self.version().copied(),
     );
 
     let awareness_subscription = observe_awareness(
@@ -596,6 +597,7 @@ fn observe_doc(
   oid: String,
   plugins: Plugins,
   local_origin: CollabOrigin,
+  collab_version: Option<CollabVersion>,
 ) -> (Subscription, Option<AfterTransactionSubscription>) {
   let cloned_oid = oid.clone();
   let cloned_plugins = plugins.clone();
@@ -612,7 +614,7 @@ fn observe_doc(
           }
         }
 
-        plugin.receive_update(&cloned_oid, txn, &event.update);
+        plugin.receive_update(&cloned_oid, txn, &event.update, collab_version.as_ref());
         let remote_origin = CollabOrigin::from(txn);
         if remote_origin == local_origin {
           plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
@@ -647,6 +649,15 @@ impl Deref for VersionedData {
   }
 }
 
+impl VersionedData {
+  pub fn new<B: Into<Vec<u8>>>(data: B, version: Option<CollabVersion>) -> Self {
+    Self {
+      version,
+      data: data.into(),
+    }
+  }
+}
+
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
 /// [Update::decode_v1].
 pub enum DataSource {
@@ -669,9 +680,13 @@ impl Debug for DataSource {
 
 impl From<EncodedCollab> for DataSource {
   fn from(encoded: EncodedCollab) -> Self {
+    let versioned = VersionedData {
+      version: encoded.collab_version,
+      data: encoded.doc_state.into(),
+    };
     match encoded.version {
-      EncoderVersion::V1 => DataSource::DocStateV1(encoded.doc_state.into()),
-      EncoderVersion::V2 => DataSource::DocStateV2(encoded.doc_state.into()),
+      EncoderVersion::V1 => DataSource::DocStateV1(versioned),
+      EncoderVersion::V2 => DataSource::DocStateV2(versioned),
     }
   }
 }

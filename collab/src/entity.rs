@@ -1,3 +1,4 @@
+use crate::core::collab::{CollabVersion, VersionedData};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -11,6 +12,8 @@ pub struct EncodedCollab {
   pub doc_state: Bytes,
   #[serde(default)]
   pub version: EncoderVersion,
+  #[serde(default)]
+  pub collab_version: Option<CollabVersion>,
 }
 
 impl Debug for EncodedCollab {
@@ -43,6 +46,7 @@ impl EncodedCollab {
       state_vector: state_vector.into(),
       doc_state: doc_state.into(),
       version: EncoderVersion::V1,
+      collab_version: None,
     }
   }
 
@@ -51,6 +55,7 @@ impl EncodedCollab {
       state_vector: state_vector.into(),
       doc_state: doc_state.into(),
       version: EncoderVersion::V2,
+      collab_version: None,
     }
   }
 
@@ -71,6 +76,7 @@ impl EncodedCollab {
           state_vector: old_collab.state_vector,
           doc_state: old_collab.doc_state,
           version: EncoderVersion::V1,
+          collab_version: None,
         })
       },
     }
@@ -102,6 +108,7 @@ mod tests {
         state_vector: Bytes::from(vec![1, 2, 3]),
         doc_state: Bytes::from(vec![4, 5, 6]),
         version: EncoderVersion::V1,
+        collab_version: None,
       }
     );
   }
@@ -112,6 +119,7 @@ mod tests {
       state_vector: Bytes::from(vec![1, 2, 3]),
       doc_state: Bytes::from(vec![4, 5, 6]),
       version: EncoderVersion::V1,
+      collab_version: None,
     };
 
     let new_encoded_collab_bytes = new_encoded_collab.encode_to_bytes().unwrap();

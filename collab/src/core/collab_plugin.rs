@@ -3,13 +3,13 @@ use crate::core::awareness::{AwarenessUpdate, Event};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 
-use std::sync::Arc;
-use tracing::trace;
-use yrs::{Doc, TransactionMut};
-
+use crate::core::collab::CollabVersion;
 use crate::core::origin::CollabOrigin;
 use crate::error::CollabError;
 use crate::preclude::Collab;
+use std::sync::Arc;
+use tracing::trace;
+use yrs::{Doc, TransactionMut};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum CollabPluginType {
@@ -43,7 +43,14 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
   /// the Yrs document.
-  fn receive_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
+  fn receive_update(
+    &self,
+    _object_id: &str,
+    _txn: &TransactionMut,
+    _update: &[u8],
+    _collab_version: Option<&CollabVersion>,
+  ) {
+  }
 
   /// Called when the plugin receives a local update.
   /// We use the [CollabOrigin] to know if the update comes from the local user or from a remote
@@ -90,8 +97,14 @@ where
     (**self).did_init(collab, _object_id)
   }
 
-  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
-    (**self).receive_update(object_id, txn, update)
+  fn receive_update(
+    &self,
+    object_id: &str,
+    txn: &TransactionMut,
+    update: &[u8],
+    collab_version: Option<&CollabVersion>,
+  ) {
+    (**self).receive_update(object_id, txn, update, collab_version)
   }
 
   fn receive_local_update(&self, origin: &CollabOrigin, object_id: &str, update: &[u8]) {

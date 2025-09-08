@@ -3,7 +3,7 @@ use std::sync::{Arc, Once, RwLock};
 
 use bytes::Bytes;
 
-use collab::core::collab::DataSource;
+use collab::core::collab::{CollabVersion, DataSource, VersionedData};
 
 use collab::core::collab_plugin::CollabPluginType;
 use collab::preclude::*;
@@ -33,7 +33,13 @@ pub struct Position {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct CollabStateCachePlugin(Arc<RwLock<Vec<Bytes>>>);
+pub struct CollabStateCachePlugin(Arc<RwLock<State>>);
+
+#[derive(Debug, Default, Clone)]
+struct State {
+  updates: Vec<Bytes>,
+  version: Option<CollabVersion>,
+}
 
 impl CollabStateCachePlugin {
   pub fn new() -> Self {
@@ -43,20 +49,24 @@ impl CollabStateCachePlugin {
   pub fn get_doc_state(&self) -> Result<DataSource, anyhow::Error> {
     let mut updates = vec![];
     let lock = self.0.read().unwrap();
-    for encoded_data in lock.iter() {
+    for encoded_data in lock.updates.iter() {
       updates.push(encoded_data.as_ref());
     }
 
     let doc_state = merge_updates_v1(&updates)
       .map_err(|err| anyhow::anyhow!("merge updates failed: {:?}", err))
       .unwrap();
-    Ok(DataSource::DocStateV1(doc_state))
+    Ok(DataSource::DocStateV1(VersionedData::new(
+      doc_state,
+      lock.version.clone(),
+    )))
   }
 
   #[allow(dead_code)]
   pub fn get_update(&self) -> Result<Update, anyhow::Error> {
     let read_guard = self.0.read().unwrap();
     let updates = read_guard
+      .updates
       .iter()
       .map(|update| update.as_ref())
       .collect::<Vec<&[u8]>>();
@@ -67,13 +77,20 @@ impl CollabStateCachePlugin {
 }
 
 impl CollabPlugin for CollabStateCachePlugin {
-  fn receive_update(&self, _object_id: &str, txn: &TransactionMut, update: &[u8]) {
+  fn receive_update(
+    &self,
+    _object_id: &str,
+    txn: &TransactionMut,
+    update: &[u8],
+    collab_version: Option<&CollabVersion>,
+  ) {
     let mut write_guard = self.0.write().unwrap();
-    if write_guard.is_empty() {
+    if write_guard.updates.is_empty() {
       let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
-      write_guard.push(Bytes::from(doc_state));
+      write_guard.updates.push(Bytes::from(doc_state));
     }
-    write_guard.push(Bytes::from(update.to_vec()));
+    write_guard.updates.push(Bytes::from(update.to_vec()));
+    write_guard.version = collab_version.cloned();
   }
 
   fn plugin_type(&self) -> CollabPluginType {
