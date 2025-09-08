@@ -21,9 +21,7 @@ use crate::core::awareness::Awareness;
 use crate::core::collab_plugin::{CollabPersistence, CollabPlugin, CollabPluginType, Plugins};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::origin::{CollabClient, CollabOrigin};
-use crate::core::revisions::{Revision, RevisionId, Revisions};
 use crate::core::transaction::DocTransactionExtension;
-use yrs::updates::encoder::{Encode, Encoder, EncoderV1, EncoderV2};
 use yrs::{
   Any, Doc, Map, MapRef, Observable, OffsetKind, Options, Out, ReadTxn, StateVector, Subscription,
   Transact, Transaction, TransactionMut, UndoManager, Update,
@@ -36,7 +34,6 @@ use uuid::Uuid;
 
 pub const DATA_SECTION: &str = "data";
 pub const META_SECTION: &str = "meta";
-pub const REVISIONS_SECTION: &str = "revisions";
 
 type AfterTransactionSubscription = Subscription;
 
@@ -50,6 +47,7 @@ pub struct Collab {
   /// The object id can be the document id or the database id. It must be unique for
   /// each [Collab] instance.
   object_id: Uuid,
+  version: Option<CollabVersion>,
   state: Arc<State>,
   update_subscription: ArcSwapOption<Subscription>,
   awareness_subscription: ArcSwapOption<Subscription>,
@@ -65,7 +63,6 @@ pub struct Collab {
   pub data: MapRef,
   #[allow(dead_code)]
   meta: MapRef,
-  revisions: Revisions,
   /// This is an inner collab state that requires mut access in order to modify it.
   pub context: CollabContext,
 }
@@ -242,6 +239,8 @@ pub fn make_yrs_doc(object_id: &str, skip_gc: bool, client_id: ClientID) -> Doc 
   Doc::with_options(options)
 }
 
+pub type CollabVersion = Uuid;
+
 pub struct CollabOptions {
   pub object_id: Uuid,
   pub data_source: Option<DataSource>,
@@ -255,6 +254,7 @@ impl Display for CollabOptions {
       .field("object_id", &self.object_id)
       .field("client_id", &self.client_id)
       .field("data_source", &self.data_source)
+      .field("skip_gc", &self.skip_gc)
       .finish()
   }
 }
@@ -295,17 +295,16 @@ impl Collab {
     let doc = make_yrs_doc(&object_id.to_string(), options.skip_gc, options.client_id);
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
-    let revisions = Revisions::new(doc.get_or_insert_array(REVISIONS_SECTION));
     let plugins = Plugins::new(vec![]);
     let state = Arc::new(State::new(&object_id.to_string()));
     let awareness = Awareness::new(doc);
     let mut this = Self {
       object_id,
+      version: options.data_source.as_ref().and_then(DataSource::version),
       context: CollabContext::new(origin, awareness),
       state,
       data,
       meta,
-      revisions,
       plugins,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
@@ -337,95 +336,8 @@ impl Collab {
     Ok(this)
   }
 
-  pub fn revisions(&self) -> &Revisions {
-    &self.revisions
-  }
-
-  pub fn prune_revisions<F>(&mut self, predicate: F) -> Result<usize, CollabError>
-  where
-    F: FnMut(&Revision) -> bool,
-  {
-    let mut txn = self.context.transact_mut();
-    let removed = self.revisions.remove_where(&mut txn, predicate)?;
-    Ok(removed)
-  }
-
-  pub fn gc(&mut self) -> Result<(), CollabError> {
-    let mut txn = self.context.transact_mut();
-    self.revisions.gc(&mut txn)?;
-    Ok(())
-  }
-
-  pub fn revision(&self, revision_id: &RevisionId) -> Result<Revision, CollabError> {
-    let txn = self.context.transact();
-    self.revisions.get(&txn, revision_id)
-  }
-
-  /// Create a new revision for the current collab state and return its identifier.
-  pub fn create_revision(&mut self) -> Result<RevisionId, CollabError> {
-    let mut txn = self.context.transact_mut();
-    self.revisions.create_revision(&mut txn, None)
-  }
-
-  /// Create a new revision for the current collab state and return its identifier.
-  pub fn create_named_revision<S: Into<String>>(
-    &mut self,
-    name: S,
-  ) -> Result<RevisionId, CollabError> {
-    let mut txn = self.context.transact_mut();
-    self.revisions.create_revision(&mut txn, Some(name.into()))
-  }
-
-  /// Remove a revision by its identifier.
-  pub fn remove_revision(&mut self, revision_id: &RevisionId) -> Result<bool, CollabError> {
-    let mut txn = self.context.transact_mut();
-    let removed = self
-      .revisions
-      .remove_where(&mut txn, |rev| rev.id() == revision_id)?;
-    Ok(removed == 1)
-  }
-
-  /// Remove all revisions that were created before the specified timestamp.
-  pub fn remove_revisions_before(
-    &mut self,
-    timestamp: chrono::DateTime<chrono::Utc>,
-  ) -> Result<usize, CollabError> {
-    let mut txn = self.context.transact_mut();
-    self
-      .revisions
-      .remove_where(&mut txn, |rev| rev.created_at().unwrap() < timestamp)
-  }
-
-  /// Restore document state up to a given revision. This method **WON'T** change the state of the
-  /// current collab.
-  ///
-  /// Instead, it returns [EncodedCollab] that contains the current collab state at given revision.
-  pub fn restore_revision(
-    &self,
-    revision_id: &RevisionId,
-    version: EncoderVersion,
-  ) -> Result<EncodedCollab, CollabError> {
-    let txn = self.context.transact();
-    let revision = self.revisions.get(&txn, revision_id)?;
-    let snapshot = revision.snapshot()?;
-    match version {
-      EncoderVersion::V1 => {
-        let mut encoder = EncoderV1::new();
-        txn
-          .encode_state_from_snapshot(&snapshot, &mut encoder)
-          .map_err(|e| CollabError::Internal(e.into()))?;
-        let data = encoder.to_vec();
-        Ok(EncodedCollab::new_v1(snapshot.state_map.encode_v1(), data))
-      },
-      EncoderVersion::V2 => {
-        let mut encoder = EncoderV2::new();
-        txn
-          .encode_state_from_snapshot(&snapshot, &mut encoder)
-          .map_err(|e| CollabError::Internal(e.into()))?;
-        let data = encoder.to_vec();
-        Ok(EncodedCollab::new_v2(snapshot.state_map.encode_v2(), data))
-      },
-    }
+  pub fn version(&self) -> Option<Uuid> {
+    self.version
   }
 
   /// Each collab can have only one cloud plugin
@@ -452,18 +364,17 @@ impl Collab {
     let object_id = Uuid::parse_str(&object_id_str).unwrap_or_else(|_| Uuid::new_v4());
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
-    let revisions = Revisions::new(doc.get_or_insert_array(REVISIONS_SECTION));
     let state = Arc::new(State::new(&object_id_str));
     let awareness = Awareness::new(doc);
     Self {
       object_id,
+      version: None,
       // if not the fact that we need origin here, it would be
       // not necessary either
       context: CollabContext::new(origin, awareness),
       state,
       data,
       meta,
-      revisions,
       plugins: Plugins::default(),
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
@@ -722,14 +633,28 @@ fn observe_doc(
   (update_sub, after_txn_sub)
 }
 
+#[derive(Clone, Debug)]
+pub struct VersionedData {
+  pub version: Option<CollabVersion>,
+  pub data: Vec<u8>,
+}
+
+impl Deref for VersionedData {
+  type Target = Vec<u8>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.data
+  }
+}
+
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
 /// [Update::decode_v1].
 pub enum DataSource {
   /// when CollabPersistence is not provided, which means the data is not persisted to disk yet
   /// otherwise, it is already persisted to disk.
   Disk(Option<Box<dyn CollabPersistence>>),
-  DocStateV1(Vec<u8>),
-  DocStateV2(Vec<u8>),
+  DocStateV1(VersionedData),
+  DocStateV2(VersionedData),
 }
 
 impl Debug for DataSource {
@@ -759,6 +684,15 @@ impl DataSource {
       DataSource::DocStateV2(d) => d.is_empty(),
     }
   }
+
+  pub fn version(&self) -> Option<CollabVersion> {
+    match self {
+      DataSource::Disk(_) => None,
+      DataSource::DocStateV1(d) => d.version.clone(),
+      DataSource::DocStateV2(d) => d.version.clone(),
+    }
+  }
+
   pub fn as_update(&self) -> Result<Option<Update>, CollabError> {
     match self {
       DataSource::DocStateV1(doc_state) if !doc_state.is_empty() => {
