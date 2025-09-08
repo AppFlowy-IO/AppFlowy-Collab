@@ -256,7 +256,7 @@ impl ViewsMap {
     self.get_view_with_txn(txn, view_id, uid)
   }
 
-  /// Return the orphan views.
+  /// Return the orphan views.d
   /// The orphan views are the views that its parent_view_id equal to its view_id.
   pub fn get_orphan_views_with_txn<T: ReadTxn>(&self, txn: &T, uid: i64) -> Vec<Arc<View>> {
     self

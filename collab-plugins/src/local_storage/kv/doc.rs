@@ -31,7 +31,6 @@ where
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
 
-    info!("new doc:{:?}, doc state len:{}", object_id, doc_state.len());
     self.insert(doc_state_key, doc_state)?;
     self.insert(sv_key, sv)?;
 
@@ -54,7 +53,6 @@ where
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
 
-    info!("new doc:{:?}, doc state len:{}", object_id, doc_state.len());
     self.insert(doc_state_key, doc_state)?;
     self.insert(sv_key, state_vector)?;
 
