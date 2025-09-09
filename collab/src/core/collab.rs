@@ -29,7 +29,7 @@ use yrs::{
   Transact, Transaction, TransactionMut, UndoManager, Update,
 };
 
-use crate::entity::{EncodedCollab, EncoderVersion};
+use crate::entity::{BincodeEncodedCollab, EncodedCollab, EncoderVersion};
 use crate::error::CollabError;
 use crate::preclude::JsonValue;
 use uuid::Uuid;
@@ -744,6 +744,15 @@ impl Debug for DataSource {
 
 impl From<EncodedCollab> for DataSource {
   fn from(encoded: EncodedCollab) -> Self {
+    match encoded.version {
+      EncoderVersion::V1 => DataSource::DocStateV1(encoded.doc_state.into()),
+      EncoderVersion::V2 => DataSource::DocStateV2(encoded.doc_state.into()),
+    }
+  }
+}
+
+impl From<BincodeEncodedCollab> for DataSource {
+  fn from(encoded: BincodeEncodedCollab) -> Self {
     match encoded.version {
       EncoderVersion::V1 => DataSource::DocStateV1(encoded.doc_state.into()),
       EncoderVersion::V2 => DataSource::DocStateV2(encoded.doc_state.into()),

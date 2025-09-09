@@ -8,7 +8,6 @@ use crate::define::{
   DATABASE, DATABASE_ID, DATABASE_INLINE_VIEW, DATABASE_METAS, DATABASE_ROW_DATA, DATABASE_ROW_ID,
   DOCUMENT_ROOT, FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID, USER_AWARENESS, WORKSPACE_DATABASES,
 };
-use crate::proto;
 use collab::preclude::{ArrayRef, Collab, MapExt, MapRef};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -139,29 +138,6 @@ impl CollabType {
         Ok(())
       },
       CollabType::Unknown => Ok(()),
-    }
-  }
-  pub fn from_proto(proto: &proto::CollabType) -> Self {
-    match proto {
-      proto::CollabType::Unknown => CollabType::Unknown,
-      proto::CollabType::Document => CollabType::Document,
-      proto::CollabType::Database => CollabType::Database,
-      proto::CollabType::WorkspaceDatabase => CollabType::WorkspaceDatabase,
-      proto::CollabType::Folder => CollabType::Folder,
-      proto::CollabType::DatabaseRow => CollabType::DatabaseRow,
-      proto::CollabType::UserAwareness => CollabType::UserAwareness,
-    }
-  }
-
-  pub fn to_proto(&self) -> proto::CollabType {
-    match self {
-      CollabType::Unknown => proto::CollabType::Unknown,
-      CollabType::Document => proto::CollabType::Document,
-      CollabType::Database => proto::CollabType::Database,
-      CollabType::WorkspaceDatabase => proto::CollabType::WorkspaceDatabase,
-      CollabType::Folder => proto::CollabType::Folder,
-      CollabType::DatabaseRow => proto::CollabType::DatabaseRow,
-      CollabType::UserAwareness => proto::CollabType::UserAwareness,
     }
   }
 }

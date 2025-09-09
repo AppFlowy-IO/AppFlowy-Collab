@@ -38,6 +38,15 @@ pub enum CollabError {
 
   #[error("Internal failure: {0}")]
   Internal(#[from] anyhow::Error),
+
+  #[error("Bincode decode error: {0}")]
+  BincodeDecode(#[from] bincode::Error),
+
+  #[error("Protobuf decode error: {0}")]
+  ProtobufDecode(#[from] prost::DecodeError),
+
+  #[error("No format could decode the data")]
+  NoDecodingFormat,
 }
 
 impl From<TransactionAcqError> for CollabError {
