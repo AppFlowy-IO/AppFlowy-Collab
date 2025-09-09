@@ -495,6 +495,7 @@ dependencies = [
  "js-sys",
  "lazy_static",
  "nanoid",
+ "prost 0.13.3",
  "serde",
  "serde_json",
  "serde_repr",
