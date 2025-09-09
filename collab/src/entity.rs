@@ -49,7 +49,7 @@ impl From<EncoderVersion> for i32 {
 }
 
 /// Helper struct for bincode serialization/deserialization
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct BincodeEncodedCollab {
   pub state_vector: Bytes,
   pub doc_state: Bytes,
