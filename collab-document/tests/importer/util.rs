@@ -3,7 +3,7 @@ use collab_document::importer::md_importer::MDImporter;
 use serde_json::Value;
 
 pub(crate) fn markdown_to_document_data<T: ToString>(md: T) -> DocumentData {
-  let importer = MDImporter::new(None);
+  let importer = MDImporter::new(None, false);
   let result = importer.import("test_document", md.to_string());
   result.unwrap()
 }
