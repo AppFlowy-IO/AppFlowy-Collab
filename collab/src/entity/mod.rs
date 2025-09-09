@@ -67,6 +67,10 @@ impl EncodedCollab {
     }
   }
 
+  pub fn versioned_data(self) -> VersionedData {
+    VersionedData::new(self.doc_state, self.collab_version)
+  }
+
   pub fn encode_to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
     bincode::serialize(self)
   }

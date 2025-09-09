@@ -58,7 +58,7 @@ impl CollabStateCachePlugin {
       .unwrap();
     Ok(DataSource::DocStateV1(VersionedData::new(
       doc_state,
-      lock.version.clone(),
+      lock.version,
     )))
   }
 

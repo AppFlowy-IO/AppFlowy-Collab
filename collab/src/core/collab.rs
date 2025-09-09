@@ -703,8 +703,8 @@ impl DataSource {
   pub fn version(&self) -> Option<CollabVersion> {
     match self {
       DataSource::Disk(_) => None,
-      DataSource::DocStateV1(d) => d.version.clone(),
-      DataSource::DocStateV2(d) => d.version.clone(),
+      DataSource::DocStateV1(d) => d.version,
+      DataSource::DocStateV2(d) => d.version,
     }
   }
 

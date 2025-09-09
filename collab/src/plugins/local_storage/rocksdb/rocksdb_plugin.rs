@@ -130,7 +130,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     object_id: &str,
     _txn: &TransactionMut,
     update: &[u8],
-    collab_version: Option<&CollabVersion>,
+    _collab_version: Option<&CollabVersion>,
   ) {
     // Only push update if the doc is loaded
     if !self.did_init.load(SeqCst) {
