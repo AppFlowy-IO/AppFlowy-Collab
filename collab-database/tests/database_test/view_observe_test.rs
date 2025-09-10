@@ -1,6 +1,7 @@
-use crate::database_test::helper::{create_database, wait_for_specific_event};
+use crate::database_test::helper::{TEST_VIEW_ID_V1, create_database, wait_for_specific_event};
 use crate::helper::setup_log;
 use collab_database::database::{DatabaseBody, gen_row_id};
+use uuid::Uuid;
 
 use collab::lock::Mutex;
 use collab_database::database_trait::NoPersistenceDatabaseCollabService;
@@ -16,6 +17,7 @@ use tokio::time::sleep;
 #[tokio::test]
 async fn observer_delete_consecutive_rows_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::parse_str(&database_id).unwrap();
   let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
 
@@ -23,22 +25,22 @@ async fn observer_delete_consecutive_rows_test() {
   let row_id_2 = gen_row_id();
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
-  let cloned_row_id_2 = row_id_2.clone();
-  let cloned_row_id_3 = row_id_3.clone();
+  let cloned_row_id_2 = row_id_2;
+  let cloned_row_id_3 = row_id_3;
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   {
     let mut db = cloned_database_test.lock().await;
-    db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_1, database_uuid))
       .await
       .unwrap();
-    db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_2, database_uuid))
       .await
       .unwrap();
-    db.create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_3, database_uuid))
       .await
       .unwrap();
-    db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_4, database_uuid))
       .await
       .unwrap();
   }
@@ -70,6 +72,7 @@ async fn observer_delete_consecutive_rows_test() {
 #[tokio::test]
 async fn observer_delete_non_consecutive_rows_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::parse_str(&database_id).unwrap();
   let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
 
@@ -77,22 +80,22 @@ async fn observer_delete_non_consecutive_rows_test() {
   let row_id_2 = gen_row_id();
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
-  let cloned_row_id_2 = row_id_2.clone();
-  let cloned_row_id_4 = row_id_4.clone();
+  let cloned_row_id_2 = row_id_2;
+  let cloned_row_id_4 = row_id_4;
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   {
     let mut db = cloned_database_test.lock().await;
-    db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_1, database_uuid))
       .await
       .unwrap();
-    db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_2, database_uuid))
       .await
       .unwrap();
-    db.create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_3, database_uuid))
       .await
       .unwrap();
-    db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_4, database_uuid))
       .await
       .unwrap();
   }
@@ -124,6 +127,7 @@ async fn observer_delete_non_consecutive_rows_test() {
 #[tokio::test]
 async fn observe_move_database_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::parse_str(&database_id).unwrap();
   let mut database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
 
@@ -132,42 +136,46 @@ async fn observe_move_database_row_test() {
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
   database_test
-    .create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(row_id_1, database_uuid))
     .await
     .unwrap();
   database_test
-    .create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(row_id_2, database_uuid))
     .await
     .unwrap();
   database_test
-    .create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(row_id_3, database_uuid))
     .await
     .unwrap();
   database_test
-    .create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(row_id_4, database_uuid))
     .await
     .unwrap();
 
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
-  let cloned_row_id_1 = row_id_1.clone();
+  let cloned_row_id_1 = row_id_1;
 
   let views = database_test.lock().await.get_all_views();
   assert_eq!(views.len(), 1);
-  let view_id = views[0].id.clone();
-  let row_orders = database_test.lock().await.get_row_orders_for_view(&view_id);
+  let view_id = views[0].id;
+  let row_orders = database_test
+    .lock()
+    .await
+    .get_row_orders_for_view(&view_id.to_string());
   assert_eq!(row_orders.len(), 4);
   assert_eq!(row_orders[0].id, row_id_1);
   assert_eq!(row_orders[1].id, row_id_2);
   assert_eq!(row_orders[2].id, row_id_3);
   assert_eq!(row_orders[3].id, row_id_4);
 
-  let cloned_row_id_3 = row_id_3.clone();
+  let cloned_row_id_3 = row_id_3;
   tokio::spawn(async move {
     sleep(Duration::from_millis(500)).await;
     let mut db = cloned_database_test.lock().await;
     // [row_id_1, row_id_2, row_id_3, row_id_4]
-    db.move_row(&cloned_row_id_1, &cloned_row_id_3).await;
+    db.move_row(&cloned_row_id_1.to_string(), &cloned_row_id_3.to_string())
+      .await;
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -193,22 +201,26 @@ async fn observe_move_database_row_test() {
   .await
   .unwrap();
 
-  let row_orders = database_test.lock().await.get_row_orders_for_view(&view_id);
+  let row_orders = database_test
+    .lock()
+    .await
+    .get_row_orders_for_view(&view_id.to_string());
   assert_eq!(row_orders.len(), 4);
   assert_eq!(row_orders[0].id, row_id_2);
   assert_eq!(row_orders[1].id, row_id_3);
   assert_eq!(row_orders[2].id, row_id_1);
   assert_eq!(row_orders[3].id, row_id_4);
 
-  let cloned_row_id_1 = row_id_1.clone();
-  let cloned_row_id_2 = row_id_2.clone();
+  let cloned_row_id_1 = row_id_1;
+  let cloned_row_id_2 = row_id_2;
   let cloned_database_test = database_test.clone();
   let view_change_rx = database_test.lock().await.subscribe_view_change().unwrap();
   tokio::spawn(async move {
     sleep(Duration::from_millis(500)).await;
     let mut db = cloned_database_test.lock().await;
     // [row_id_2, row_id_3, row_id_1, row_id_4]
-    db.move_row(&cloned_row_id_1, &cloned_row_id_2).await;
+    db.move_row(&cloned_row_id_1.to_string(), &cloned_row_id_2.to_string())
+      .await;
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -238,6 +250,7 @@ async fn observe_move_database_row_test() {
 #[tokio::test]
 async fn observe_move_database_view_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::parse_str(&database_id).unwrap();
   let mut database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
   let row_id_1 = gen_row_id();
@@ -245,28 +258,28 @@ async fn observe_move_database_view_row_test() {
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
   database_test
-    .create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(row_id_1, database_uuid))
     .await
     .unwrap();
   database_test
-    .create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(row_id_2, database_uuid))
     .await
     .unwrap();
   database_test
-    .create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(row_id_3, database_uuid))
     .await
     .unwrap();
   database_test
-    .create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(row_id_4, database_uuid))
     .await
     .unwrap();
 
   let second_view_id = uuid::Uuid::new_v4().to_string();
-  let first_view_id = database_test.get_all_views().first().unwrap().id.clone();
+  let first_view_id = database_test.get_all_views().first().unwrap().id;
   database_test
     .create_linked_view(CreateViewParams {
-      database_id: database_id.clone(),
-      view_id: second_view_id.to_string(),
+      database_id: database_uuid,
+      view_id: uuid::Uuid::parse_str(&second_view_id).unwrap(),
       name: "my second grid".to_string(),
       layout: DatabaseLayout::Grid,
       ..Default::default()
@@ -275,13 +288,13 @@ async fn observe_move_database_view_row_test() {
 
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
-  let cloned_row_id_1 = row_id_1.clone();
+  let cloned_row_id_1 = row_id_1;
 
   let views = database_test.lock().await.get_all_views();
   assert_eq!(views.len(), 2);
 
-  let cloned_row_id_3 = row_id_3.clone();
-  let cloned_first_view_id = first_view_id.clone();
+  let cloned_row_id_3 = row_id_3;
+  let cloned_first_view_id = first_view_id;
   println!(
     "first_view_id: {}, second_view_id:{}",
     first_view_id, second_view_id
@@ -290,8 +303,8 @@ async fn observe_move_database_view_row_test() {
     sleep(Duration::from_millis(500)).await;
     let mut db = cloned_database_test.lock().await;
     // [row_id_1, row_id_2, row_id_3, row_id_4]
-    db.update_database_view(&cloned_first_view_id, |view| {
-      view.move_row_order(&cloned_row_id_1, &cloned_row_id_3);
+    db.update_database_view(&cloned_first_view_id.to_string(), |view| {
+      view.move_row_order(&cloned_row_id_1.to_string(), &cloned_row_id_3.to_string());
     });
   });
 
@@ -323,7 +336,7 @@ async fn observe_move_database_view_row_test() {
   let row_orders = database_test
     .lock()
     .await
-    .get_row_orders_for_view(&first_view_id);
+    .get_row_orders_for_view(&first_view_id.to_string());
   assert_eq!(row_orders.len(), 4);
   assert_eq!(row_orders[0].id, row_id_2);
   assert_eq!(row_orders[1].id, row_id_3);
@@ -380,7 +393,9 @@ async fn observe_move_database_view_row_test() {
     .unwrap();
 
     let txn = collab.transact();
-    let body_row_orders = db_body.views.get_row_orders(&txn, &second_view_id);
+    let second_view_uuid =
+      collab_entity::uuid_validation::try_parse_database_view_id(&second_view_id).unwrap();
+    let body_row_orders = db_body.views.get_row_orders(&txn, &second_view_uuid);
     assert_eq!(body_row_orders.len(), 4);
     assert_eq!(body_row_orders[0].id, row_id_1);
     assert_eq!(body_row_orders[1].id, row_id_2);
@@ -392,33 +407,30 @@ async fn observe_move_database_view_row_test() {
 #[tokio::test]
 async fn observer_create_delete_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::parse_str(&database_id).unwrap();
   let database_test = create_database(1, &database_id);
 
   let row_id_1 = gen_row_id();
   let row_id_2 = gen_row_id();
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
-  let created_row = vec![
-    row_id_1.clone(),
-    row_id_2.clone(),
-    row_id_3.clone(),
-    row_id_4.clone(),
-  ];
+  let created_row = vec![row_id_1, row_id_2, row_id_3, row_id_4];
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
+  let cloned_database_uuid = database_uuid;
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     let mut db = cloned_database_test.lock().await;
-    db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_1, cloned_database_uuid))
       .await
       .unwrap();
-    db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_2, cloned_database_uuid))
       .await
       .unwrap();
-    db.create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_3, cloned_database_uuid))
       .await
       .unwrap();
-    db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_4, cloned_database_uuid))
       .await
       .unwrap();
   });
@@ -432,13 +444,14 @@ async fn observer_create_delete_row_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      if database_view_id == "v1" {
+      let expected_view_id = TEST_VIEW_ID_V1.to_string();
+      if database_view_id == &expected_view_id {
         assert!(is_local_change);
         assert_eq!(delete_row_indexes.len(), 0);
         for (row_order, index) in insert_row_orders {
           let pos = created_row.iter().position(|x| x == &row_order.id).unwrap() as u32;
           assert_eq!(&pos, index);
-          received_rows.push(row_order.id.clone());
+          received_rows.push(row_order.id);
         }
         created_row == received_rows
       } else {
@@ -455,7 +468,8 @@ async fn observer_create_delete_row_test() {
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     let mut db = cloned_database_test.lock().await;
-    db.move_row(&created_row[0], &created_row[2]).await;
+    db.move_row(&created_row[0].to_string(), &created_row[2].to_string())
+      .await;
   });
 
   let view_change_rx = database_test.lock().await.subscribe_view_change().unwrap();
@@ -466,7 +480,8 @@ async fn observer_create_delete_row_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      if database_view_id == "v1" {
+      let expected_view_id = TEST_VIEW_ID_V1.to_string();
+      if database_view_id == &expected_view_id {
         assert!(is_local_change);
         assert_eq!(delete_row_indexes.len(), 1);
         assert_eq!(delete_row_indexes[0], 0);
@@ -488,16 +503,18 @@ async fn observer_create_delete_row_test() {
 #[tokio::test]
 async fn observer_create_row_when_reopen_a_database_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::parse_str(&database_id).unwrap();
   let database_test = create_database(1, &database_id);
 
   let database_test = Arc::new(Mutex::from(database_test));
   let row_id = gen_row_id();
   let cloned_database_test = database_test.clone();
-  let cloned_row_id = row_id.clone();
+  let cloned_row_id = row_id;
+  let cloned_database_uuid = database_uuid;
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     let mut db = cloned_database_test.lock().await;
-    db.create_row(CreateRowParams::new(cloned_row_id, database_id.clone()))
+    db.create_row(CreateRowParams::new(cloned_row_id, cloned_database_uuid))
       .await
       .unwrap();
   });
@@ -510,7 +527,8 @@ async fn observer_create_row_when_reopen_a_database_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      if database_view_id == "v1" {
+      let expected_view_id = TEST_VIEW_ID_V1.to_string();
+      if database_view_id == &expected_view_id {
         assert_eq!(insert_row_orders.len(), 1);
         assert_eq!(insert_row_orders[0].0.id, row_id);
         assert!(delete_row_indexes.is_empty());
@@ -555,12 +573,13 @@ async fn observe_update_view_test() {
 async fn observe_create_delete_view_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::parse_str(&database_id).unwrap();
   let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
   let create_view_id = uuid::Uuid::new_v4().to_string();
   let params = CreateViewParams {
-    database_id: database_id.clone(),
-    view_id: create_view_id.clone(),
+    database_id: database_uuid,
+    view_id: uuid::Uuid::parse_str(&create_view_id).unwrap(),
     name: "my second grid".to_string(),
     layout: DatabaseLayout::Grid,
     ..Default::default()

@@ -1,34 +1,36 @@
 use crate::database_test::helper::{
-  create_database, create_database_with_default_data, create_row,
+  TEST_VIEW_ID_V1, TEST_VIEW_ID_V2, create_database, create_database_with_default_data, create_row,
 };
 use collab::core::collab::default_client_id;
 use collab_database::database::gen_row_id;
 use collab_database::entity::{CreateViewParams, FileUploadType};
 use collab_database::rows::{
-  CoverType, CreateRowParams, RowCover, RowId, RowMetaKey, meta_id_from_row_id,
+  CoverType, CreateRowParams, RowCover, RowMetaKey, meta_id_from_row_id,
 };
 use collab_database::views::OrderObjectPosition;
 use uuid::Uuid;
 
 #[tokio::test]
 async fn create_row_shared_by_two_view_test() {
-  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::new_v4();
+  let database_id = database_uuid.to_string();
   let mut database_test = create_database(1, &database_id);
+  // View ID needs to be deterministic for test
   let params = CreateViewParams {
-    database_id: "1".to_string(),
-    view_id: "v2".to_string(),
+    database_id: database_uuid,
+    view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V2).unwrap(),
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();
 
   let row_id = gen_row_id();
   database_test
-    .create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
+    .create_row(CreateRowParams::new(row_id, database_uuid))
     .await
     .unwrap();
 
-  let view_1 = database_test.get_view("v1").unwrap();
-  let view_2 = database_test.get_view("v2").unwrap();
+  let view_1 = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
+  let view_2 = database_test.get_view(TEST_VIEW_ID_V2).unwrap();
 
   for row_order in view_1.row_orders.iter() {
     let _ = database_test.get_row_detail(&row_order.id).await.unwrap();
@@ -44,23 +46,25 @@ async fn create_row_shared_by_two_view_test() {
 
 #[tokio::test]
 async fn delete_row_shared_by_two_view_test() {
-  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::new_v4();
+  let database_id = database_uuid.to_string();
   let mut database_test = create_database(1, &database_id);
+  // View ID needs to be deterministic for test
   let params = CreateViewParams {
-    database_id: "1".to_string(),
-    view_id: "v2".to_string(),
+    database_id: database_uuid,
+    view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V2).unwrap(),
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();
 
   let row_order = database_test
-    .create_row(CreateRowParams::new(gen_row_id(), database_id.clone()))
+    .create_row(CreateRowParams::new(gen_row_id(), database_uuid))
     .await
     .unwrap();
   database_test.remove_row(&row_order.id).await;
 
-  let view_1 = database_test.get_view("v1").unwrap();
-  let view_2 = database_test.get_view("v2").unwrap();
+  let view_1 = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
+  let view_2 = database_test.get_view(TEST_VIEW_ID_V2).unwrap();
   assert!(view_1.row_orders.is_empty());
   assert!(view_2.row_orders.is_empty());
 }
@@ -69,29 +73,29 @@ async fn delete_row_shared_by_two_view_test() {
 async fn move_row_in_view_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let rows = database_test.get_rows_for_view("v1").await;
-  let first_row_id = database_test.pre_define_row_ids[0].clone();
-  let second_row_id = database_test.pre_define_row_ids[1].clone();
-  let third_row_id = database_test.pre_define_row_ids[2].clone();
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
+  let first_row_id = database_test.pre_define_row_ids[0];
+  let second_row_id = database_test.pre_define_row_ids[1];
+  let third_row_id = database_test.pre_define_row_ids[2];
 
   assert_eq!(rows[0].id, first_row_id);
   assert_eq!(rows[1].id, second_row_id);
   assert_eq!(rows[2].id, third_row_id);
 
-  database_test.update_database_view("v1", |update| {
-    update.move_row_order(third_row_id.as_str(), second_row_id.as_str());
+  database_test.update_database_view(TEST_VIEW_ID_V1, |update| {
+    update.move_row_order(&third_row_id.to_string(), &second_row_id.to_string());
   });
 
-  let rows2 = database_test.get_rows_for_view("v1").await;
+  let rows2 = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows2[0].id, first_row_id);
   assert_eq!(rows2[1].id, third_row_id);
   assert_eq!(rows2[2].id, second_row_id);
 
-  database_test.update_database_view("v1", |update| {
-    update.move_row_order(second_row_id.as_str(), first_row_id.as_str());
+  database_test.update_database_view(TEST_VIEW_ID_V1, |update| {
+    update.move_row_order(&second_row_id.to_string(), &first_row_id.to_string());
   });
 
-  let row3 = database_test.get_rows_for_view("v1").await;
+  let row3 = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(row3[0].id, second_row_id);
   assert_eq!(row3[1].id, first_row_id);
   assert_eq!(row3[2].id, third_row_id);
@@ -101,20 +105,20 @@ async fn move_row_in_view_test() {
 async fn move_row_in_view_test2() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let rows = database_test.get_rows_for_view("v1").await;
-  let first_row_id = database_test.pre_define_row_ids[0].clone();
-  let second_row_id = database_test.pre_define_row_ids[1].clone();
-  let third_row_id = database_test.pre_define_row_ids[2].clone();
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
+  let first_row_id = database_test.pre_define_row_ids[0];
+  let second_row_id = database_test.pre_define_row_ids[1];
+  let third_row_id = database_test.pre_define_row_ids[2];
 
   assert_eq!(rows[0].id, first_row_id);
   assert_eq!(rows[1].id, second_row_id);
   assert_eq!(rows[2].id, third_row_id);
 
-  database_test.update_database_view("v1", |update| {
-    update.move_row_order(first_row_id.as_str(), third_row_id.as_str());
+  database_test.update_database_view(TEST_VIEW_ID_V1, |update| {
+    update.move_row_order(&first_row_id.to_string(), &third_row_id.to_string());
   });
 
-  let rows2 = database_test.get_rows_for_view("v1").await;
+  let rows2 = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows2[0].id, second_row_id);
   assert_eq!(rows2[1].id, third_row_id);
   assert_eq!(rows2[2].id, first_row_id);
@@ -125,26 +129,26 @@ async fn move_row_in_views_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let params = CreateViewParams {
-    database_id: database_id.to_string(),
-    view_id: "v2".to_string(),
+    database_id,
+    view_id: uuid::Uuid::parse_str(TEST_VIEW_ID_V2).unwrap(),
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();
 
-  let first_row_id = database_test.pre_define_row_ids[0].clone();
-  let second_row_id = database_test.pre_define_row_ids[1].clone();
-  let third_row_id = database_test.pre_define_row_ids[2].clone();
+  let first_row_id = database_test.pre_define_row_ids[0];
+  let second_row_id = database_test.pre_define_row_ids[1];
+  let third_row_id = database_test.pre_define_row_ids[2];
 
-  database_test.update_database_view("v1", |update| {
-    update.move_row_order(third_row_id.as_str(), second_row_id.as_str());
+  database_test.update_database_view(TEST_VIEW_ID_V1, |update| {
+    update.move_row_order(&third_row_id.to_string(), &second_row_id.to_string());
   });
 
-  let rows_1 = database_test.get_rows_for_view("v1").await;
+  let rows_1 = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows_1[0].id, first_row_id);
   assert_eq!(rows_1[1].id, third_row_id);
   assert_eq!(rows_1[2].id, second_row_id);
 
-  let rows_2 = database_test.get_rows_for_view("v2").await;
+  let rows_2 = database_test.get_rows_for_view(TEST_VIEW_ID_V2).await;
   assert_eq!(rows_2[0].id, first_row_id);
   assert_eq!(rows_2[1].id, second_row_id);
   assert_eq!(rows_2[2].id, third_row_id);
@@ -152,28 +156,35 @@ async fn move_row_in_views_test() {
 
 #[tokio::test]
 async fn insert_row_in_views_test() {
-  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::new_v4();
+  let database_id = database_uuid.to_string();
   let mut database_test = create_database_with_default_data(1, &database_id).await;
-  let first_row_id = database_test.pre_define_row_ids[0].clone();
-  let second_row_id = database_test.pre_define_row_ids[1].clone();
-  let third_row_id = database_test.pre_define_row_ids[2].clone();
+  let first_row_id = database_test.pre_define_row_ids[0];
+  let second_row_id = database_test.pre_define_row_ids[1];
+  let third_row_id = database_test.pre_define_row_ids[2];
   let fourth_row_id = gen_row_id();
-  let row = CreateRowParams::new(fourth_row_id.clone(), database_id.clone())
+  let row = CreateRowParams::new(fourth_row_id, database_uuid)
     .with_row_position(OrderObjectPosition::After(second_row_id.to_string()));
-  database_test.create_row_in_view("v1", row).await.unwrap();
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
-  let rows = database_test.get_rows_for_view("v1").await;
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows[0].id, first_row_id);
   assert_eq!(rows[1].id, second_row_id);
   assert_eq!(rows[2].id, fourth_row_id);
   assert_eq!(rows[3].id, third_row_id);
 
   let fifth_row_id = gen_row_id();
-  let row = CreateRowParams::new(fifth_row_id.clone(), database_id.clone())
+  let row = CreateRowParams::new(fifth_row_id, database_uuid)
     .with_row_position(OrderObjectPosition::Before(second_row_id.to_string()));
-  database_test.create_row_in_view("v1", row).await.unwrap();
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
-  let rows = database_test.get_rows_for_view("v1").await;
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows[0].id, first_row_id);
   assert_eq!(rows[1].id, fifth_row_id);
   assert_eq!(rows[2].id, second_row_id);
@@ -181,11 +192,14 @@ async fn insert_row_in_views_test() {
   assert_eq!(rows[4].id, third_row_id);
 
   let sixth_row_id = gen_row_id();
-  let row = CreateRowParams::new(sixth_row_id.clone(), database_id.clone())
+  let row = CreateRowParams::new(sixth_row_id, database_uuid)
     .with_row_position(OrderObjectPosition::After(10.to_string()));
-  database_test.create_row_in_view("v1", row).await.unwrap();
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
-  let rows = database_test.get_rows_for_view("v1").await;
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
 
   assert_eq!(rows[0].id, first_row_id);
   assert_eq!(rows[1].id, fifth_row_id);
@@ -197,15 +211,19 @@ async fn insert_row_in_views_test() {
 
 #[tokio::test]
 async fn insert_row_at_front_in_views_test() {
-  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::new_v4();
+  let database_id = database_uuid.to_string();
   let mut database_test = create_database_with_default_data(1, &database_id).await;
 
   let new_row_id = gen_row_id();
-  let row = CreateRowParams::new(new_row_id.clone(), database_id.clone())
-    .with_row_position(OrderObjectPosition::Start);
-  database_test.create_row_in_view("v1", row).await.unwrap();
+  let row =
+    CreateRowParams::new(new_row_id, database_uuid).with_row_position(OrderObjectPosition::Start);
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
-  let rows = database_test.get_rows_for_view("v1").await;
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows[0].id, new_row_id);
   assert_eq!(rows[1].id, database_test.pre_define_row_ids[0]);
   assert_eq!(rows[2].id, database_test.pre_define_row_ids[1]);
@@ -214,17 +232,21 @@ async fn insert_row_at_front_in_views_test() {
 
 #[tokio::test]
 async fn insert_row_at_last_in_views_test() {
-  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::new_v4();
+  let database_id = database_uuid.to_string();
   let mut database_test = create_database_with_default_data(1, &database_id).await;
 
   let fourth_row_id = gen_row_id();
-  let row = CreateRowParams::new(fourth_row_id.clone(), database_id.clone());
-  database_test.create_row_in_view("v1", row).await.unwrap();
+  let row = CreateRowParams::new(fourth_row_id, database_uuid);
+  database_test
+    .create_row_in_view(TEST_VIEW_ID_V1, row)
+    .await
+    .unwrap();
 
-  let rows = database_test.get_rows_for_view("v1").await;
-  let first_row_id = database_test.pre_define_row_ids[0].clone();
-  let second_row_id = database_test.pre_define_row_ids[1].clone();
-  let third_row_id = database_test.pre_define_row_ids[2].clone();
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
+  let first_row_id = database_test.pre_define_row_ids[0];
+  let second_row_id = database_test.pre_define_row_ids[1];
+  let third_row_id = database_test.pre_define_row_ids[2];
   assert_eq!(rows[0].id, first_row_id);
   assert_eq!(rows[1].id, second_row_id);
   assert_eq!(rows[2].id, third_row_id);
@@ -235,20 +257,24 @@ async fn insert_row_at_last_in_views_test() {
 async fn duplicate_row_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let rows = database_test.get_rows_for_view("v1").await;
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows.len(), 3);
-  let first_row_id = database_test.pre_define_row_ids[0].clone();
-  let second_row_id = database_test.pre_define_row_ids[1].clone();
-  let third_row_id = database_test.pre_define_row_ids[2].clone();
+  let first_row_id = database_test.pre_define_row_ids[0];
+  let second_row_id = database_test.pre_define_row_ids[1];
+  let third_row_id = database_test.pre_define_row_ids[2];
 
-  let params = database_test.duplicate_row(&second_row_id).await.unwrap();
+  let params = database_test
+    .duplicate_row(&second_row_id)
+    .await
+    .unwrap()
+    .unwrap();
   let (index, row_order) = database_test
-    .create_row_in_view("v1", params)
+    .create_row_in_view(TEST_VIEW_ID_V1, params)
     .await
     .unwrap();
   assert_eq!(index, 2);
 
-  let rows = database_test.get_rows_for_view("v1").await;
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows.len(), 4);
 
   assert_eq!(rows[0].id, first_row_id);
@@ -261,50 +287,50 @@ async fn duplicate_row_test() {
 async fn duplicate_last_row_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let rows = database_test.get_rows_for_view("v1").await;
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows.len(), 3);
 
   let params = database_test
     .duplicate_row(&database_test.pre_define_row_ids[2].clone())
     .await
+    .unwrap()
     .unwrap();
   let (index, row_order) = database_test
-    .create_row_in_view("v1", params)
+    .create_row_in_view(TEST_VIEW_ID_V1, params)
     .await
     .unwrap();
   assert_eq!(index, 3);
 
-  let rows = database_test.get_rows_for_view("v1").await;
+  let rows = database_test.get_rows_for_view(TEST_VIEW_ID_V1).await;
   assert_eq!(rows.len(), 4);
   assert_eq!(rows[3].id, row_order.id);
 }
 
 #[tokio::test]
 async fn document_id_of_row_test() {
-  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::new_v4();
+  let database_id = database_uuid.to_string();
   let mut database_test = create_database(1, &database_id);
   let row_id = Uuid::parse_str("43f6c30f-9d23-470c-a0dd-8819f08dcf2f").unwrap();
   let row_order = database_test
-    .create_row(CreateRowParams::new(row_id, database_id.clone()))
+    .create_row(CreateRowParams::new(row_id, database_uuid))
     .await
     .unwrap();
 
-  let row = database_test.get_row(&row_order.id).await;
-  let expected_document_id = meta_id_from_row_id(
-    &Uuid::parse_str(row.id.as_str()).unwrap(),
-    RowMetaKey::DocumentId,
-  );
+  let row = database_test.get_row(&row_order.id).await.unwrap();
+  let expected_document_id = meta_id_from_row_id(&row.id, RowMetaKey::DocumentId);
   assert_eq!(row.document_id(), expected_document_id,);
   assert_eq!(row.document_id(), expected_document_id,);
 }
 
 #[tokio::test]
 async fn update_row_meta_test() {
-  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_uuid = Uuid::new_v4();
+  let database_id = database_uuid.to_string();
   let mut database_test = create_database(1, &database_id);
   let row_id = Uuid::parse_str("43f6c30f-9d23-470c-a0dd-8819f08dcf2f").unwrap();
   let row_order = database_test
-    .create_row(CreateRowParams::new(row_id, database_id.clone()))
+    .create_row(CreateRowParams::new(row_id, database_uuid))
     .await
     .unwrap();
 
@@ -339,7 +365,7 @@ async fn update_row_meta_test() {
 //   let mut database_test = create_database(1, &database_id);
 //   let row_id = uuid::Uuid::new_v4().to_string();
 //   let row_order = database_test
-//     .create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
+//     .create_row(CreateRowParams::new(row_id.clone(), database_id_from_any_string(&database_id)))
 //     .await
 //     .unwrap();
 //
@@ -396,6 +422,6 @@ fn row_document_id_test() {
 #[tokio::test]
 async fn validate_row_test() {
   let workspace_id = Uuid::new_v4().to_string();
-  let row = create_row(1, &workspace_id, RowId::from(1), default_client_id());
+  let row = create_row(1, &workspace_id, Uuid::new_v4(), default_client_id());
   row.validate().unwrap();
 }

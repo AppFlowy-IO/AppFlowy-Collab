@@ -7,14 +7,15 @@ use serde_json;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use uuid::Uuid;
 
 pub struct SpaceViewEdgeCaseHandler {
   id_mapper: Arc<IdMapper>,
-  original_workspace_id: String,
+  original_workspace_id: Uuid,
 }
 
 impl SpaceViewEdgeCaseHandler {
-  pub fn new(id_mapper: Arc<IdMapper>, original_workspace_id: String) -> Self {
+  pub fn new(id_mapper: Arc<IdMapper>, original_workspace_id: Uuid) -> Self {
     Self {
       id_mapper,
       original_workspace_id,
@@ -31,17 +32,15 @@ impl SpaceViewEdgeCaseHandler {
       return Ok(None);
     }
 
-    let space_view_id = self.id_mapper.generate_new_id();
-    let space_view = self.create_default_space_view(&space_view_id)?;
-    relation_map.views.insert(space_view_id.clone(), space_view);
+    let space_view_uuid = self.id_mapper.generate_new_uuid();
+    let space_view = self.create_default_space_view(&space_view_uuid)?;
+    relation_map.views.insert(space_view_uuid, space_view);
 
-    id_mapper
-      .id_map
-      .insert(space_view_id.clone(), space_view_id.clone());
-    self.reparent_workspace_views(relation_map, &space_view_id)?;
-    self.generate_space_document(&space_view_id, export_path)?;
+    id_mapper.id_map.insert(space_view_uuid, space_view_uuid);
+    self.reparent_workspace_views(relation_map, &space_view_uuid)?;
+    self.generate_space_document(&space_view_uuid, export_path)?;
 
-    Ok(Some(space_view_id))
+    Ok(Some(space_view_uuid.to_string()))
   }
 
   fn has_space_views(&self, relation_map: &WorkspaceRelationMap) -> bool {
@@ -59,7 +58,7 @@ impl SpaceViewEdgeCaseHandler {
     false
   }
 
-  fn create_default_space_view(&self, space_view_id: &str) -> Result<ViewMetadata> {
+  fn create_default_space_view(&self, space_view_uuid: &Uuid) -> Result<ViewMetadata> {
     let current_time = timestamp();
 
     let space_info = serde_json::json!({
@@ -71,12 +70,12 @@ impl SpaceViewEdgeCaseHandler {
     });
 
     let space_view = ViewMetadata {
-      view_id: space_view_id.to_string(),
+      view_id: *space_view_uuid,
       name: "General".to_string(),
       layout: ViewLayout::Document,
-      parent_id: Some(self.original_workspace_id.clone()),
+      parent_id: Some(self.original_workspace_id),
       children: Vec::new(),
-      collab_object_id: space_view_id.to_string(),
+      collab_object_id: *space_view_uuid,
       created_at: current_time,
       updated_at: current_time,
       extra: Some(space_info.to_string()),
@@ -89,28 +88,31 @@ impl SpaceViewEdgeCaseHandler {
   fn reparent_workspace_views(
     &self,
     relation_map: &mut WorkspaceRelationMap,
-    space_view_id: &str,
+    space_view_id: &Uuid,
   ) -> Result<()> {
     let mut workspace_children = Vec::new();
 
+    let space_view_uuid = *space_view_id;
+    let original_workspace_uuid = self.original_workspace_id;
+
     for (view_id, view_metadata) in relation_map.views.iter_mut() {
-      if view_id != space_view_id {
+      if view_id != &space_view_uuid {
         if let Some(parent_id) = &view_metadata.parent_id {
-          if parent_id == &self.original_workspace_id {
-            view_metadata.parent_id = Some(space_view_id.to_string());
-            workspace_children.push(view_id.clone());
+          if parent_id == &original_workspace_uuid {
+            view_metadata.parent_id = Some(space_view_uuid);
+            workspace_children.push(*view_id);
           }
         }
       }
     }
 
-    if let Some(space_view) = relation_map.views.get_mut(space_view_id) {
+    if let Some(space_view) = relation_map.views.get_mut(&space_view_uuid) {
       space_view.children = workspace_children;
     }
     Ok(())
   }
 
-  fn generate_space_document(&self, space_view_id: &str, export_path: &Path) -> Result<()> {
+  fn generate_space_document(&self, space_view_id: &Uuid, export_path: &Path) -> Result<()> {
     let documents_dir = export_path.join("collab_jsons").join("documents");
     fs::create_dir_all(&documents_dir)?;
 
@@ -118,7 +120,7 @@ impl SpaceViewEdgeCaseHandler {
 
     let document_content = serde_json::json!({
         "document": {
-            "page_id": space_view_id,
+            "page_id": space_view_id.to_string(),
             "blocks": {},
             "meta": {
                 "children_map": {},

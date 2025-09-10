@@ -41,10 +41,14 @@ async fn test_workspace_remapper_folder_structure() {
   let folder = remapper.build_folder_collab(uid, workspace_name).unwrap();
 
   let workspace_id = folder.get_workspace_id().unwrap();
-  let workspace_info = folder.get_workspace_info(&workspace_id, uid).unwrap();
+  let workspace_uuid = uuid::Uuid::parse_str(&workspace_id).unwrap();
+  let workspace_info = folder.get_workspace_info(&workspace_uuid, uid).unwrap();
 
   assert_eq!(workspace_info.name, workspace_name);
-  assert_eq!(workspace_info.id, workspace_id);
+  assert_eq!(
+    workspace_info.id,
+    uuid::Uuid::parse_str(&workspace_id).unwrap()
+  );
 
   let all_views = folder.get_all_views(uid);
   assert_eq!(all_views.len(), 8);
@@ -100,10 +104,10 @@ async fn test_workspace_remapper_row_document_collabs() {
   assert_eq!(row_documents.len(), 1);
 
   let row_document = &row_documents[0];
-  assert!(!row_document.object_id().is_empty());
+  // UUID is never empty by definition, so we don't need to check
 
   let original_row_doc_id = "3edeba80-8862-54b6-bf1b-8d868dad3e0c";
-  assert_ne!(row_document.object_id(), original_row_doc_id);
+  assert_ne!(row_document.object_id().to_string(), original_row_doc_id);
 }
 
 #[tokio::test]
@@ -121,7 +125,7 @@ async fn test_workspace_remapper_with_row_meta() {
   assert_eq!(databases.len(), 1);
 
   let database = &databases[0];
-  let database_data = database.get_database_data(20, false).await;
+  let database_data = database.get_database_data(20, false).await.unwrap();
 
   assert_eq!(database_data.row_metas.len(), 4);
   assert_eq!(database_data.rows.len(), 4);

@@ -4,7 +4,7 @@ use crate::importer::util::{
 };
 use assert_json_diff::assert_json_eq;
 use collab::core::collab::default_client_id;
-use collab_document::document::{Document, gen_document_id};
+use collab_document::document::Document;
 use collab_document::importer::md_importer::MDImporter;
 use serde_json::json;
 
@@ -13,7 +13,7 @@ fn test_override_document() {
   let markdown_1 = "hello world";
   let doc_data_1 = markdown_to_document_data(markdown_1);
 
-  let doc_id = gen_document_id();
+  let doc_id = collab_entity::uuid_validation::generate_document_id().to_string();
   let doc = Document::create(&doc_id, doc_data_1, default_client_id()).unwrap();
   {
     let plain_txt = doc.to_plain_text().join("");

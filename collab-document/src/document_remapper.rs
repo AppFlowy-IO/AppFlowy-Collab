@@ -3,6 +3,7 @@ use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use crate::blocks::{Block, DocumentData, DocumentMeta, TextDelta};
 use crate::document::Document;
@@ -41,7 +42,8 @@ impl DocumentCollabRemapper {
     let document_data = doc.get_document_data()?;
     let remapped_data = self.remap_document_data(document_data)?;
 
-    let new_options = CollabOptions::new(doc_id.to_string(), client_id);
+    let doc_uuid = Uuid::parse_str(doc_id).unwrap_or_else(|_| Uuid::new_v4());
+    let new_options = CollabOptions::new(doc_uuid, client_id);
     let new_collab = Collab::new_with_options(CollabOrigin::Empty, new_options)
       .map_err(|e| DocumentError::Internal(anyhow::Error::new(e)))?;
     let new_document = Document::create_with_data(new_collab, remapped_data)?;
@@ -56,7 +58,8 @@ impl DocumentCollabRemapper {
     doc_state: &[u8],
   ) -> Result<Vec<u8>, DocumentError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
-    let options = CollabOptions::new(doc_id.to_string(), client_id)
+    let doc_uuid = Uuid::parse_str(doc_id).unwrap_or_else(|_| Uuid::new_v4());
+    let options = CollabOptions::new(doc_uuid, client_id)
       .with_data_source(DataSource::DocStateV1(doc_state.to_owned()));
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)
       .map_err(|e| DocumentError::Internal(anyhow::Error::new(e)))?;

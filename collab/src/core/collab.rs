@@ -17,23 +17,26 @@ use yrs::types::ToJson;
 use yrs::types::map::MapEvent;
 use yrs::updates::decoder::Decode;
 
+use crate::core::awareness::Awareness;
+use crate::core::collab_plugin::{CollabPersistence, CollabPlugin, CollabPluginType, Plugins};
+use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
+use crate::core::origin::{CollabClient, CollabOrigin};
+use crate::core::revisions::{Revision, RevisionId, Revisions};
+use crate::core::transaction::DocTransactionExtension;
+use yrs::updates::encoder::{Encode, Encoder, EncoderV1, EncoderV2};
 use yrs::{
   Any, Doc, Map, MapRef, Observable, OffsetKind, Options, Out, ReadTxn, StateVector, Subscription,
   Transact, Transaction, TransactionMut, UndoManager, Update,
 };
 
-use crate::core::awareness::Awareness;
-use crate::core::collab_plugin::{CollabPersistence, CollabPlugin, CollabPluginType, Plugins};
-use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
-use crate::core::origin::{CollabClient, CollabOrigin};
-use crate::core::transaction::DocTransactionExtension;
-
 use crate::entity::{EncodedCollab, EncoderVersion};
 use crate::error::CollabError;
 use crate::preclude::JsonValue;
+use uuid::Uuid;
 
 pub const DATA_SECTION: &str = "data";
 pub const META_SECTION: &str = "meta";
+pub const REVISIONS_SECTION: &str = "revisions";
 
 type AfterTransactionSubscription = Subscription;
 
@@ -46,7 +49,7 @@ pub type MapSubscription = Subscription;
 pub struct Collab {
   /// The object id can be the document id or the database id. It must be unique for
   /// each [Collab] instance.
-  object_id: String,
+  object_id: Uuid,
   state: Arc<State>,
   update_subscription: ArcSwapOption<Subscription>,
   awareness_subscription: ArcSwapOption<Subscription>,
@@ -60,6 +63,9 @@ pub struct Collab {
   //  will be able to infere that &mut context and &data/&meta don't overlap.
   /// Every [Collab] instance has a data section that can be used to store
   pub data: MapRef,
+  #[allow(dead_code)]
+  meta: MapRef,
+  revisions: Revisions,
   /// This is an inner collab state that requires mut access in order to modify it.
   pub context: CollabContext,
 }
@@ -237,9 +243,10 @@ pub fn make_yrs_doc(object_id: &str, skip_gc: bool, client_id: ClientID) -> Doc 
 }
 
 pub struct CollabOptions {
-  pub object_id: String,
+  pub object_id: Uuid,
   pub data_source: Option<DataSource>,
   pub client_id: ClientID,
+  pub skip_gc: bool,
 }
 
 impl Display for CollabOptions {
@@ -253,11 +260,12 @@ impl Display for CollabOptions {
 }
 
 impl CollabOptions {
-  pub fn new(object_id: String, client_id: ClientID) -> Self {
+  pub fn new(object_id: Uuid, client_id: ClientID) -> Self {
     Self {
       object_id,
       data_source: None,
       client_id,
+      skip_gc: false,
     }
   }
 
@@ -265,17 +273,17 @@ impl CollabOptions {
     self.data_source = Some(data_source);
     self
   }
+
+  pub fn with_gc(mut self, gc: bool) -> Self {
+    self.skip_gc = !gc;
+    self
+  }
 }
 
 impl Collab {
-  pub fn new<T: AsRef<str>>(
-    uid: i64,
-    object_id: T,
-    device_id: impl ToString,
-    client_id: ClientID,
-  ) -> Collab {
+  pub fn new(uid: i64, object_id: Uuid, device_id: impl ToString, client_id: ClientID) -> Collab {
     let origin = CollabClient::new(uid, device_id);
-    let options = CollabOptions::new(object_id.as_ref().to_string(), client_id);
+    let options = CollabOptions::new(object_id, client_id);
     Self::new_with_options(CollabOrigin::Client(origin), options).unwrap()
   }
 
@@ -284,16 +292,20 @@ impl Collab {
     options: CollabOptions,
   ) -> Result<Self, CollabError> {
     let object_id = options.object_id;
-    let doc = make_yrs_doc(&object_id, false, options.client_id);
+    let doc = make_yrs_doc(&object_id.to_string(), options.skip_gc, options.client_id);
     let data = doc.get_or_insert_map(DATA_SECTION);
+    let meta = doc.get_or_insert_map(META_SECTION);
+    let revisions = Revisions::new(doc.get_or_insert_array(REVISIONS_SECTION));
     let plugins = Plugins::new(vec![]);
-    let state = Arc::new(State::new(&object_id));
+    let state = Arc::new(State::new(&object_id.to_string()));
     let awareness = Awareness::new(doc);
     let mut this = Self {
       object_id,
       context: CollabContext::new(origin, awareness),
       state,
       data,
+      meta,
+      revisions,
       plugins,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
@@ -325,6 +337,97 @@ impl Collab {
     Ok(this)
   }
 
+  pub fn revisions(&self) -> &Revisions {
+    &self.revisions
+  }
+
+  pub fn prune_revisions<F>(&mut self, predicate: F) -> Result<usize, CollabError>
+  where
+    F: FnMut(&Revision) -> bool,
+  {
+    let mut txn = self.context.transact_mut();
+    let removed = self.revisions.remove_where(&mut txn, predicate)?;
+    Ok(removed)
+  }
+
+  pub fn gc(&mut self) -> Result<(), CollabError> {
+    let mut txn = self.context.transact_mut();
+    self.revisions.gc(&mut txn)?;
+    Ok(())
+  }
+
+  pub fn revision(&self, revision_id: &RevisionId) -> Result<Revision, CollabError> {
+    let txn = self.context.transact();
+    self.revisions.get(&txn, revision_id)
+  }
+
+  /// Create a new revision for the current collab state and return its identifier.
+  pub fn create_revision(&mut self) -> Result<RevisionId, CollabError> {
+    let mut txn = self.context.transact_mut();
+    self.revisions.create_revision(&mut txn, None)
+  }
+
+  /// Create a new revision for the current collab state and return its identifier.
+  pub fn create_named_revision<S: Into<String>>(
+    &mut self,
+    name: S,
+  ) -> Result<RevisionId, CollabError> {
+    let mut txn = self.context.transact_mut();
+    self.revisions.create_revision(&mut txn, Some(name.into()))
+  }
+
+  /// Remove a revision by its identifier.
+  pub fn remove_revision(&mut self, revision_id: &RevisionId) -> Result<bool, CollabError> {
+    let mut txn = self.context.transact_mut();
+    let removed = self
+      .revisions
+      .remove_where(&mut txn, |rev| rev.id() == revision_id)?;
+    Ok(removed == 1)
+  }
+
+  /// Remove all revisions that were created before the specified timestamp.
+  pub fn remove_revisions_before(
+    &mut self,
+    timestamp: chrono::DateTime<chrono::Utc>,
+  ) -> Result<usize, CollabError> {
+    let mut txn = self.context.transact_mut();
+    self
+      .revisions
+      .remove_where(&mut txn, |rev| rev.created_at().unwrap() < timestamp)
+  }
+
+  /// Restore document state up to a given revision. This method **WON'T** change the state of the
+  /// current collab.
+  ///
+  /// Instead, it returns [EncodedCollab] that contains the current collab state at given revision.
+  pub fn restore_revision(
+    &self,
+    revision_id: &RevisionId,
+    version: EncoderVersion,
+  ) -> Result<EncodedCollab, CollabError> {
+    let txn = self.context.transact();
+    let revision = self.revisions.get(&txn, revision_id)?;
+    let snapshot = revision.snapshot()?;
+    match version {
+      EncoderVersion::V1 => {
+        let mut encoder = EncoderV1::new();
+        txn
+          .encode_state_from_snapshot(&snapshot, &mut encoder)
+          .map_err(|e| CollabError::Internal(e.into()))?;
+        let data = encoder.to_vec();
+        Ok(EncodedCollab::new_v1(snapshot.state_map.encode_v1(), data))
+      },
+      EncoderVersion::V2 => {
+        let mut encoder = EncoderV2::new();
+        txn
+          .encode_state_from_snapshot(&snapshot, &mut encoder)
+          .map_err(|e| CollabError::Internal(e.into()))?;
+        let data = encoder.to_vec();
+        Ok(EncodedCollab::new_v2(snapshot.state_map.encode_v2(), data))
+      },
+    }
+  }
+
   /// Each collab can have only one cloud plugin
   pub fn has_cloud_plugin(&self) -> bool {
     self.plugins.has_cloud_plugin()
@@ -345,9 +448,12 @@ impl Collab {
 
   pub fn from_doc(doc: Doc, origin: CollabOrigin) -> Self {
     // doc guid is by default a UUID v4, we can inherit it
-    let object_id = doc.guid().to_string();
+    let object_id_str = doc.guid().to_string();
+    let object_id = Uuid::parse_str(&object_id_str).unwrap_or_else(|_| Uuid::new_v4());
     let data = doc.get_or_insert_map(DATA_SECTION);
-    let state = Arc::new(State::new(&object_id));
+    let meta = doc.get_or_insert_map(META_SECTION);
+    let revisions = Revisions::new(doc.get_or_insert_array(REVISIONS_SECTION));
+    let state = Arc::new(State::new(&object_id_str));
     let awareness = Awareness::new(doc);
     Self {
       object_id,
@@ -356,6 +462,8 @@ impl Collab {
       context: CollabContext::new(origin, awareness),
       state,
       data,
+      meta,
+      revisions,
       plugins: Plugins::default(),
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
@@ -363,7 +471,7 @@ impl Collab {
     }
   }
 
-  pub fn object_id(&self) -> &str {
+  pub fn object_id(&self) -> &Uuid {
     &self.object_id
   }
 
@@ -383,13 +491,13 @@ impl Collab {
       let origin = self.origin();
       self
         .plugins
-        .each(|plugin| plugin.init(&self.object_id, origin, doc));
+        .each(|plugin| plugin.init(&self.object_id.to_string(), origin, doc));
     }
     self.observe_update();
     {
       self
         .plugins
-        .each(|plugin| plugin.did_init(self, &self.object_id));
+        .each(|plugin| plugin.did_init(self, &self.object_id.to_string()));
     }
   }
 
@@ -401,7 +509,7 @@ impl Collab {
     let doc = self.context.doc();
     let (update_subscription, after_txn_subscription) = observe_doc(
       doc,
-      self.object_id.clone(),
+      self.object_id.to_string(),
       self.plugins.clone(),
       self.origin().clone(),
     );
@@ -409,7 +517,7 @@ impl Collab {
     let awareness_subscription = observe_awareness(
       self.context.get_awareness(),
       self.plugins.clone(),
-      self.object_id.clone(),
+      self.object_id.to_string(),
       self.origin().clone(),
     );
 

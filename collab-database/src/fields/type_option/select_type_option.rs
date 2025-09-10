@@ -138,6 +138,12 @@ pub enum SelectOptionColor {
   Sky = 11,
   Lilac = 12,
   Pearl = 13,
+  Sunset = 14,
+  Coral = 15,
+  Sapphire = 16,
+  Moss = 17,
+  Sand = 18,
+  Charcoal = 19,
 }
 
 impl TryFrom<u8> for SelectOptionColor {
@@ -159,6 +165,12 @@ impl TryFrom<u8> for SelectOptionColor {
       11 => Ok(SelectOptionColor::Sky),
       12 => Ok(SelectOptionColor::Lilac),
       13 => Ok(SelectOptionColor::Pearl),
+      14 => Ok(SelectOptionColor::Sunset),
+      15 => Ok(SelectOptionColor::Coral),
+      16 => Ok(SelectOptionColor::Sapphire),
+      17 => Ok(SelectOptionColor::Moss),
+      18 => Ok(SelectOptionColor::Sand),
+      19 => Ok(SelectOptionColor::Charcoal),
       _ => Err("Invalid color value"),
     }
   }
@@ -187,6 +199,12 @@ impl From<usize> for SelectOptionColor {
       11 => SelectOptionColor::Sky,
       12 => SelectOptionColor::Lilac,
       13 => SelectOptionColor::Pearl,
+      14 => SelectOptionColor::Sunset,
+      15 => SelectOptionColor::Coral,
+      16 => SelectOptionColor::Sapphire,
+      17 => SelectOptionColor::Moss,
+      18 => SelectOptionColor::Sand,
+      19 => SelectOptionColor::Charcoal,
       _ => SelectOptionColor::Purple,
     }
   }
@@ -574,7 +592,7 @@ mod tests {
       SelectOptionColor::try_from(8_u8).unwrap(),
       SelectOptionColor::Blue
     );
-    assert!(SelectOptionColor::try_from(15_u8).is_err());
+    assert!(SelectOptionColor::try_from(23_u8).is_err());
   }
 
   #[test]

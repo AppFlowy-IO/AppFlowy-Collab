@@ -122,4 +122,3 @@ impl DerefMut for LayoutSettings {
 /// Each [LayoutSetting] is a [Map] of [String] to [Any].
 /// This is used to store the settings for each layout.
 pub type LayoutSetting = HashMap<String, Any>;
-pub type LayoutSettingBuilder = HashMap<String, Any>;

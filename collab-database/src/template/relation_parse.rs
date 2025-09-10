@@ -2,9 +2,10 @@ use crate::entity::FieldType;
 use std::str::FromStr;
 
 use crate::error::DatabaseError;
-use crate::rows::{Cell, RowId, new_cell_builder};
+use crate::rows::{Cell, new_cell_builder};
 use crate::template::entity::CELL_DATA;
 use crate::template::util::{ToCellString, TypeOptionCellData};
+use collab_entity::uuid_validation::RowId;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yrs::Any;
@@ -22,10 +23,13 @@ impl FromStr for RelationCellData {
       return Ok(RelationCellData { row_ids: vec![] });
     }
 
-    let ids = s
-      .split(", ")
-      .map(|id| id.to_string().into())
-      .collect::<Vec<_>>();
+    let mut ids = Vec::new();
+    for id_str in s.split(", ") {
+      let row_id = uuid::Uuid::parse_str(id_str).map_err(|_| {
+        DatabaseError::Internal(anyhow::anyhow!("Invalid row ID in relation: {}", id_str))
+      })?;
+      ids.push(row_id);
+    }
 
     Ok(RelationCellData { row_ids: ids })
   }
@@ -44,7 +48,7 @@ impl From<&Cell> for RelationCellData {
         .iter()
         .flat_map(|item| {
           if let Any::String(string) = item {
-            Some(RowId::from(string.clone().to_string()))
+            uuid::Uuid::parse_str(string.as_ref()).ok()
           } else {
             None
           }

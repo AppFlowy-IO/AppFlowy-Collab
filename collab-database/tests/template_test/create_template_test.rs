@@ -26,7 +26,7 @@ async fn create_template_test() {
   let expected_cell_len = [6, 6, 6, 4, 2, 2];
   let expected_field_name = ["name", "status", "user", "time", "tasks", "last modified"];
 
-  let template = DatabaseTemplateBuilder::new(database_id.clone(), gen_database_view_id(), None)
+  let template = DatabaseTemplateBuilder::new(database_id, gen_database_view_id(), None)
     .create_field(
       &None,
       &database_id,
@@ -150,6 +150,7 @@ async fn create_template_test() {
   let rows: Vec<Row> = database
     .get_all_rows(10, None, false)
     .await
+    .unwrap()
     .filter_map(|result| async move { result.ok() })
     .collect()
     .await;

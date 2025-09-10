@@ -1,21 +1,23 @@
 use crate::entity::{CreateDatabaseParams, FieldType};
 use crate::views::{DatabaseLayout, LayoutSettings};
 use collab::preclude::Any;
+use collab_entity::uuid_validation::{DatabaseId, DatabaseViewId};
 
+use crate::error::DatabaseError;
 use crate::template::util::create_database_params_from_template;
 use std::collections::HashMap;
 
 pub const CELL_DATA: &str = "data";
 pub struct DatabaseTemplate {
-  pub database_id: String,
-  pub view_id: String,
+  pub database_id: DatabaseId,
+  pub view_id: DatabaseViewId,
   pub fields: Vec<FieldTemplate>,
   pub rows: Vec<RowTemplate>,
   pub views: Vec<DatabaseViewTemplate>,
 }
 
 impl DatabaseTemplate {
-  pub fn into_params(self) -> CreateDatabaseParams {
+  pub fn into_params(self) -> Result<CreateDatabaseParams, DatabaseError> {
     create_database_params_from_template(self)
   }
 }

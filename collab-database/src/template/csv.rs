@@ -4,6 +4,7 @@ use crate::error::DatabaseError;
 use crate::template::builder::{DatabaseTemplateBuilder, FileUrlBuilder};
 use crate::template::date_parse::cast_string_to_timestamp;
 use crate::template::entity::DatabaseTemplate;
+use collab_entity::uuid_validation::{DatabaseId, DatabaseViewId};
 use percent_encoding::percent_decode_str;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -14,8 +15,8 @@ pub struct CSVTemplate {
   pub fields: Vec<CSVField>,
   pub rows: Vec<Vec<String>>,
   pub resource: Option<CSVResource>,
-  pub database_id: String,
-  pub view_id: String,
+  pub database_id: DatabaseId,
+  pub view_id: DatabaseViewId,
 }
 
 pub struct CSVField {
@@ -76,7 +77,7 @@ impl CSVTemplate {
     })
   }
 
-  pub fn reset_view_id(&mut self, view_id: String) {
+  pub fn reset_view_id(&mut self, view_id: DatabaseViewId) {
     self.view_id = view_id;
   }
 
@@ -92,8 +93,7 @@ impl CSVTemplate {
       view_id,
     } = self;
 
-    let mut builder =
-      DatabaseTemplateBuilder::new(database_id.clone(), view_id.clone(), file_url_builder);
+    let mut builder = DatabaseTemplateBuilder::new(database_id, view_id, file_url_builder);
     for (field_index, field) in fields.into_iter().enumerate() {
       builder = builder
         .create_field(

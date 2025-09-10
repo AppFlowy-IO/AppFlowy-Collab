@@ -1,8 +1,8 @@
 use crate::space_info::SpacePermission;
 use crate::{
   IconType, RepeatedViewIdentifier, SPACE_CREATED_AT_KEY, SPACE_ICON_COLOR_KEY, SPACE_ICON_KEY,
-  SPACE_IS_SPACE_KEY, SPACE_PERMISSION_KEY, SpaceInfo, View, ViewIcon, ViewIdentifier, ViewLayout,
-  timestamp,
+  SPACE_IS_SPACE_KEY, SPACE_PERMISSION_KEY, SpaceInfo, View, ViewIcon, ViewId, ViewIdentifier,
+  ViewLayout, timestamp,
 };
 
 use serde_json::json;
@@ -14,12 +14,12 @@ use std::ops::{Deref, DerefMut};
 /// The views created by this builder will be the first level views of the workspace.
 pub struct NestedViewBuilder {
   pub uid: i64,
-  pub workspace_id: String,
+  pub workspace_id: ViewId,
   pub views: Vec<ParentChildViews>,
 }
 
 impl NestedViewBuilder {
-  pub fn new(workspace_id: String, uid: i64) -> Self {
+  pub fn new(workspace_id: ViewId, uid: i64) -> Self {
     Self {
       uid,
       workspace_id,
@@ -32,7 +32,7 @@ impl NestedViewBuilder {
     F: Fn(NestedChildViewBuilder) -> O,
     O: Future<Output = ParentChildViews>,
   {
-    let builder = NestedChildViewBuilder::new(self.uid, self.workspace_id.clone());
+    let builder = NestedChildViewBuilder::new(self.uid, self.workspace_id);
     let view = view_builder(builder).await;
     self.views.push(view);
     self
@@ -67,7 +67,7 @@ impl NestedViews {
   pub fn remove_view(&mut self, view_id: &str) {
     // recursively remove the view and its children views.
     self.views.retain_mut(|view| {
-      if view.view.id == view_id {
+      if view.view.id.to_string() == view_id {
         return false;
       }
       view.remove_view(view_id);
@@ -108,8 +108,8 @@ impl DerefMut for NestedViews {
 /// The default layout of the view is [ViewLayout::Document]
 pub struct NestedChildViewBuilder {
   uid: i64,
-  parent_view_id: String,
-  view_id: String,
+  parent_view_id: ViewId,
+  view_id: ViewId,
   name: String,
   desc: String,
   layout: ViewLayout,
@@ -123,11 +123,11 @@ pub struct NestedChildViewBuilder {
 impl NestedChildViewBuilder {
   /// Create a new view builder.
   /// It generates a new view id for the view. If you want to specify the view id, you can use [with_view_id] method.
-  pub fn new(uid: i64, parent_view_id: String) -> Self {
+  pub fn new(uid: i64, parent_view_id: ViewId) -> Self {
     Self {
       uid,
       parent_view_id,
-      view_id: uuid::Uuid::new_v4().to_string(),
+      view_id: uuid::Uuid::new_v4(),
       name: Default::default(),
       desc: Default::default(),
       layout: ViewLayout::Document,
@@ -139,8 +139,8 @@ impl NestedChildViewBuilder {
     }
   }
 
-  pub fn view_id(&self) -> &str {
-    &self.view_id
+  pub fn view_id(&self) -> ViewId {
+    self.view_id
   }
 
   pub fn with_view(mut self, view: ParentChildViews) -> Self {
@@ -153,8 +153,8 @@ impl NestedChildViewBuilder {
     self
   }
 
-  pub fn with_view_id<T: ToString>(mut self, view_id: T) -> Self {
-    self.view_id = view_id.to_string();
+  pub fn with_view_id<T: Into<ViewId>>(mut self, view_id: T) -> Self {
+    self.view_id = view_id.into();
     self
   }
 
@@ -195,7 +195,7 @@ impl NestedChildViewBuilder {
     F: Fn(NestedChildViewBuilder) -> O,
     O: Future<Output = ParentChildViews>,
   {
-    let builder = NestedChildViewBuilder::new(self.uid, self.view_id.clone());
+    let builder = NestedChildViewBuilder::new(self.uid, self.view_id);
     self.children.push(child_view_builder(builder).await);
     self
   }
@@ -203,7 +203,7 @@ impl NestedChildViewBuilder {
   pub fn build(self) -> ParentChildViews {
     let view = View {
       id: self.view_id,
-      parent_view_id: self.parent_view_id,
+      parent_view_id: self.parent_view_id.to_string(),
       name: self.name,
       created_at: timestamp(),
       is_favorite: self.is_favorite,
@@ -215,9 +215,7 @@ impl NestedChildViewBuilder {
         self
           .children
           .iter()
-          .map(|v| ViewIdentifier {
-            id: v.view.id.clone(),
-          })
+          .map(|v| ViewIdentifier { id: v.view.id })
           .collect(),
       ),
       last_edited_by: Some(self.uid),
@@ -321,7 +319,7 @@ impl Display for ParentChildViews {
 impl ParentChildViews {
   pub fn remove_view(&mut self, view_id: &str) {
     self.children.retain_mut(|child_view| {
-      if child_view.view.id == view_id {
+      if child_view.view.id.to_string() == view_id {
         return false;
       }
       child_view.remove_view(view_id);
@@ -330,7 +328,7 @@ impl ParentChildViews {
   }
 
   pub fn find_view(&self, view_id: &str) -> Option<&View> {
-    if self.view.id == view_id {
+    if self.view.id.to_string() == view_id {
       return Some(&self.view);
     }
     for child_view in &self.children {
@@ -358,11 +356,13 @@ impl FlattedViews {
 
 #[cfg(test)]
 mod tests {
+  use crate::ViewId;
   use crate::hierarchy_builder::{FlattedViews, NestedViewBuilder};
 
   #[tokio::test]
   async fn create_first_level_views_test() {
-    let workspace_id = "w1".to_string();
+    let workspace_id: ViewId =
+      uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
     builder
       .with_view_builder(|view_builder| async { view_builder.with_name("1").build() })
@@ -382,7 +382,8 @@ mod tests {
 
   #[tokio::test]
   async fn create_view_with_children_test() {
-    let workspace_id = "w1".to_string();
+    let workspace_id: ViewId =
+      uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
     builder
       .with_view_builder(|view_builder| async {
@@ -424,16 +425,16 @@ mod tests {
 
     {
       let mut cloned_workspace_views = workspace_views.clone();
-      let view_id_1_2 = workspace_views[0].children[1].view.id.clone();
-      cloned_workspace_views.remove_view(&view_id_1_2);
+      let view_id_1_2 = workspace_views[0].children[1].view.id;
+      cloned_workspace_views.remove_view(&view_id_1_2.to_string());
       let views = FlattedViews::flatten_views(cloned_workspace_views.into_inner());
       assert_eq!(views.len(), 4);
     }
 
     {
       let mut cloned_workspace_views = workspace_views.clone();
-      let view_id_1 = workspace_views[0].view.id.clone();
-      cloned_workspace_views.remove_view(&view_id_1);
+      let view_id_1 = workspace_views[0].view.id;
+      cloned_workspace_views.remove_view(&view_id_1.to_string());
       let views = FlattedViews::flatten_views(cloned_workspace_views.into_inner());
       assert_eq!(views.len(), 2);
     }
@@ -441,7 +442,8 @@ mod tests {
 
   #[tokio::test]
   async fn create_three_level_view_test() {
-    let workspace_id = "w1".to_string();
+    let workspace_id: ViewId =
+      uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
     builder
       .with_view_builder(|view_builder| async {
@@ -501,13 +503,13 @@ mod tests {
 
     {
       let mut cloned_workspace_views = workspace_views.clone();
-      let view_id_1_1 = workspace_views[0].children[0].view.id.clone();
-      let view_id_1_2 = workspace_views[0].children[1].view.id.clone();
-      cloned_workspace_views.remove_view(&view_id_1_1);
+      let view_id_1_1 = workspace_views[0].children[0].view.id;
+      let view_id_1_2 = workspace_views[0].children[1].view.id;
+      cloned_workspace_views.remove_view(&view_id_1_1.to_string());
       let views = FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
       assert_eq!(views.len(), 4);
 
-      cloned_workspace_views.remove_view(&view_id_1_2);
+      cloned_workspace_views.remove_view(&view_id_1_2.to_string());
       let views = FlattedViews::flatten_views(cloned_workspace_views.into_inner());
       assert_eq!(views.len(), 1);
     }
@@ -515,7 +517,8 @@ mod tests {
 
   #[tokio::test]
   async fn delete_multiple_views_in_sequence_test() {
-    let workspace_id = "w1".to_string();
+    let workspace_id: ViewId =
+      uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
     let mut builder = NestedViewBuilder::new(workspace_id, 1);
 
     // Create a 3-level nested view hierarchy
@@ -564,8 +567,8 @@ mod tests {
       let mut cloned_workspace_views = workspace_views.clone();
 
       // First, delete a third-level view (Grandchild-1-2)
-      let view_id_grandchild_1_2 = workspace_views[0].children[0].children[1].view.id.clone(); // "Grandchild-1-2"
-      cloned_workspace_views.remove_view(&view_id_grandchild_1_2);
+      let view_id_grandchild_1_2 = workspace_views[0].children[0].children[1].view.id; // "Grandchild-1-2"
+      cloned_workspace_views.remove_view(&view_id_grandchild_1_2.to_string());
       let views_after_delete =
         FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
       assert_eq!(views_after_delete.len(), 5); // Should have 5 views left
@@ -578,9 +581,8 @@ mod tests {
       // Second, delete the great-grandchild (Great-Grandchild-1-1-1)
       let view_id_great_grandchild_1_1_1 = workspace_views[0].children[0].children[0].children[0]
         .view
-        .id
-        .clone(); // "Great-Grandchild-1-1-1"
-      cloned_workspace_views.remove_view(&view_id_great_grandchild_1_1_1);
+        .id; // "Great-Grandchild-1-1-1"
+      cloned_workspace_views.remove_view(&view_id_great_grandchild_1_1_1.to_string());
       let views_after_delete =
         FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
       assert_eq!(views_after_delete.len(), 4); // Should have 4 views left
@@ -591,16 +593,16 @@ mod tests {
       );
 
       // Third, delete a second-level view (Child-2)
-      let view_id_child_2 = workspace_views[0].children[1].view.id.clone(); // "Child-2"
-      cloned_workspace_views.remove_view(&view_id_child_2);
+      let view_id_child_2 = workspace_views[0].children[1].view.id; // "Child-2"
+      cloned_workspace_views.remove_view(&view_id_child_2.to_string());
       let views_after_delete =
         FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
       assert_eq!(views_after_delete.len(), 3); // Should have 3 views left
       assert!(!views_after_delete.iter().any(|v| v.name == "Child-2"));
 
       // Fourth, delete the root view (Root)
-      let view_id_root = workspace_views[0].view.id.clone(); // "Root"
-      cloned_workspace_views.remove_view(&view_id_root);
+      let view_id_root = workspace_views[0].view.id; // "Root"
+      cloned_workspace_views.remove_view(&view_id_root.to_string());
       let views_after_delete = FlattedViews::flatten_views(cloned_workspace_views.into_inner());
       assert_eq!(views_after_delete.len(), 0); // Should have no views left
     }

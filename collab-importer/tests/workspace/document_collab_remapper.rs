@@ -17,9 +17,9 @@ async fn test_parse_real_document_json() {
     .parse_relation_map(&relation_map_path.to_string_lossy())
     .await
     .unwrap();
-  let id_mapper = IdMapper::new(&relation_map);
+  let id_mapper = IdMapper::new(&relation_map).unwrap();
 
-  let view_id_mapping = id_mapper.id_map.clone();
+  let view_id_mapping = id_mapper.get_id_map_as_strings();
 
   let remapper = DocumentCollabRemapper::new(json_value, view_id_mapping);
 
@@ -56,14 +56,14 @@ async fn test_parse_real_document_json() {
 
     if let Some(new_uuid) = id_mapper.get_new_id(original_uuid) {
       assert!(
-        text_map_content.contains(new_uuid),
+        text_map_content.contains(&new_uuid.to_string()),
         "New UUID {} should be present in DocumentData",
         new_uuid
       );
     }
   }
 
-  let document = remapper.build_document("test-document-id").unwrap();
+  let document = remapper.build_document(&uuid::Uuid::new_v4()).unwrap();
   assert_eq!(document.get_page_id().unwrap(), "wl_3CTczV-");
 
   let doc_data_from_document = document.get_document_data().unwrap();

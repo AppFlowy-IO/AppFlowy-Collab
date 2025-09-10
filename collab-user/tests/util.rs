@@ -42,17 +42,17 @@ impl UserAwarenessTest {
 
     let path = tempdir.into_path();
     let db = Arc::new(CollabKVDB::open(path.clone()).unwrap());
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = uuid::Uuid::new_v4();
     let disk_plugin = RocksdbDiskPlugin::new(
       uid,
       workspace_id,
-      id.clone(),
+      id.to_string(),
       CollabType::UserAwareness,
       Arc::downgrade(&db),
     );
 
-    let options = CollabOptions::new(uid.to_string(), default_client_id())
-      .with_data_source(DataSource::Disk(None));
+    let options =
+      CollabOptions::new(id, default_client_id()).with_data_source(DataSource::Disk(None));
     let client = CollabClient::new(uid, "1");
     let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));

@@ -110,20 +110,28 @@ macro_rules! impl_section_op {
     pub fn $add_fn(&mut self, ids: Vec<String>, uid: i64) {
       let mut txn = self.collab.transact_mut();
       for id in ids {
-        self
-          .body
-          .views
-          .update_view(&mut txn, &id, |update| update.$set_fn(true).done(), uid);
+        if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+          self.body.views.update_view(
+            &mut txn,
+            &view_uuid,
+            |update| update.$set_fn(true).done(),
+            uid,
+          );
+        }
       }
     }
 
     pub fn $delete_fn(&mut self, ids: Vec<String>, uid: i64) {
       let mut txn = self.collab.transact_mut();
       for id in ids {
-        self
-          .body
-          .views
-          .update_view(&mut txn, &id, |update| update.$set_fn(false).done(), uid);
+        if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+          self.body.views.update_view(
+            &mut txn,
+            &view_uuid,
+            |update| update.$set_fn(false).done(),
+            uid,
+          );
+        }
       }
     }
 

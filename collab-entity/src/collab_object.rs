@@ -2,6 +2,8 @@ use anyhow::{Error, anyhow};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
+use crate::uuid_validation::ObjectId;
+
 use crate::define::{
   DATABASE, DATABASE_ID, DATABASE_INLINE_VIEW, DATABASE_METAS, DATABASE_ROW_DATA, DATABASE_ROW_ID,
   DOCUMENT_ROOT, FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID, USER_AWARENESS, WORKSPACE_DATABASES,
@@ -250,7 +252,7 @@ impl_from_collab_type_for_integer!(i32, u8);
 
 #[derive(Clone, Debug)]
 pub struct CollabObject {
-  pub object_id: String,
+  pub object_id: ObjectId,
   pub uid: i64,
   pub collab_type: CollabType,
   pub device_id: String,
@@ -261,7 +263,7 @@ pub struct CollabObject {
 impl CollabObject {
   pub fn new(
     uid: i64,
-    object_id: String,
+    object_id: ObjectId,
     collab_type: CollabType,
     workspace_id: String,
     device_id: String,

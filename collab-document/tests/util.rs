@@ -37,10 +37,14 @@ impl DocumentTest {
   }
 
   pub fn new_with_db(uid: i64, workspace_id: String, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
+    // Parse doc_id to UUID or generate a deterministic one from the string
+    let doc_uuid = Uuid::parse_str(doc_id)
+      .unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, doc_id.as_bytes()));
+
     let disk_plugin = RocksdbDiskPlugin::new(
       uid,
       workspace_id.clone(),
-      doc_id.to_string(),
+      doc_uuid.to_string(),
       CollabType::Document,
       Arc::downgrade(&db),
     );
@@ -50,8 +54,8 @@ impl DocumentTest {
       workspace_id: workspace_id.clone(),
     };
 
-    let options = CollabOptions::new(doc_id.to_string(), default_client_id())
-      .with_data_source(data_source.into());
+    let options =
+      CollabOptions::new(doc_uuid, default_client_id()).with_data_source(data_source.into());
     let client = CollabClient::new(uid, "1");
     let collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
@@ -130,10 +134,14 @@ pub fn open_document_with_db(
   db: Arc<CollabKVDB>,
 ) -> Document {
   setup_log();
+  // Parse doc_id to UUID or generate a deterministic one from the string
+  let doc_uuid = Uuid::parse_str(doc_id)
+    .unwrap_or_else(|_| Uuid::new_v5(&Uuid::NAMESPACE_OID, doc_id.as_bytes()));
+
   let disk_plugin = RocksdbDiskPlugin::new(
     uid,
     workspace_id.to_string(),
-    doc_id.to_string(),
+    doc_uuid.to_string(),
     CollabType::Document,
     Arc::downgrade(&db),
   );
@@ -143,8 +151,8 @@ pub fn open_document_with_db(
     workspace_id: workspace_id.to_string(),
   };
 
-  let options = CollabOptions::new(doc_id.to_string(), default_client_id())
-    .with_data_source(data_source.into());
+  let options =
+    CollabOptions::new(doc_uuid, default_client_id()).with_data_source(data_source.into());
   let client = CollabClient::new(uid, "1");
   let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
   collab.add_plugin(Box::new(disk_plugin));
@@ -271,6 +279,6 @@ pub fn unzip_history_document_db(folder_name: &str) -> std::io::Result<(Cleaner,
 pub fn try_decode_from_encode_collab(document: &Document) {
   let data = document.encode_collab().unwrap();
   let options =
-    CollabOptions::new("1".to_string(), default_client_id()).with_data_source(data.into());
+    CollabOptions::new(Uuid::new_v4(), default_client_id()).with_data_source(data.into());
   let _ = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
 }

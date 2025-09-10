@@ -8,7 +8,8 @@ async fn test_space_view_edge_case_handler() {
     .unwrap();
   let test_assets_path = unzip_path;
 
-  let custom_workspace_id = "custom_workspace_123".to_string();
+  // Use a valid UUID for workspace ID
+  let custom_workspace_id = uuid::Uuid::new_v4().to_string();
   let remapper =
     WorkspaceRemapper::new(test_assets_path.as_ref(), Some(custom_workspace_id.clone()))
       .await
@@ -25,7 +26,7 @@ async fn test_space_view_edge_case_handler() {
         if let Some(is_space) = space_info.get("is_space") {
           if is_space.as_bool() == Some(true) {
             found_space = true;
-            space_view_id = Some(view_id.clone());
+            space_view_id = Some(*view_id);
             assert_eq!(view_metadata.name, "General");
             assert_eq!(space_info["space_icon"], "interface_essential/home-3");
             assert_eq!(space_info["space_icon_color"], "0xFFA34AFD");
@@ -68,7 +69,7 @@ async fn test_space_view_edge_case_handler() {
 
   assert!(document_json.get("document").is_some());
   let document = &document_json["document"];
-  assert_eq!(document["page_id"], space_id);
+  assert_eq!(document["page_id"], space_id.to_string());
 
   let id_mapping = remapper.get_id_mapping();
   assert!(
@@ -81,8 +82,10 @@ async fn test_space_view_edge_case_handler() {
   let folder = remapper.build_folder_collab(uid, workspace_name).unwrap();
 
   let folder_workspace_id = folder.get_workspace_id().unwrap();
+  let expected_workspace_id = uuid::Uuid::parse_str(&custom_workspace_id).unwrap();
   assert_eq!(
-    folder_workspace_id, custom_workspace_id,
+    folder_workspace_id,
+    expected_workspace_id.to_string(),
     "folder should use custom workspace id"
   );
 

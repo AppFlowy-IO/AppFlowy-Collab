@@ -8,6 +8,7 @@ use collab_document::document::Document;
 use collab_document::importer::define::URL_FIELD;
 use collab_document::importer::md_importer::{MDImporter, create_image_block};
 use collab_entity::CollabType;
+use collab_entity::uuid_validation::DatabaseId;
 use futures::stream::{self, StreamExt};
 
 use crate::notion::file::NotionFile;
@@ -16,9 +17,9 @@ use crate::notion::{CSVRelation, ImportedCollabInfoStream};
 use crate::util::{FileId, upload_file_url};
 use collab::core::collab::default_client_id;
 use collab_database::database_trait::NoPersistenceDatabaseCollabService;
-use collab_database::rows::RowId;
 use collab_database::template::builder::FileUrlBuilder;
 use collab_document::document_data::default_document_data;
+use collab_entity::uuid_validation::RowId;
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
 use serde_json::json;
@@ -29,6 +30,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
 use tracing::error;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct NotionPage {
@@ -181,7 +183,12 @@ impl NotionPage {
           .collect();
 
         let resource = CollabResource {
-          object_id: self.view_id.clone(),
+          object_id: Uuid::parse_str(&self.view_id).map_err(|_| {
+            ImporterError::Internal(anyhow::anyhow!(
+              "Invalid UUID format for view_id: {}",
+              self.view_id
+            ))
+          })?,
           files,
         };
 
@@ -513,8 +520,10 @@ impl NotionPage {
         // create csv template, we need to set the view id as csv template view id
         let mut csv_template =
           CSVTemplate::try_from_reader(content.as_bytes(), true, Some(csv_resource))?;
-        csv_template.reset_view_id(self.view_id.clone());
-        let database_id = csv_template.database_id.clone();
+        let view_uuid = uuid::Uuid::parse_str(&self.view_id)
+          .map_err(|err| ImporterError::Internal(err.into()))?;
+        csv_template.reset_view_id(view_uuid);
+        let database_id = csv_template.database_id;
 
         let file_url_builder = FileUrlBuilderImpl {
           host: self.host.clone(),
@@ -575,7 +584,10 @@ impl NotionPage {
     match &self.notion_file {
       NotionFile::CSV { .. } => {
         let content = self.as_database().await?;
-        let database_id = content.database.get_database_id();
+        let database_id = content
+          .database
+          .get_database_id()
+          .map_err(|e| ImporterError::Internal(e.into()))?;
         let mut resources = vec![content.resource];
         let view_ids = content
           .database
@@ -625,8 +637,8 @@ impl NotionPage {
           imported_collabs,
           resources,
           import_type: ImportType::Database {
-            database_id,
-            view_ids,
+            database_id: database_id.to_string(),
+            view_ids: view_ids.into_iter().map(|id| id.to_string()).collect(),
             row_document_ids,
           },
         }))
@@ -659,7 +671,12 @@ impl NotionPage {
           name,
           imported_collabs: vec![imported_collab],
           resources: vec![CollabResource {
-            object_id: self.view_id.clone(),
+            object_id: Uuid::parse_str(&self.view_id).map_err(|_| {
+              ImporterError::Internal(anyhow::anyhow!(
+                "Invalid UUID format for view_id: {}",
+                self.view_id
+              ))
+            })?,
             files: vec![],
           }],
           import_type: ImportType::Document,
@@ -716,7 +733,7 @@ pub enum ExternalLinkType {
 
 #[derive(Debug, Clone)]
 pub struct CollabResource {
-  pub object_id: String,
+  pub object_id: Uuid,
   pub files: Vec<String>,
 }
 
@@ -727,12 +744,12 @@ struct FileUrlBuilderImpl {
 
 #[async_trait::async_trait]
 impl FileUrlBuilder for FileUrlBuilderImpl {
-  async fn build(&self, database_id: &str, path: &Path) -> Option<String> {
+  async fn build(&self, database_id: &DatabaseId, path: &Path) -> Option<String> {
     let file_id = FileId::from_path(&path.to_path_buf()).await.ok()?;
     Some(upload_file_url(
       &self.host,
       &self.workspace_id,
-      database_id,
+      &database_id.to_string(),
       &file_id,
     ))
   }

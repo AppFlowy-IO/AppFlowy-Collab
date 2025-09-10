@@ -4,6 +4,7 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::database::timestamp;
 use crate::database::{
@@ -12,17 +13,28 @@ use crate::database::{
 use crate::database_trait::NoPersistenceDatabaseCollabService;
 use crate::entity::{CreateDatabaseParams, CreateViewParams, DatabaseView};
 use crate::error::DatabaseError;
-use crate::rows::{CreateRowParams, Row, RowId, RowMeta};
+use crate::rows::{CreateRowParams, Row, RowMeta};
 use crate::views::{OrderObjectPosition, RowOrder};
 use collab_entity::CollabType;
+use collab_entity::uuid_validation::RowId;
 
 pub struct DatabaseCollabRemapper {
-  id_mapping: HashMap<String, String>,
+  id_mapping: HashMap<Uuid, Uuid>,
 }
 
 impl DatabaseCollabRemapper {
   pub fn new(id_mapping: HashMap<String, String>) -> Self {
-    Self { id_mapping }
+    let uuid_mapping = id_mapping
+      .into_iter()
+      .filter_map(|(k, v)| {
+        let key_uuid = Uuid::parse_str(&k).ok()?;
+        let value_uuid = Uuid::parse_str(&v).ok()?;
+        Some((key_uuid, value_uuid))
+      })
+      .collect();
+    Self {
+      id_mapping: uuid_mapping,
+    }
   }
 
   /// remap the collab database
@@ -55,11 +67,11 @@ impl DatabaseCollabRemapper {
     db_state: &[u8],
   ) -> Result<DatabaseData, DatabaseError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
-
     let data_source = DataSource::DocStateV1(db_state.to_owned());
 
-    let options =
-      CollabOptions::new(database_id.to_string(), client_id).with_data_source(data_source);
+    let database_uuid =
+      Uuid::parse_str(database_id).map_err(|err| DatabaseError::Internal(err.into()))?;
+    let options = CollabOptions::new(database_uuid, client_id).with_data_source(data_source);
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)
       .map_err(|e| DatabaseError::Internal(anyhow::Error::new(e)))?;
     let collab_service = Arc::new(NoPersistenceDatabaseCollabService::new(client_id));
@@ -72,7 +84,7 @@ impl DatabaseCollabRemapper {
       body: database_body,
       collab_service,
     };
-    let database_data = database.get_database_data(20, false).await;
+    let database_data = database.get_database_data(20, false).await?;
     Ok(database_data)
   }
 
@@ -84,7 +96,7 @@ impl DatabaseCollabRemapper {
   ) -> Result<Vec<u8>, DatabaseError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
 
-    let remapped_database_id = database_data.database_id.clone();
+    let remapped_database_id = database_data.database_id;
     let create_params = self.create_database_params_from_remapped_data(database_data);
 
     let context = DatabaseContext::new(
@@ -113,7 +125,7 @@ impl DatabaseCollabRemapper {
   ) -> CreateDatabaseParams {
     let timestamp = timestamp();
 
-    let database_id = data.database_id.clone();
+    let database_id = data.database_id;
 
     let create_row_params = data
       .rows
@@ -123,7 +135,7 @@ impl DatabaseCollabRemapper {
 
         CreateRowParams {
           id: row.id,
-          database_id: database_id.clone(),
+          database_id,
           created_at: timestamp,
           modified_at: timestamp,
           cells: row.cells,
@@ -139,7 +151,7 @@ impl DatabaseCollabRemapper {
       .views
       .into_iter()
       .map(|view| CreateViewParams {
-        database_id: database_id.clone(),
+        database_id,
         view_id: view.id,
         name: view.name,
         layout: view.layout,
@@ -172,7 +184,7 @@ impl DatabaseCollabRemapper {
         let row_meta = data.row_metas.get(&row.id).cloned();
         CreateRowParams {
           id: row.id,
-          database_id: data.database_id.clone(),
+          database_id: data.database_id,
           created_at: timestamp,
           modified_at: timestamp,
           cells: row.cells,
@@ -188,7 +200,7 @@ impl DatabaseCollabRemapper {
       .views
       .into_iter()
       .map(|view| CreateViewParams {
-        database_id: data.database_id.clone(),
+        database_id: data.database_id,
         view_id: view.id,
         name: view.name,
         layout: view.layout,
@@ -204,7 +216,7 @@ impl DatabaseCollabRemapper {
       .collect();
 
     CreateDatabaseParams {
-      database_id: data.database_id.clone(),
+      database_id: data.database_id,
       rows: create_row_params,
       fields: data.fields,
       views: create_view_params,
@@ -216,7 +228,7 @@ impl DatabaseCollabRemapper {
     mut database_data: DatabaseData,
   ) -> Result<DatabaseData, DatabaseError> {
     if let Some(new_database_id) = self.id_mapping.get(&database_data.database_id) {
-      database_data.database_id = new_database_id.clone();
+      database_data.database_id = *new_database_id;
     }
     database_data.views = self.remap_database_views(database_data.views);
     database_data.rows = self.remap_database_rows(database_data.rows);
@@ -234,11 +246,11 @@ impl DatabaseCollabRemapper {
 
   pub fn remap_database_view(&self, mut view: DatabaseView) -> DatabaseView {
     if let Some(new_view_id) = self.id_mapping.get(&view.id) {
-      view.id = new_view_id.clone();
+      view.id = *new_view_id;
     }
 
     if let Some(new_database_id) = self.id_mapping.get(&view.database_id) {
-      view.database_id = new_database_id.clone();
+      view.database_id = *new_database_id;
     }
 
     view.row_orders = self.remap_row_orders(view.row_orders);
@@ -253,12 +265,12 @@ impl DatabaseCollabRemapper {
   }
 
   fn remap_row_data(&self, mut row: Row) -> Row {
-    if let Some(new_row_id) = self.id_mapping.get(&row.id.to_string()) {
-      row.id = RowId::from(new_row_id.clone());
+    if let Some(new_row_id) = self.id_mapping.get(&row.id) {
+      row.id = *new_row_id;
     }
 
     if let Some(new_database_id) = self.id_mapping.get(&row.database_id) {
-      row.database_id = new_database_id.clone();
+      row.database_id = *new_database_id;
     }
 
     row
@@ -268,8 +280,8 @@ impl DatabaseCollabRemapper {
     row_orders
       .into_iter()
       .map(|mut row_order| {
-        if let Some(new_row_id) = self.id_mapping.get(&row_order.id.to_string()) {
-          row_order.id = RowId::from(new_row_id.clone());
+        if let Some(new_row_id) = self.id_mapping.get(&row_order.id) {
+          row_order.id = *new_row_id;
         }
         row_order
       })
@@ -280,11 +292,11 @@ impl DatabaseCollabRemapper {
     row_metas
       .into_iter()
       .map(|(row_id, row_meta)| {
-        let new_row_id = self
-          .id_mapping
-          .get(row_id.as_str())
-          .map_or(row_id.clone(), RowId::from);
-        (new_row_id, row_meta)
+        if let Some(new_uuid) = self.id_mapping.get(&row_id) {
+          (*new_uuid, row_meta)
+        } else {
+          (row_id, row_meta)
+        }
       })
       .collect()
   }
