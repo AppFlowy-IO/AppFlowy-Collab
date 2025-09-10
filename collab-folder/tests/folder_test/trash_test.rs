@@ -1,17 +1,17 @@
+use collab_entity::uuid_validation::view_id_from_any_string;
+use collab_folder::{SectionChange, SectionChangeReceiver, TrashSectionChange, UserId};
 use std::future::Future;
 use std::time::Duration;
-
-use collab_folder::{SectionChange, SectionChangeReceiver, TrashSectionChange, UserId};
 
 use crate::util::{create_folder_with_workspace, make_test_view};
 
 #[test]
 fn create_trash_test() {
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "w1");
-  let view_1 = make_test_view("v1", "w1", vec![]);
-  let view_2 = make_test_view("v2", "w1", vec![]);
-  let view_3 = make_test_view("v3", "w1", vec![]);
+  let folder_test = create_folder_with_workspace(uid.clone(), view_id_from_any_string("w1"));
+  let view_1 = make_test_view("v1", view_id_from_any_string("w1"), vec![]);
+  let view_2 = make_test_view("v2", view_id_from_any_string("w1"), vec![]);
+  let view_3 = make_test_view("v3", view_id_from_any_string("w1"), vec![]);
   let view_1_id = view_1.id.to_string();
   let view_2_id = view_2.id.to_string();
   let view_3_id = view_3.id.to_string();
@@ -43,12 +43,12 @@ fn create_trash_test() {
 #[test]
 fn delete_trash_view_ids_test() {
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "w1");
+  let folder_test = create_folder_with_workspace(uid.clone(), view_id_from_any_string("w1"));
 
   let mut folder = folder_test.folder;
 
-  let view_1 = make_test_view("v1", "w1", vec![]);
-  let view_2 = make_test_view("v2", "w1", vec![]);
+  let view_1 = make_test_view("v1", view_id_from_any_string("w1"), vec![]);
+  let view_2 = make_test_view("v2", view_id_from_any_string("w1"), vec![]);
   let view_1_id = view_1.id.to_string();
   let view_2_id = view_2.id.to_string();
   folder.insert_view(view_1, Some(0), uid.as_i64());
@@ -77,7 +77,7 @@ fn delete_trash_view_ids_test() {
 #[tokio::test]
 async fn create_trash_callback_test() {
   let uid = UserId::from(1);
-  let mut folder_test = create_folder_with_workspace(uid.clone(), "w1");
+  let mut folder_test = create_folder_with_workspace(uid.clone(), view_id_from_any_string("w1"));
 
   let section_rx = folder_test.section_rx.take().unwrap();
 
@@ -102,7 +102,7 @@ async fn create_trash_callback_test() {
 #[tokio::test]
 async fn delete_trash_view_ids_callback_test() {
   let uid = UserId::from(1);
-  let mut folder_test = create_folder_with_workspace(uid.clone(), "w1");
+  let mut folder_test = create_folder_with_workspace(uid.clone(), view_id_from_any_string("w1"));
   let trash_rx = folder_test.section_rx.take().unwrap();
   tokio::spawn(async move {
     folder_test.add_trash_view_ids(vec!["1".to_string(), "2".to_string()], uid.as_i64());

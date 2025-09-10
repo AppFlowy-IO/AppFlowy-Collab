@@ -203,7 +203,7 @@ impl NestedChildViewBuilder {
   pub fn build(self) -> ParentChildViews {
     let view = View {
       id: self.view_id,
-      parent_view_id: self.parent_view_id.to_string(),
+      parent_view_id: Some(self.parent_view_id),
       name: self.name,
       created_at: timestamp(),
       is_favorite: self.is_favorite,
@@ -297,7 +297,7 @@ impl ParentChildViews {
     let indent = "  ".repeat(indent_level);
     writeln!(
       f,
-      "{}: {}, parent id: {}, layout: {:?}",
+      "{}: {}, parent id: {:?}, layout: {:?}",
       indent, self.view.name, self.view.parent_view_id, self.view.layout,
     )?;
 
