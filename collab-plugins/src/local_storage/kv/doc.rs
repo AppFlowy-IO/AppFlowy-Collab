@@ -3,7 +3,7 @@ use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
 use smallvec::{SmallVec, smallvec};
 use std::collections::HashSet;
-use tracing::{error, info};
+use tracing::error;
 use uuid::Uuid;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
