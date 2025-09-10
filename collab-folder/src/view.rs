@@ -795,7 +795,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 pub struct View {
   /// The id of the view
   pub id: ViewId,
-  /// The id for given parent view  
+  /// The id for given parent view
+  #[serde(with = "collab::preclude::serde_option_uuid")]
   pub parent_view_id: Option<ViewId>,
   /// The name that display on the left sidebar
   pub name: String,

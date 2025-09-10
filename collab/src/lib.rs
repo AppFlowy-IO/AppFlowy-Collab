@@ -39,4 +39,5 @@ pub mod preclude {
   pub use crate::util::MapExt;
   pub use crate::util::deserialize_i32_from_numeric;
   pub use crate::util::deserialize_i64_from_numeric;
+  pub use crate::util::serde_option_uuid;
 }
