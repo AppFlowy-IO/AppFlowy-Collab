@@ -5,6 +5,7 @@ use crate::{
   ViewLayout, timestamp,
 };
 
+use collab::core::collab::CollabVersion;
 use serde_json::json;
 use std::fmt::{Display, Formatter};
 use std::future::Future;
@@ -109,6 +110,7 @@ impl DerefMut for NestedViews {
 pub struct NestedChildViewBuilder {
   uid: i64,
   parent_view_id: ViewId,
+  version: Option<CollabVersion>,
   view_id: ViewId,
   name: String,
   desc: String,
@@ -127,6 +129,7 @@ impl NestedChildViewBuilder {
     Self {
       uid,
       parent_view_id,
+      version: None,
       view_id: uuid::Uuid::new_v4(),
       name: Default::default(),
       desc: Default::default(),
@@ -145,6 +148,11 @@ impl NestedChildViewBuilder {
 
   pub fn with_view(mut self, view: ParentChildViews) -> Self {
     self.children.push(view);
+    self
+  }
+
+  pub fn with_collab_version(mut self, version: CollabVersion) -> Self {
+    self.version = Some(version);
     self
   }
 
@@ -203,6 +211,7 @@ impl NestedChildViewBuilder {
   pub fn build(self) -> ParentChildViews {
     let view = View {
       id: self.view_id,
+      version: self.version,
       parent_view_id: self.parent_view_id.to_string(),
       name: self.name,
       created_at: timestamp(),

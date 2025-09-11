@@ -1,7 +1,10 @@
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::folder_observe::ViewChangeSender;
 use anyhow::bail;
+use collab::core::collab::CollabVersion;
 use collab::preclude::{
   Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut,
 };
@@ -11,8 +14,6 @@ use serde_repr::*;
 use tokio::sync::Mutex;
 use tracing::{instrument, trace};
 use uuid::Uuid;
-
-use crate::folder_observe::ViewChangeSender;
 
 use crate::revision::RevisionMapping;
 use crate::section::{Section, SectionItem, SectionMap};
@@ -33,6 +34,7 @@ const VIEW_LAST_EDITED_TIME: &str = "last_edited_time";
 const VIEW_LAST_EDITED_BY: &str = "last_edited_by";
 const VIEW_IS_LOCKED: &str = "is_locked";
 const VIEW_EXTRA: &str = "extra";
+const COLLAB_VERSION: &str = "version";
 // const VIEW_LAST_VIEWED_TIME: &str = "last_viewed_time";
 
 pub fn timestamp() -> i64 {
@@ -556,8 +558,12 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   let is_locked = map_ref.get_with_txn(txn, VIEW_IS_LOCKED);
   let extra = map_ref.get_with_txn(txn, VIEW_EXTRA);
 
+  let version: Option<String> = map_ref.get_with_txn(txn, COLLAB_VERSION);
+  let version = version.and_then(|v| Uuid::from_str(&v).ok());
+
   Some(View {
     id,
+    version,
     parent_view_id,
     name,
     children,
@@ -783,6 +789,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 pub struct View {
   /// The id of the view
   pub id: collab_entity::uuid_validation::ViewId,
+  /// The version of the view, used when corresponding page has been reverted to past state.
+  pub version: Option<CollabVersion>,
   /// The id for given parent view  
   pub parent_view_id: String,
   /// The name that display on the left sidebar
@@ -822,6 +830,7 @@ impl View {
   ) -> Self {
     Self {
       id: view_id,
+      version: None,
       parent_view_id,
       name,
       children: Default::default(),
