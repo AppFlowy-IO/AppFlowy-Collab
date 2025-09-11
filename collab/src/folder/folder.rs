@@ -1079,6 +1079,7 @@ mod tests {
     let space_view = View {
       id: Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap(),
       parent_view_id: Some(workspace_id),
+      version: None,
       name: "Space 1".to_string(),
       children: RepeatedViewIdentifier::new(vec![
         ViewIdentifier::new(view_1_id),
@@ -1148,6 +1149,7 @@ mod tests {
     let space_view = View {
       id: space_view_id,
       parent_view_id: None,
+      version: None,
       name: "Space".to_string(),
       children: RepeatedViewIdentifier::new(
         views
