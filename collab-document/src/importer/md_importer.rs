@@ -20,10 +20,15 @@ pub struct MDImporter {
   /// - math text, math flow, autolink features.
   /// - default Markdown features.
   pub parse_options: ParseOptions,
+
+  /// If true, paragraphs containing only inline linked text will be converted to link_preview blocks.
+  ///
+  /// [link](https://example.com) -> link_preview block
+  pub parse_link_as_link_preview: bool,
 }
 
 impl MDImporter {
-  pub fn new(parse_options: Option<ParseOptions>) -> Self {
+  pub fn new(parse_options: Option<ParseOptions>, parse_link_as_link_preview: bool) -> Self {
     let parse_options = parse_options.unwrap_or_else(|| ParseOptions {
       gfm_strikethrough_single_tilde: true,
       constructs: Constructs {
@@ -35,7 +40,10 @@ impl MDImporter {
       ..ParseOptions::gfm()
     });
 
-    Self { parse_options }
+    Self {
+      parse_options,
+      parse_link_as_link_preview,
+    }
   }
 
   pub fn import(&self, document_id: &str, md: String) -> Result<DocumentData, DocumentError> {
@@ -58,10 +66,20 @@ impl MDImporter {
       Some(document_id.to_string()),
       None,
       None,
+      self.parse_link_as_link_preview,
     );
 
     Ok(document_data)
   }
+}
+
+fn is_paragraph_with_only_link(para: &mdast::Paragraph) -> Option<String> {
+  if para.children.len() == 1 {
+    if let mdast::Node::Link(link) = &para.children[0] {
+      return Some(link.url.clone());
+    }
+  }
+  None
 }
 
 /// This function will recursively process the mdast node and convert it to document blocks
@@ -73,6 +91,7 @@ fn process_mdast_node(
   block_id: Option<String>,
   list_type: Option<&str>,
   start_number: Option<u32>,
+  parse_link_as_link_preview: bool,
 ) {
   // If the node is an inline node, process it as an inline node
   if is_inline_node(node) {
@@ -90,6 +109,7 @@ fn process_mdast_node(
       children,
       Some(&list_type),
       start_number,
+      parse_link_as_link_preview,
     );
     return;
   }
@@ -119,7 +139,7 @@ fn process_mdast_node(
 
   document_data.blocks.insert(id.clone(), block);
 
-  update_children_map(document_data, parent_id, &id);
+  update_children_map(document_data, parent_id.clone(), &id);
 
   match node {
     mdast::Node::Root(root) => {
@@ -129,9 +149,20 @@ fn process_mdast_node(
         &root.children,
         None,
         start_number,
+        parse_link_as_link_preview,
       );
     },
     mdast::Node::Paragraph(para) => {
+      if let Some(parent_id) = parent_id {
+        if parse_link_as_link_preview {
+          if let Some(url) = is_paragraph_with_only_link(para) {
+            let link_preview_block = create_link_preview_block(&id, url, &parent_id);
+            document_data.blocks.insert(id.clone(), link_preview_block);
+            return;
+          }
+        }
+      }
+
       // Process paragraph as before
       process_mdast_node_children(
         document_data,
@@ -139,6 +170,7 @@ fn process_mdast_node(
         &para.children,
         None,
         start_number,
+        parse_link_as_link_preview,
       );
     },
     mdast::Node::Heading(heading) => {
@@ -148,6 +180,7 @@ fn process_mdast_node(
         &heading.children,
         None,
         start_number,
+        parse_link_as_link_preview,
       );
     },
     // handle the blockquote and list item node
@@ -166,6 +199,7 @@ fn process_mdast_node(
               &para.children,
               None,
               start_number,
+              parse_link_as_link_preview,
             );
           }
 
@@ -176,6 +210,7 @@ fn process_mdast_node(
             rest,
             list_type,
             start_number,
+            parse_link_as_link_preview,
           );
         }
       }
@@ -189,7 +224,14 @@ fn process_mdast_node(
       // Process each row and create SimpleTableRow blocks
       for (row_index, row) in table.children.iter().enumerate() {
         if let mdast::Node::TableRow(row_node) = row {
-          process_table_row(document_data, row_node, row_index, &id, &table.align);
+          process_table_row(
+            document_data,
+            row_node,
+            row_index,
+            &id,
+            &table.align,
+            parse_link_as_link_preview,
+          );
         }
       }
     },
@@ -257,6 +299,7 @@ fn process_table_row(
   row_index: usize,
   table_id: &str,
   align: &[AlignKind],
+  parse_link_as_link_preview: bool,
 ) {
   let row_id = generate_id();
   let row_block = create_simple_table_row_block(&row_id, table_id);
@@ -279,6 +322,7 @@ fn process_table_row(
         &cell_node.children,
         None,
         None,
+        parse_link_as_link_preview,
       );
     }
   }
@@ -318,6 +362,20 @@ pub fn create_image_block(block_id: &str, url: String, parent_id: &str) -> Block
   Block {
     id: block_id.to_string(),
     ty: BlockType::Image.to_string(),
+    data,
+    parent: parent_id.to_string(),
+    children: "".to_string(),
+    external_id: None,
+    external_type: None,
+  }
+}
+
+fn create_link_preview_block(block_id: &str, url: String, parent_id: &str) -> Block {
+  let mut data = BlockData::new();
+  data.insert(URL_FIELD.to_string(), url.into());
+  Block {
+    id: block_id.to_string(),
+    ty: BlockType::LinkPreview.to_string(),
     data,
     parent: parent_id.to_string(),
     children: "".to_string(),
@@ -379,6 +437,7 @@ fn process_mdast_node_children(
   children: &[mdast::Node],
   list_type: Option<&str>,
   start_number: Option<u32>,
+  parse_link_as_link_preview: bool,
 ) {
   for child in children {
     process_mdast_node(
@@ -388,6 +447,7 @@ fn process_mdast_node_children(
       None,
       list_type,
       start_number,
+      parse_link_as_link_preview,
     );
   }
 }

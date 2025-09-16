@@ -139,7 +139,7 @@ impl NotionPage {
     match &self.notion_file {
       NotionFile::Markdown { file_path, .. } => {
         let resource_paths = self.notion_file.upload_files();
-        let md_importer = MDImporter::new(None);
+        let md_importer = MDImporter::new(None, false);
         let content = fs::read_to_string(file_path).await?;
         let document_data = md_importer.import(&self.view_id, content)?;
         let mut document = Document::create(&self.view_id, document_data, default_client_id())?;

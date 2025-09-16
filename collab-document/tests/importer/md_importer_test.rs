@@ -5,6 +5,7 @@ use crate::importer::util::{
 use assert_json_diff::assert_json_eq;
 use collab::core::collab::default_client_id;
 use collab_document::document::Document;
+use collab_document::importer::md_importer::MDImporter;
 use serde_json::json;
 
 #[test]
@@ -531,4 +532,41 @@ fn test_aside() {
       {"insert": "</aside>"}
   ]);
   assert_eq!(delta_json, expected_delta);
+}
+
+#[test]
+fn test_link_preview_with_false() {
+  let markdown = "[AppFlowy.IO](https://appflowy.io)";
+
+  let importer = MDImporter::new(None, false);
+  let result = importer
+    .import("test_document", markdown.to_string())
+    .unwrap();
+
+  let page = get_page_block(&result);
+  let children = get_children_blocks(&result, &page.id);
+
+  assert_eq!(children.len(), 1);
+  let first_child = &children[0];
+  assert_eq!(first_child.ty, "paragraph");
+}
+
+#[test]
+fn test_link_preview_with_true() {
+  let markdown = "[AppFlowy.IO](https://appflowy.io)";
+
+  let importer = MDImporter::new(None, true);
+  let result = importer
+    .import("test_document", markdown.to_string())
+    .unwrap();
+
+  let page = get_page_block(&result);
+  let children = get_children_blocks(&result, &page.id);
+
+  assert_eq!(children.len(), 1);
+  let first_child = &children[0];
+  assert_eq!(first_child.ty, "link_preview");
+
+  let url = first_child.data.get("url").unwrap();
+  assert_eq!(url.as_str().unwrap(), "https://appflowy.io");
 }

@@ -120,7 +120,7 @@ jobs:
         run: brew install protobuf
 
       - name: Build
-        run: IPHONEOS_DEPLOYMENT_TARGET=10.0 cargo build --target ${{ matrix.target }} --verbose
+        run: BINDGEN_EXTRA_CLANG_ARGS="--target=arm64-apple-ios10.0.0-simulator" IPHONEOS_DEPLOYMENT_TARGET=10.0 cargo build --target ${{ matrix.target }} --verbose
 
   # Android Build
   android-build:
