@@ -153,7 +153,6 @@ fn process_mdast_node(
       );
     },
     mdast::Node::Paragraph(para) => {
-      let parent_id = parent_id.clone();
       if let Some(parent_id) = parent_id {
         if parse_link_as_link_preview {
           if let Some(url) = is_paragraph_with_only_link(para) {
