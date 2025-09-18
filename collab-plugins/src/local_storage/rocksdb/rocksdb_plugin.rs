@@ -13,6 +13,7 @@ use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
 use tracing::{error, info, warn};
 
+use collab::core::collab::CollabVersion;
 use collab::core::collab_plugin::CollabPluginType;
 use yrs::TransactionMut;
 
@@ -126,7 +127,13 @@ impl CollabPlugin for RocksdbDiskPlugin {
     self.write_to_disk(collab);
   }
 
-  fn receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
+  fn receive_update(
+    &self,
+    object_id: &str,
+    _txn: &TransactionMut,
+    update: &[u8],
+    _collab_version: Option<&CollabVersion>,
+  ) {
     // Only push update if the doc is loaded
     if !self.did_init.load(SeqCst) {
       return;

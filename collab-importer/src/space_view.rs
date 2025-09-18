@@ -1,5 +1,5 @@
 use crate::error::ImporterError;
-use collab::core::collab::{CollabOptions, DataSource, default_client_id};
+use collab::core::collab::{CollabOptions, DataSource, VersionedData, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_document::document_data::default_document_collab_data;
@@ -17,13 +17,12 @@ pub fn create_space_view(
   space_info: SpaceInfo,
 ) -> Result<(ParentChildViews, Collab), ImporterError> {
   let client_id = default_client_id();
-  let import_container_doc_state = default_document_collab_data(&view_id.to_string(), client_id)
-    .map_err(|err| ImporterError::Internal(err.into()))?
-    .doc_state
-    .to_vec();
+  let encoded_collab = default_document_collab_data(&view_id.to_string(), client_id)
+    .map_err(|err| ImporterError::Internal(err.into()))?;
 
-  let options = CollabOptions::new(*view_id, client_id)
-    .with_data_source(DataSource::DocStateV1(import_container_doc_state));
+  let data = VersionedData::new(encoded_collab.doc_state, encoded_collab.collab_version);
+  let options =
+    CollabOptions::new(*view_id, client_id).with_data_source(DataSource::DocStateV1(data));
   let collab = Collab::new_with_options(CollabOrigin::Empty, options)
     .map_err(|err| ImporterError::Internal(err.into()))?;
 

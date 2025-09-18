@@ -46,6 +46,7 @@ impl From<Workspace> for View {
   fn from(value: Workspace) -> Self {
     Self {
       id: value.id,
+      version: None,
       parent_view_id: "".to_string(),
       name: value.name,
       children: value.child_views,

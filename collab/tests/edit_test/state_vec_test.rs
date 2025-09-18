@@ -1,7 +1,8 @@
+use collab::core::collab::ConsistentHash;
 use serde_json::json;
 use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
-use yrs::{Doc, Map, MapPrelim, MapRef, ReadTxn, Transact, Update};
+use yrs::{Doc, Map, MapPrelim, MapRef, ReadTxn, StateVector, Text, Transact, Update};
 
 #[tokio::test]
 async fn state_vec_apply_test() {
@@ -118,6 +119,35 @@ async fn two_way_sync_result_undetermined() {
   // a: {map: {key_2: b, key_1: a}}
   // b: {map: {key_1: a, key_2: b}}
   assert_eq!(a, b);
+}
+
+#[test]
+fn snapshot_produces_consistent_hash() {
+  let d1 = Doc::with_client_id(0xdeadbeef);
+  let txt1 = d1.get_or_insert_text("text");
+  let mut t1 = d1.transact_mut();
+  txt1.insert(&mut t1, 0, "Hello world!");
+  txt1.remove_range(&mut t1, 4, 5);
+
+  // we need at least 2 client IDs to produce a non-trivial state vector where order could be
+  // possibly different between runs
+  let d2 = Doc::with_client_id(123);
+  let txt2 = d2.get_or_insert_text("text");
+  let mut t2 = d2.transact_mut();
+  t2.apply_update(
+    Update::decode_v1(&t1.encode_state_as_update_v1(&StateVector::default())).unwrap(),
+  )
+  .unwrap();
+  txt2.insert(&mut t2, 0, "Acronym!");
+  txt2.remove_range(&mut t2, 1, 2);
+
+  let snapshot = t2.snapshot();
+
+  // We're going to use consistent hash to uniquely identify the snapshot based on its internal
+  // state. This way we can use it as ID and quickly compare if two snapshots are identical.
+  let hash = snapshot.consistent_hash();
+  let expected: u128 = 42481876838278106308370919647884892234; // produced in previous run
+  assert_eq!(hash, expected);
 }
 
 #[tokio::test]
