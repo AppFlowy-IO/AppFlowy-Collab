@@ -54,6 +54,7 @@ sanitize-filename = "0.5.0"
 indexmap = { version = "2.3", features = ["serde"] }
 zip = "0.6.6"
 rocksdb = { version = "0.22.0", default-features = false, features = ["zstd"], optional = true }
+blake3.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "sync", "rt"] }

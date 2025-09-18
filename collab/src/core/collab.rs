@@ -5,11 +5,10 @@ use std::panic;
 use std::panic::AssertUnwindSafe;
 
 use arc_swap::ArcSwapOption;
+use blake3::Hasher;
+use serde_json::json;
 use std::sync::Arc;
 use std::vec::IntoIter;
-
-use serde_json::json;
-
 use tokio_stream::wrappers::WatchStream;
 use tracing::trace;
 use yrs::block::{ClientID, Prelim};
@@ -240,6 +239,55 @@ pub fn make_yrs_doc(object_id: &str, skip_gc: bool, client_id: ClientID) -> Doc 
 }
 
 pub type CollabVersion = Uuid;
+
+pub trait ConsistentHash {
+  fn hash(&self, h: &mut blake3::Hasher);
+  fn consistent_hash(&self) -> u128 {
+    use blake3::Hasher;
+    let mut h = Hasher::new();
+
+    self.hash(&mut h);
+
+    let mut hash = [0; 16];
+    h.finalize_xof().fill(&mut hash);
+    u128::from_be_bytes(hash)
+  }
+}
+
+impl ConsistentHash for yrs::StateVector {
+  fn hash(&self, h: &mut Hasher) {
+    let mut clients = self.iter().map(|(k, _)| k).collect::<Vec<_>>();
+    clients.sort();
+    for client in clients {
+      let clock = self.get(client);
+      h.update(&client.to_be_bytes());
+      h.update(&clock.to_be_bytes());
+    }
+  }
+}
+
+impl ConsistentHash for yrs::DeleteSet {
+  fn hash(&self, h: &mut Hasher) {
+    let mut clients = self.iter().map(|(c, _)| c).collect::<Vec<_>>();
+    clients.sort();
+    for client in clients {
+      if let Some(range) = self.range(client) {
+        h.update(&client.to_be_bytes());
+        for r in range.iter() {
+          h.update(&r.start.to_be_bytes());
+          h.update(&r.end.to_be_bytes());
+        }
+      }
+    }
+  }
+}
+
+impl ConsistentHash for yrs::Snapshot {
+  fn hash(&self, h: &mut Hasher) {
+    ConsistentHash::hash(&self.state_map, h);
+    ConsistentHash::hash(&self.delete_set, h);
+  }
+}
 
 pub struct CollabOptions {
   pub object_id: Uuid,

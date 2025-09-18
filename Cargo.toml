@@ -16,6 +16,7 @@ async-trait = "0.1"
 arc-swap = { version = "1.7" }
 uuid = { version = "1.17.0", features = ["v4", "v5", "v7", "serde"] }
 futures-lite = { version = "2.6.0", features = ["futures-io"] }
+blake3 = "1.8"
 
 [patch.crates-io]
 # We're using a specific commit here because rust-rocksdb doesn't publish the latest version that includes the memory alignment fix.
