@@ -6,6 +6,7 @@ use crate::fields::checklist_type_option::ChecklistTypeOption;
 use crate::fields::date_type_option::{DateTypeOption, TimeTypeOption};
 use crate::fields::media_type_option::MediaTypeOption;
 use crate::fields::number_type_option::NumberTypeOption;
+use crate::fields::person_type_option::PersonTypeOption;
 use crate::fields::relation_type_option::RelationTypeOption;
 use crate::fields::select_type_option::{MultiSelectTypeOption, SingleSelectTypeOption};
 use crate::fields::summary_type_option::SummarizationTypeOption;
@@ -293,6 +294,7 @@ pub enum FieldType {
   Translate = 12,
   Time = 13,
   Media = 14,
+  Person = 15,
 }
 
 impl FieldType {
@@ -365,6 +367,7 @@ impl FieldType {
       FieldType::Translate => "Translate",
       FieldType::Time => "Time",
       FieldType::Media => "Media",
+      FieldType::Person => "Person",
     };
     s.to_string()
   }
@@ -456,6 +459,7 @@ impl From<i64> for FieldType {
       12 => FieldType::Translate,
       13 => FieldType::Time,
       14 => FieldType::Media,
+      15 => FieldType::Person,
       _ => {
         error!("Unknown field type: {}, fallback to text", index);
         FieldType::RichText
@@ -484,6 +488,7 @@ pub fn default_type_option_data_from_type(field_type: FieldType) -> TypeOptionDa
     FieldType::Relation => RelationTypeOption::default().into(),
     FieldType::Summary => SummarizationTypeOption::default().into(),
     FieldType::Translate => TranslateTypeOption::default().into(),
+    FieldType::Person => PersonTypeOption::default().into(),
   }
 }
 
