@@ -12,6 +12,7 @@ pub struct PersonTypeOption {
   pub is_single_select: bool,
   pub fill_with_creator: bool,
   pub disable_notification: bool,
+  pub persons: Vec<DatabasePerson>,
 }
 
 impl TypeOptionCellReader for PersonTypeOption {
@@ -52,4 +53,17 @@ impl From<PersonTypeOption> for TypeOptionData {
     let content = serde_json::to_string(&data).unwrap_or_default();
     TypeOptionDataBuilder::from([("content".into(), content.into())])
   }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DatabasePerson {
+  pub id: String,
+
+  #[serde(default)]
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub name: Option<String>,
+
+  #[serde(default)]
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub avatar_url: Option<String>,
 }
