@@ -36,6 +36,7 @@ pub mod preclude {
   pub use crate::core::collab::Collab;
   pub use crate::core::collab_plugin::CollabPlugin;
   pub use crate::core::fill::{FillError, FillRef};
+  pub use crate::core::user_data::PermanentUserData;
   pub use crate::util::MapExt;
   pub use crate::util::deserialize_i32_from_numeric;
   pub use crate::util::deserialize_i64_from_numeric;
