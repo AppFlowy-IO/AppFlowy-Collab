@@ -3,6 +3,7 @@ pub mod checklist_type_option;
 pub mod date_type_option;
 pub mod media_type_option;
 pub mod number_type_option;
+pub mod person_type_option;
 pub mod relation_type_option;
 pub mod select_type_option;
 pub mod summary_type_option;
@@ -19,6 +20,7 @@ use crate::fields::checklist_type_option::ChecklistTypeOption;
 use crate::fields::date_type_option::{DateTypeOption, TimeTypeOption};
 use crate::fields::media_type_option::MediaTypeOption;
 use crate::fields::number_type_option::NumberTypeOption;
+use crate::fields::person_type_option::PersonTypeOption;
 use crate::fields::relation_type_option::RelationTypeOption;
 use crate::fields::select_type_option::{MultiSelectTypeOption, SingleSelectTypeOption};
 use crate::fields::summary_type_option::SummarizationTypeOption;
@@ -178,6 +180,7 @@ pub fn type_option_cell_writer(
     FieldType::Relation => Box::new(RelationTypeOption::from(type_option_data)),
     FieldType::Summary => Box::new(SummarizationTypeOption::from(type_option_data)),
     FieldType::Translate => Box::new(TranslateTypeOption::from(type_option_data)),
+    FieldType::Person => Box::new(PersonTypeOption::from(type_option_data)),
   }
 }
 
@@ -201,5 +204,6 @@ pub fn type_option_cell_reader(
     FieldType::Relation => Box::new(RelationTypeOption::from(type_option_data)),
     FieldType::Summary => Box::new(SummarizationTypeOption::from(type_option_data)),
     FieldType::Translate => Box::new(TranslateTypeOption::from(type_option_data)),
+    FieldType::Person => Box::new(PersonTypeOption::from(type_option_data)),
   }
 }
