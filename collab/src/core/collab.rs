@@ -46,7 +46,6 @@ pub struct Collab {
   /// The object id can be the document id or the database id. It must be unique for
   /// each [Collab] instance.
   object_id: Uuid,
-  version: Option<CollabVersion>,
   state: Arc<State>,
   update_subscription: ArcSwapOption<Subscription>,
   awareness_subscription: ArcSwapOption<Subscription>,
@@ -86,19 +85,29 @@ pub struct CollabContext {
 
   /// The current transaction that is being executed.
   current_txn: Option<TransactionMut<'static>>,
+  version: Option<CollabVersion>,
 }
 
 unsafe impl Send for CollabContext {}
 unsafe impl Sync for CollabContext {}
 
 impl CollabContext {
-  fn new(origin: CollabOrigin, awareness: Awareness) -> Self {
+  fn new(origin: CollabOrigin, awareness: Awareness, version: Option<CollabVersion>) -> Self {
     CollabContext {
       origin,
       awareness,
+      version,
       undo_manager: None,
       current_txn: None,
     }
+  }
+
+  pub fn version(&self) -> Option<&CollabVersion> {
+    self.version.as_ref()
+  }
+
+  pub fn version_mut(&mut self) -> &mut Option<CollabVersion> {
+    &mut self.version
   }
 
   pub fn with_txn<F, T>(&mut self, f: F) -> Result<T, CollabError>
@@ -348,8 +357,11 @@ impl Collab {
     let awareness = Awareness::new(doc);
     let mut this = Self {
       object_id,
-      version: options.data_source.as_ref().and_then(DataSource::version),
-      context: CollabContext::new(origin, awareness),
+      context: CollabContext::new(
+        origin,
+        awareness,
+        options.data_source.as_ref().and_then(DataSource::version),
+      ),
       state,
       data,
       meta,
@@ -416,10 +428,9 @@ impl Collab {
     let awareness = Awareness::new(doc);
     Self {
       object_id,
-      version: None,
       // if not the fact that we need origin here, it would be
       // not necessary either
-      context: CollabContext::new(origin, awareness),
+      context: CollabContext::new(origin, awareness, None),
       state,
       data,
       meta,
@@ -445,12 +456,12 @@ impl Collab {
   ///
   /// This method must be called after all plugins have been added.
   pub fn initialize(&mut self) {
-    let doc = self.context.doc();
     {
-      let origin = self.origin();
+      let origin = self.origin.clone();
+      let context = &mut self.context;
       self
         .plugins
-        .each(|plugin| plugin.init(&self.object_id.to_string(), origin, doc));
+        .each(|plugin| plugin.init(&self.object_id.to_string(), &origin, context));
     }
     self.observe_update();
     {

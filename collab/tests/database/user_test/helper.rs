@@ -76,7 +76,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
 
   fn upsert_collab(
     &self,
-    object_id: &collab::entity::uuid_validation::ObjectId,
+    object_id: &ObjectId,
     encoded_collab: EncodedCollab,
   ) -> Result<(), CollabError> {
     let db_write = self.db.write_txn();
@@ -84,6 +84,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
       self.uid,
       &self.workspace_id,
       &object_id.to_string(),
+      encoded_collab.collab_version.as_ref(),
       encoded_collab.state_vector.to_vec(),
       encoded_collab.doc_state.to_vec(),
     );

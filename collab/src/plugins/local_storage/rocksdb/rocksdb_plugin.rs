@@ -92,9 +92,16 @@ impl RocksdbDiskPlugin {
       if !rocksdb_read.is_exist(self.uid, &self.workspace_id, &self.object_id) {
         match self.collab_type.validate_require_data(collab) {
           Ok(_) => {
+            let version = collab.version();
             let txn = collab.transact();
             if let Err(err) = collab_db.with_write_txn(|w_db_txn| {
-              w_db_txn.create_new_doc(self.uid, &self.workspace_id, &self.object_id, &txn)?;
+              w_db_txn.create_new_doc(
+                self.uid,
+                &self.workspace_id,
+                &self.object_id,
+                version,
+                &txn,
+              )?;
               info!(
                 "[Rocksdb Plugin]: created new doc {}, collab_type:{}",
                 self.object_id, self.collab_type
@@ -130,7 +137,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     object_id: &str,
     _txn: &TransactionMut,
     update: &[u8],
-    _collab_version: Option<&CollabVersion>,
+    collab_version: Option<&CollabVersion>,
   ) {
     // Only push update if the doc is loaded
     if !self.did_init.load(SeqCst) {
@@ -140,7 +147,13 @@ impl CollabPlugin for RocksdbDiskPlugin {
       self.increase_count();
       //Acquire a write transaction to ensure consistency
       let result = db.with_write_txn(|w_db_txn| {
-        let _ = w_db_txn.push_update(self.uid, self.workspace_id.as_str(), object_id, update)?;
+        let _ = w_db_txn.push_update(
+          self.uid,
+          self.workspace_id.as_str(),
+          object_id,
+          collab_version,
+          update,
+        )?;
         use yrs::updates::decoder::Decode;
         tracing::trace!(
           "[Rocksdb Plugin]: Collab {} {} persisting update: {:#?}",

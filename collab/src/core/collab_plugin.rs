@@ -3,7 +3,7 @@ use crate::core::awareness::{AwarenessUpdate, Event};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 
-use crate::core::collab::CollabVersion;
+use crate::core::collab::{CollabContext, CollabVersion};
 use crate::core::origin::CollabOrigin;
 use crate::error::CollabError;
 use crate::preclude::Collab;
@@ -36,7 +36,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
   /// The will apply the updates to the current [TransactionMut] which will restore the state of
   /// the document.
-  fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &Doc) {}
+  fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &mut CollabContext) {}
 
   /// Called when the plugin is initialized.
   fn did_init(&self, _collab: &Collab, _object_id: &str) {}
@@ -89,8 +89,8 @@ impl<T> CollabPlugin for Box<T>
 where
   T: CollabPlugin,
 {
-  fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
-    (**self).init(object_id, origin, doc);
+  fn init(&self, object_id: &str, origin: &CollabOrigin, ctx: &mut CollabContext) {
+    (**self).init(object_id, origin, ctx);
   }
 
   fn did_init(&self, collab: &Collab, _object_id: &str) {
