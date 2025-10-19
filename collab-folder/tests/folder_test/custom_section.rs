@@ -1,16 +1,16 @@
+use crate::util::create_folder_with_workspace;
 use assert_json_diff::assert_json_include;
 use collab::preclude::Any;
+use collab_entity::uuid_validation::view_id_from_any_string;
 use collab_folder::{Section, SectionItem, UserId, timestamp};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::util::create_folder_with_workspace;
-
 #[test]
 fn custom_section_test() {
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "w1");
+  let folder_test = create_folder_with_workspace(uid.clone(), view_id_from_any_string("w1"));
 
   let mut folder = folder_test.folder;
   let mut txn = folder.collab.transact_mut();

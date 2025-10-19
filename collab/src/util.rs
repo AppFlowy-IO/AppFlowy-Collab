@@ -276,6 +276,30 @@ pub fn any_to_json_value(any: Any) -> Result<JsonValue> {
 create_deserialize_numeric!(i32, I32Visitor, deserialize_i32_from_numeric);
 create_deserialize_numeric!(i64, I64Visitor, deserialize_i64_from_numeric);
 
+pub mod serde_option_uuid {
+  use serde::{self, Deserialize, Deserializer, Serializer};
+  use uuid::Uuid;
+
+  pub fn serialize<S>(value: &Option<Uuid>, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let str = value.map(|uuid| uuid.to_string()).unwrap_or_default();
+    serializer.serialize_str(&str)
+  }
+
+  pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Uuid>, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    let opt = Option::<String>::deserialize(deserializer)?;
+    match opt {
+      Some(s) => Ok(Uuid::parse_str(&s).ok()),
+      None => Ok(None),
+    }
+  }
+}
+
 pub trait ArrayExt: Array {
   fn clear(&self, txn: &mut TransactionMut) {
     let len = self.len(txn);
