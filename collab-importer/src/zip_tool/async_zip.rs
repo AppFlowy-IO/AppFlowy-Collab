@@ -5,7 +5,7 @@ use async_zip::{StringEncoding, ZipString};
 use futures::AsyncReadExt as FuturesAsyncReadExt;
 use futures::io::AsyncBufRead;
 use std::ffi::OsString;
-use std::{io, str};
+use std::str;
 
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -19,8 +19,11 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
 use crate::error::ImporterError;
-use crate::zip_tool::util::{is_multi_part_zip_signature, remove_part_suffix, sanitize_file_path};
-use tracing::error;
+use crate::zip_tool::util::{
+  has_multi_part_extension, has_multi_part_suffix, is_multi_part_zip_signature, remove_part_suffix,
+  sanitize_file_path,
+};
+use tracing::{error, warn};
 
 pub struct UnzipFile {
   pub file_name: String,
@@ -74,12 +77,20 @@ where
                 if buffer.len() >= 4 {
                   if let Ok(four_bytes) = buffer[..4].try_into() {
                     if is_multi_part_zip_signature(four_bytes) {
-                      if let Some(file_name) =
-                        Path::new(&filename).file_stem().and_then(|s| s.to_str())
-                      {
-                        root_dir = Some(remove_part_suffix(file_name));
+                      let is_multipart_candidate = filename.contains('/')
+                        || has_multi_part_extension(&filename)
+                        || has_multi_part_suffix(&filename);
+
+                      if root_dir.is_none() && is_multipart_candidate {
+                        if let Some(file_name) =
+                          Path::new(&filename).file_stem().and_then(|s| s.to_str())
+                        {
+                          root_dir = Some(remove_part_suffix(file_name));
+                        }
                       }
-                      parts.push(output_path.clone());
+                      if is_multipart_candidate {
+                        parts.push(output_path.clone());
+                      }
                     }
                   }
                 }
@@ -130,54 +141,39 @@ where
     None => match default_file_name {
       None => Err(ImporterError::FileNotFound),
       Some(default_file_name) => {
-        let new_out_dir = out_dir
-          .parent()
-          .ok_or_else(|| ImporterError::FileNotFound)?
-          .join(uuid::Uuid::new_v4().to_string())
-          .join(&default_file_name);
-        move_all(&out_dir, &new_out_dir).await?;
-        let _ = fs::remove_dir_all(&out_dir).await;
+        if fs::metadata(&out_dir).await.is_err() {
+          fs::create_dir_all(&out_dir)
+            .await
+            .with_context(|| format!("Failed to create output directory: {}", out_dir.display()))?;
+        }
         Ok(UnzipFile {
           file_name: default_file_name.clone(),
-          unzip_dir_path: new_out_dir,
+          unzip_dir_path: out_dir,
           parts,
         })
       },
     },
-    Some(file_name) => Ok(UnzipFile {
-      file_name: file_name.clone(),
-      unzip_dir_path: out_dir.join(file_name),
-      parts,
-    }),
-  }
-}
-
-#[async_recursion]
-async fn move_all(old_path: &Path, new_path: &Path) -> io::Result<()> {
-  if !new_path.exists() {
-    fs::create_dir_all(new_path).await?;
-  }
-
-  let mut read_dir = fs::read_dir(old_path).await?;
-  while let Some(entry) = read_dir.next_entry().await? {
-    let path = entry.path();
-    let file_name = match path.file_name() {
-      Some(name) => name,
-      None => continue,
-    };
-
-    let new_file_path = new_path.join(file_name);
-    if path.is_dir() {
-      if !new_file_path.exists() {
-        fs::create_dir_all(&new_file_path).await?;
+    Some(file_name) => {
+      let target_dir = out_dir.join(&file_name);
+      if fs::metadata(&target_dir).await.is_err() {
+        warn!(
+          "Root directory {:?} missing after unzip; falling back to {:?}",
+          target_dir, out_dir
+        );
+        return Ok(UnzipFile {
+          file_name,
+          unzip_dir_path: out_dir,
+          parts,
+        });
       }
-      move_all(&path, &new_file_path).await?;
-      fs::remove_dir_all(&path).await?;
-    } else if path.is_file() {
-      fs::rename(&path, &new_file_path).await?;
-    }
+
+      Ok(UnzipFile {
+        file_name: file_name.clone(),
+        unzip_dir_path: target_dir,
+        parts,
+      })
+    },
   }
-  Ok(())
 }
 
 pub fn get_filename_from_zip_string(zip_string: &ZipString) -> Result<String, anyhow::Error> {

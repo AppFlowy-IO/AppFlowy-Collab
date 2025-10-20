@@ -35,6 +35,32 @@ pub fn sanitize_file_path(path: &str) -> PathBuf {
         .collect()
 }
 
+/// Determine whether the provided file path ends with a known multi-part archive extension.
+pub fn has_multi_part_extension(file_name: &str) -> bool {
+  Path::new(file_name)
+    .extension()
+    .and_then(|ext| ext.to_str())
+    .map(|ext| {
+      let ext = ext.to_ascii_lowercase();
+      (ext.starts_with('z') && ext.chars().skip(1).all(|c| c.is_ascii_digit()))
+        || (ext.starts_with("part") && ext.chars().skip(4).all(|c| c.is_ascii_digit()))
+    })
+    .unwrap_or(false)
+}
+
+/// Identify multi-part style suffixes that appear before the file extension.
+pub fn has_multi_part_suffix(file_name: &str) -> bool {
+  if let Some(file_name) = Path::new(file_name).file_name().and_then(|s| s.to_str()) {
+    let patterns = [r"(?i)-part-\d+", r"(?i)\.part\d+", r"(?i)\.z\d{2}"];
+    return patterns.iter().any(|pattern| {
+      let re = Regex::new(pattern).unwrap();
+      re.is_match(file_name).unwrap_or(false)
+    });
+  }
+
+  false
+}
+
 pub fn remove_part_suffix(file_name: &str) -> String {
   let path = Path::new(file_name);
   if let Some(stem) = path.file_stem() {
@@ -96,5 +122,21 @@ mod tests {
         input
       );
     }
+  }
+
+  #[test]
+  fn test_has_multi_part_extension() {
+    assert!(has_multi_part_extension("Export-Part.z01"));
+    assert!(has_multi_part_extension("export.part1"));
+    assert!(!has_multi_part_extension("Attachment.zip"));
+    assert!(!has_multi_part_extension("regular.txt"));
+  }
+
+  #[test]
+  fn test_has_multi_part_suffix() {
+    assert!(has_multi_part_suffix("Export-Part-1.zip"));
+    assert!(has_multi_part_suffix("nested/Export.Part2"));
+    assert!(!has_multi_part_suffix("Attachment.zip"));
+    assert!(!has_multi_part_suffix("duplicate(1).zip"));
   }
 }
