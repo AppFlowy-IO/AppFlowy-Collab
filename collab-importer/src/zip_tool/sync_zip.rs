@@ -1,5 +1,11 @@
 use crate::error::ImporterError;
-use crate::zip_tool::util::{is_multi_part_zip_signature, remove_part_suffix, sanitize_file_path};
+use crate::zip_tool::util::{
+  has_multi_part_extension,
+  has_multi_part_suffix,
+  is_multi_part_zip_signature,
+  remove_part_suffix,
+  sanitize_file_path,
+};
 use anyhow::{Result, anyhow};
 
 use std::fs::{File, OpenOptions};
@@ -17,7 +23,7 @@ pub struct UnzipFile {
 
 pub fn sync_unzip(
   file_path: PathBuf,
-  mut out_dir: PathBuf,
+  out_dir: PathBuf,
   default_file_name: Option<String>,
 ) -> Result<UnzipFile, ImporterError> {
   let file = File::open(file_path)
@@ -37,14 +43,9 @@ pub fn sync_unzip(
     }
   }
 
-  if root_dir.is_none() {
-    if let Some(default_name) = &default_file_name {
-      out_dir = out_dir.join(default_name);
-      if !out_dir.exists() {
-        fs::create_dir_all(&out_dir)
-          .map_err(|e| ImporterError::Internal(anyhow!("Failed to create dir: {:?}", e)))?;
-      }
-    }
+  if !out_dir.exists() {
+    fs::create_dir_all(&out_dir)
+      .map_err(|e| ImporterError::Internal(anyhow!("Failed to create dir: {:?}", e)))?;
   }
 
   // Iterate through each file in the archive
@@ -92,10 +93,20 @@ pub fn sync_unzip(
           if buffer.len() >= 4 {
             let four_bytes: [u8; 4] = buffer[..4].try_into().unwrap();
             if is_multi_part_zip_signature(&four_bytes) {
-              if let Some(file_name) = Path::new(&filename).file_stem().and_then(|s| s.to_str()) {
-                root_dir = Some(remove_part_suffix(file_name));
+              let is_multipart_candidate = filename.contains('/')
+                || has_multi_part_extension(&filename)
+                || has_multi_part_suffix(&filename);
+
+              if root_dir.is_none() && is_multipart_candidate {
+                if let Some(file_name) =
+                  Path::new(&filename).file_stem().and_then(|s| s.to_str())
+                {
+                  root_dir = Some(remove_part_suffix(file_name));
+                }
               }
-              parts.push(output_path.clone());
+              if is_multipart_candidate {
+                parts.push(output_path.clone());
+              }
             }
           }
 
@@ -130,11 +141,27 @@ pub fn sync_unzip(
         parts,
       }),
     },
-    Some(root_dir) => Ok(UnzipFile {
-      dir_name: root_dir.clone(),
-      unzip_dir: out_dir.join(root_dir),
-      parts,
-    }),
+    Some(root_dir) => {
+      let target_dir = out_dir.join(&root_dir);
+      if !target_dir.exists() {
+        warn!(
+          "Root directory {:?} missing after unzip; falling back to {:?}",
+          target_dir,
+          out_dir
+        );
+        return Ok(UnzipFile {
+          dir_name: root_dir,
+          unzip_dir: out_dir,
+          parts,
+        });
+      }
+
+      Ok(UnzipFile {
+        dir_name: root_dir.clone(),
+        unzip_dir: target_dir,
+        parts,
+      })
+    },
   }
 }
 
