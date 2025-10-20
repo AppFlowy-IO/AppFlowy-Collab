@@ -20,10 +20,7 @@ use tokio_util::compat::TokioAsyncWriteCompatExt;
 
 use crate::error::ImporterError;
 use crate::zip_tool::util::{
-  has_multi_part_extension,
-  has_multi_part_suffix,
-  is_multi_part_zip_signature,
-  remove_part_suffix,
+  has_multi_part_extension, has_multi_part_suffix, is_multi_part_zip_signature, remove_part_suffix,
   sanitize_file_path,
 };
 use tracing::{error, warn};
@@ -145,9 +142,9 @@ where
       None => Err(ImporterError::FileNotFound),
       Some(default_file_name) => {
         if fs::metadata(&out_dir).await.is_err() {
-          fs::create_dir_all(&out_dir).await.with_context(|| {
-            format!("Failed to create output directory: {}", out_dir.display())
-          })?;
+          fs::create_dir_all(&out_dir)
+            .await
+            .with_context(|| format!("Failed to create output directory: {}", out_dir.display()))?;
         }
         Ok(UnzipFile {
           file_name: default_file_name.clone(),
@@ -161,8 +158,7 @@ where
       if fs::metadata(&target_dir).await.is_err() {
         warn!(
           "Root directory {:?} missing after unzip; falling back to {:?}",
-          target_dir,
-          out_dir
+          target_dir, out_dir
         );
         return Ok(UnzipFile {
           file_name,

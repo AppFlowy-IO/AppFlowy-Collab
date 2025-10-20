@@ -1,9 +1,6 @@
 use crate::error::ImporterError;
 use crate::zip_tool::util::{
-  has_multi_part_extension,
-  has_multi_part_suffix,
-  is_multi_part_zip_signature,
-  remove_part_suffix,
+  has_multi_part_extension, has_multi_part_suffix, is_multi_part_zip_signature, remove_part_suffix,
   sanitize_file_path,
 };
 use anyhow::{Result, anyhow};
@@ -98,9 +95,7 @@ pub fn sync_unzip(
                 || has_multi_part_suffix(&filename);
 
               if root_dir.is_none() && is_multipart_candidate {
-                if let Some(file_name) =
-                  Path::new(&filename).file_stem().and_then(|s| s.to_str())
-                {
+                if let Some(file_name) = Path::new(&filename).file_stem().and_then(|s| s.to_str()) {
                   root_dir = Some(remove_part_suffix(file_name));
                 }
               }
@@ -146,8 +141,7 @@ pub fn sync_unzip(
       if !target_dir.exists() {
         warn!(
           "Root directory {:?} missing after unzip; falling back to {:?}",
-          target_dir,
-          out_dir
+          target_dir, out_dir
         );
         return Ok(UnzipFile {
           dir_name: root_dir,

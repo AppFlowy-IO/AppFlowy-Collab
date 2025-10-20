@@ -6,9 +6,9 @@ use collab_importer::zip_tool::async_zip::async_unzip;
 use collab_importer::zip_tool::sync_zip::sync_unzip;
 use tempfile::tempdir;
 use tokio_util::compat::TokioAsyncReadCompatExt;
-use zip::write::FileOptions;
 use zip::CompressionMethod;
 use zip::ZipWriter;
+use zip::write::FileOptions;
 
 const ROOT_DIR: &str = "ExportBlock-7365b89b";
 const FALLBACK_DIR: &str = "fallback";
@@ -22,7 +22,11 @@ fn sync_unzip_preserves_root_directory_with_nested_zip() -> Result<()> {
   let output_dir = temp.path().join("output");
   std::fs::create_dir_all(&output_dir)?;
 
-  let unzip_file = sync_unzip(zip_path.clone(), output_dir.clone(), Some(FALLBACK_DIR.to_string()))?;
+  let unzip_file = sync_unzip(
+    zip_path.clone(),
+    output_dir.clone(),
+    Some(FALLBACK_DIR.to_string()),
+  )?;
 
   let expected_root = output_dir.join(ROOT_DIR);
   assert_eq!(unzip_file.dir_name, ROOT_DIR);
@@ -41,7 +45,11 @@ fn sync_unzip_falls_back_when_root_directory_missing() -> Result<()> {
   let output_dir = temp.path().join("output");
   std::fs::create_dir_all(&output_dir)?;
 
-  let unzip_file = sync_unzip(zip_path.clone(), output_dir.clone(), Some(FALLBACK_DIR.to_string()))?;
+  let unzip_file = sync_unzip(
+    zip_path.clone(),
+    output_dir.clone(),
+    Some(FALLBACK_DIR.to_string()),
+  )?;
 
   assert_eq!(unzip_file.dir_name, FALLBACK_DIR);
   assert_eq!(unzip_file.unzip_dir, output_dir);
@@ -63,12 +71,21 @@ async fn async_unzip_preserves_root_directory_with_nested_zip() -> Result<()> {
   let output_dir = temp.path().join("async_output");
   tokio::fs::create_dir_all(&output_dir).await?;
 
-  let unzip_file = async_unzip(zip_reader, output_dir.clone(), Some(FALLBACK_DIR.to_string())).await?;
+  let unzip_file = async_unzip(
+    zip_reader,
+    output_dir.clone(),
+    Some(FALLBACK_DIR.to_string()),
+  )
+  .await?;
 
   let expected_root = output_dir.join(ROOT_DIR);
   assert_eq!(unzip_file.file_name, ROOT_DIR);
   assert_eq!(unzip_file.unzip_dir_path, expected_root);
-  assert!(tokio::fs::metadata(unzip_file.unzip_dir_path.clone()).await?.is_dir());
+  assert!(
+    tokio::fs::metadata(unzip_file.unzip_dir_path.clone())
+      .await?
+      .is_dir()
+  );
 
   Ok(())
 }
@@ -86,11 +103,20 @@ async fn async_unzip_falls_back_when_root_directory_missing() -> Result<()> {
   let output_dir = temp.path().join("async_output");
   tokio::fs::create_dir_all(&output_dir).await?;
 
-  let unzip_file = async_unzip(zip_reader, output_dir.clone(), Some(FALLBACK_DIR.to_string())).await?;
+  let unzip_file = async_unzip(
+    zip_reader,
+    output_dir.clone(),
+    Some(FALLBACK_DIR.to_string()),
+  )
+  .await?;
 
   assert_eq!(unzip_file.file_name, FALLBACK_DIR);
   assert_eq!(unzip_file.unzip_dir_path, output_dir);
-  assert!(tokio::fs::metadata(&unzip_file.unzip_dir_path).await?.is_dir());
+  assert!(
+    tokio::fs::metadata(&unzip_file.unzip_dir_path)
+      .await?
+      .is_dir()
+  );
 
   Ok(())
 }
