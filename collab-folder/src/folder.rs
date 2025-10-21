@@ -21,7 +21,7 @@ use crate::revision::RevisionMapping;
 use crate::section::{Section, SectionItem, SectionMap};
 use crate::{
   FolderData, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
-  ViewChangeReceiver, ViewId, ViewUpdate, ViewsMap, Workspace, impl_section_op,
+  ViewChangeReceiver, ViewId, ViewUpdate, ViewsMap, Workspace,
 };
 use collab_entity::uuid_validation::WorkspaceId;
 
@@ -253,40 +253,202 @@ impl Folder {
 
   // Section operations
   // Favorites
-  impl_section_op!(
-    Section::Favorite,
-    set_favorite,
-    add_favorite_view_ids,
-    delete_favorite_view_ids,
-    get_my_favorite_sections,
-    get_all_favorites_sections,
-    remove_all_my_favorite_sections,
-    move_favorite_view_id
-  );
+  pub fn add_favorite_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_favorite(true).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn delete_favorite_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_favorite(false).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn get_my_favorite_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Favorite, uid)
+      .map(|op| op.get_all_section_item(&txn))
+      .unwrap_or_default()
+  }
+
+  pub fn get_all_favorites_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Favorite, uid)
+      .map(|op| op.get_sections(&txn))
+      .unwrap_or_default()
+      .into_iter()
+      .flat_map(|(_user_id, items)| items)
+      .collect()
+  }
+
+  pub fn remove_all_my_favorite_sections(&mut self, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, uid) {
+      op.clear(&mut txn);
+    }
+  }
+
+  pub fn move_favorite_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, uid) {
+      op.move_section_item_with_txn(&mut txn, id, prev_id);
+    }
+  }
 
   // Trash
-  impl_section_op!(
-    Section::Trash,
-    set_trash,
-    add_trash_view_ids,
-    delete_trash_view_ids,
-    get_my_trash_sections,
-    get_all_trash_sections,
-    remove_all_my_trash_sections,
-    move_trash_view_id
-  );
+  pub fn add_trash_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_trash(true).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn delete_trash_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_trash(false).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn get_my_trash_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Trash, uid)
+      .map(|op| op.get_all_section_item(&txn))
+      .unwrap_or_default()
+  }
+
+  pub fn get_all_trash_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Trash, uid)
+      .map(|op| op.get_sections(&txn))
+      .unwrap_or_default()
+      .into_iter()
+      .flat_map(|(_user_id, items)| items)
+      .collect()
+  }
+
+  pub fn remove_all_my_trash_sections(&mut self, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, uid) {
+      op.clear(&mut txn);
+    }
+  }
+
+  pub fn move_trash_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, uid) {
+      op.move_section_item_with_txn(&mut txn, id, prev_id);
+    }
+  }
 
   // Private
-  impl_section_op!(
-    Section::Private,
-    set_private,
-    add_private_view_ids,
-    delete_private_view_ids,
-    get_my_private_sections,
-    get_all_private_sections,
-    remove_all_my_private_sections,
-    move_private_view_id
-  );
+  pub fn add_private_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_private(true).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn delete_private_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_private(false).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn get_my_private_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Private, uid)
+      .map(|op| op.get_all_section_item(&txn))
+      .unwrap_or_default()
+  }
+
+  pub fn get_all_private_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Private, uid)
+      .map(|op| op.get_sections(&txn))
+      .unwrap_or_default()
+      .into_iter()
+      .flat_map(|(_user_id, items)| items)
+      .collect()
+  }
+
+  pub fn remove_all_my_private_sections(&mut self, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Private, uid) {
+      op.clear(&mut txn);
+    }
+  }
+
+  pub fn move_private_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Private, uid) {
+      op.move_section_item_with_txn(&mut txn, id, prev_id);
+    }
+  }
 
   pub fn get_my_trash_info(&self, uid: i64) -> Vec<TrashInfo> {
     let txn = self.collab.transact();

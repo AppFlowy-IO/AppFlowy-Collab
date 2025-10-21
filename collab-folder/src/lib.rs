@@ -15,11 +15,6 @@ mod folder;
 mod relation;
 mod section;
 // mod trash;
-mod view;
-mod workspace;
-
-#[macro_use]
-mod macros;
 pub mod error;
 pub mod folder_diff;
 mod folder_migration;
@@ -27,3 +22,5 @@ mod folder_observe;
 pub mod hierarchy_builder;
 mod revision;
 pub mod space_info;
+mod view;
+mod workspace;

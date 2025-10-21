@@ -15,7 +15,6 @@ use crate::views::{
   FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap, FilterArray, FilterMap,
   GroupSettingArray, GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
 };
-use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
 pub struct ViewBuilder<'a, 'b> {
   map_ref: MapRef,
@@ -79,44 +78,219 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     self
   }
 
-  impl_str_update!(
-    set_database_id,
-    set_database_id_if_not_none,
-    VIEW_DATABASE_ID
-  );
+  pub fn set_database_id<T: AsRef<str>>(self, value: T) -> Self {
+    self
+      .map_ref
+      .try_update(self.txn, VIEW_DATABASE_ID, value.as_ref());
+    self
+  }
 
-  impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
-  impl_i64_update!(set_modified_at, set_modified_at_if_not_none, VIEW_MODIFY_AT);
-  impl_str_update!(set_name, set_name_if_not_none, VIEW_NAME);
+  pub fn set_database_id_if_not_none<T: AsRef<str>>(self, value: Option<T>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .try_update(self.txn, VIEW_DATABASE_ID, value.as_ref());
+    }
+    self
+  }
 
-  impl_any_update!(
-    set_layout_type,
-    set_layout_type_if_not_none,
-    DATABASE_VIEW_LAYOUT,
-    DatabaseLayout
-  );
+  pub fn set_created_at(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, VIEW_CREATE_AT, Any::BigInt(value));
+    self
+  }
 
-  impl_order_update!(
-    set_row_orders,
-    remove_row_order,
-    move_row_order,
-    insert_row_order,
-    iter_mut_row_order,
-    DATABASE_VIEW_ROW_ORDERS,
-    RowOrder,
-    RowOrderArray
-  );
+  pub fn set_created_at_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, VIEW_CREATE_AT, Any::BigInt(value));
+    }
+    self
+  }
 
-  impl_order_update!(
-    set_field_orders,
-    remove_field_order,
-    move_field_order,
-    insert_field_order,
-    iter_mut_field_order,
-    DATABASE_VIEW_FIELD_ORDERS,
-    FieldOrder,
-    FieldOrderArray
-  );
+  pub fn set_modified_at(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, VIEW_MODIFY_AT, Any::BigInt(value));
+    self
+  }
+
+  pub fn set_modified_at_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, VIEW_MODIFY_AT, Any::BigInt(value));
+    }
+    self
+  }
+
+  pub fn set_name<T: AsRef<str>>(self, value: T) -> Self {
+    self.map_ref.try_update(self.txn, VIEW_NAME, value.as_ref());
+    self
+  }
+
+  pub fn set_name_if_not_none<T: AsRef<str>>(self, value: Option<T>) -> Self {
+    if let Some(value) = value {
+      self.map_ref.try_update(self.txn, VIEW_NAME, value.as_ref());
+    }
+    self
+  }
+
+  pub fn set_layout_type(self, value: DatabaseLayout) -> Self {
+    self.map_ref.insert(self.txn, DATABASE_VIEW_LAYOUT, value);
+    self
+  }
+
+  pub fn set_layout_type_if_not_none(self, value: Option<DatabaseLayout>) -> Self {
+    if let Some(value) = value {
+      self.map_ref.insert(self.txn, DATABASE_VIEW_LAYOUT, value);
+    }
+    self
+  }
+
+  pub fn set_row_orders(self, orders: Vec<RowOrder>) -> Self {
+    let array_ref: ArrayRef = self.map_ref.get_or_init(self.txn, DATABASE_VIEW_ROW_ORDERS);
+    let array = RowOrderArray::new(array_ref);
+    array.extends_with_txn(self.txn, orders);
+    self
+  }
+
+  pub fn remove_row_order(self, id: &str) -> Self {
+    if let Some(array) = self
+      .map_ref
+      .get_with_txn::<_, ArrayRef>(self.txn, DATABASE_VIEW_ROW_ORDERS)
+      .map(RowOrderArray::new)
+    {
+      array.remove_with_txn(self.txn, id);
+    }
+    self
+  }
+
+  pub fn move_row_order(self, from_id: &str, to_id: &str) -> Self {
+    if let Some(array) = self
+      .map_ref
+      .get_with_txn::<_, ArrayRef>(self.txn, DATABASE_VIEW_ROW_ORDERS)
+      .map(RowOrderArray::new)
+    {
+      array.move_to(self.txn, from_id, to_id);
+    }
+    self
+  }
+
+  pub fn insert_row_order<T: Into<RowOrder>>(
+    self,
+    object: T,
+    position: &OrderObjectPosition,
+  ) -> Self {
+    let object = object.into();
+    if let Some(array) = self
+      .map_ref
+      .get_with_txn::<_, ArrayRef>(self.txn, DATABASE_VIEW_ROW_ORDERS)
+      .map(RowOrderArray::new)
+    {
+      match position {
+        OrderObjectPosition::Start => array.push_front_with_txn(self.txn, object),
+        OrderObjectPosition::Before(next_object_id) => {
+          array.insert_before_with_txn(self.txn, object, next_object_id)
+        },
+        OrderObjectPosition::After(prev_object_id) => {
+          array.insert_after_with_txn(self.txn, object, prev_object_id)
+        },
+        OrderObjectPosition::End => array.push_back_with_txn(self.txn, object),
+      };
+    }
+    self
+  }
+
+  pub fn iter_mut_row_order<F: FnMut(&mut RowOrder)>(self, mut f: F) -> Self {
+    if let Some(array) = self
+      .map_ref
+      .get_with_txn::<_, ArrayRef>(self.txn, DATABASE_VIEW_ROW_ORDERS)
+      .map(RowOrderArray::new)
+    {
+      for mut row_order in array.get_objects_with_txn(self.txn) {
+        array.remove_with_txn(self.txn, &row_order.id.to_string());
+        f(&mut row_order);
+        array.push_back(self.txn, row_order);
+      }
+    }
+
+    self
+  }
+
+  pub fn set_field_orders(self, orders: Vec<FieldOrder>) -> Self {
+    let array_ref: ArrayRef = self
+      .map_ref
+      .get_or_init(self.txn, DATABASE_VIEW_FIELD_ORDERS);
+    let array = FieldOrderArray::new(array_ref);
+    array.extends_with_txn(self.txn, orders);
+    self
+  }
+
+  pub fn remove_field_order(self, id: &str) -> Self {
+    if let Some(array) = self
+      .map_ref
+      .get_with_txn::<_, ArrayRef>(self.txn, DATABASE_VIEW_FIELD_ORDERS)
+      .map(FieldOrderArray::new)
+    {
+      array.remove_with_txn(self.txn, id);
+    }
+    self
+  }
+
+  pub fn move_field_order(self, from_id: &str, to_id: &str) -> Self {
+    if let Some(array) = self
+      .map_ref
+      .get_with_txn::<_, ArrayRef>(self.txn, DATABASE_VIEW_FIELD_ORDERS)
+      .map(FieldOrderArray::new)
+    {
+      array.move_to(self.txn, from_id, to_id);
+    }
+    self
+  }
+
+  pub fn insert_field_order<T: Into<FieldOrder>>(
+    self,
+    object: T,
+    position: &OrderObjectPosition,
+  ) -> Self {
+    let object = object.into();
+    if let Some(array) = self
+      .map_ref
+      .get_with_txn::<_, ArrayRef>(self.txn, DATABASE_VIEW_FIELD_ORDERS)
+      .map(FieldOrderArray::new)
+    {
+      match position {
+        OrderObjectPosition::Start => array.push_front_with_txn(self.txn, object),
+        OrderObjectPosition::Before(next_object_id) => {
+          array.insert_before_with_txn(self.txn, object, next_object_id)
+        },
+        OrderObjectPosition::After(prev_object_id) => {
+          array.insert_after_with_txn(self.txn, object, prev_object_id)
+        },
+        OrderObjectPosition::End => array.push_back_with_txn(self.txn, object),
+      };
+    }
+    self
+  }
+
+  pub fn iter_mut_field_order<F: FnMut(&mut FieldOrder)>(self, mut f: F) -> Self {
+    if let Some(array) = self
+      .map_ref
+      .get_with_txn::<_, ArrayRef>(self.txn, DATABASE_VIEW_FIELD_ORDERS)
+      .map(FieldOrderArray::new)
+    {
+      for mut field_order in array.get_objects_with_txn(self.txn) {
+        array.remove_with_txn(self.txn, &field_order.id.to_string());
+        f(&mut field_order);
+        array.push_back(self.txn, field_order);
+      }
+    }
+
+    self
+  }
 
   /// Set layout settings of the current view
   pub fn set_layout_settings(self, layout_settings: LayoutSettings) -> Self {

@@ -5,7 +5,6 @@ use collab::preclude::{Any, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsVal
 use crate::database::gen_field_id;
 use crate::entity::{FieldType, default_type_option_data_from_type};
 use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};
-use crate::{impl_bool_update, impl_i64_update, impl_str_update};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Field {
@@ -98,16 +97,97 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
     Self { id, map_ref, txn }
   }
 
-  impl_str_update!(set_name, set_name_if_not_none, FIELD_NAME);
-  impl_str_update!(set_icon, set_icon_if_not_none, FIELD_ICON);
-  impl_bool_update!(set_primary, set_primary_if_not_none, FIELD_PRIMARY);
-  impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
-  impl_i64_update!(set_created_at, set_created_at_if_not_none, CREATED_AT);
-  impl_i64_update!(
-    set_last_modified,
-    set_last_modified_if_not_none,
-    LAST_MODIFIED
-  );
+  pub fn set_name<T: AsRef<str>>(self, value: T) -> Self {
+    self
+      .map_ref
+      .try_update(self.txn, FIELD_NAME, value.as_ref());
+    self
+  }
+
+  pub fn set_name_if_not_none<T: AsRef<str>>(self, value: Option<T>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .try_update(self.txn, FIELD_NAME, value.as_ref());
+    }
+    self
+  }
+
+  pub fn set_icon<T: AsRef<str>>(self, value: T) -> Self {
+    self
+      .map_ref
+      .try_update(self.txn, FIELD_ICON, value.as_ref());
+    self
+  }
+
+  pub fn set_icon_if_not_none<T: AsRef<str>>(self, value: Option<T>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .try_update(self.txn, FIELD_ICON, value.as_ref());
+    }
+    self
+  }
+
+  pub fn set_primary(self, value: bool) -> Self {
+    self.map_ref.insert(self.txn, FIELD_PRIMARY, value);
+    self
+  }
+
+  pub fn set_primary_if_not_none(self, value: Option<bool>) -> Self {
+    if let Some(value) = value {
+      self.map_ref.insert(self.txn, FIELD_PRIMARY, value);
+    }
+    self
+  }
+
+  pub fn set_field_type(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, FIELD_TYPE, Any::BigInt(value));
+    self
+  }
+
+  pub fn set_field_type_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, FIELD_TYPE, Any::BigInt(value));
+    }
+    self
+  }
+
+  pub fn set_created_at(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, CREATED_AT, Any::BigInt(value));
+    self
+  }
+
+  pub fn set_created_at_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, CREATED_AT, Any::BigInt(value));
+    }
+    self
+  }
+
+  pub fn set_last_modified(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, LAST_MODIFIED, Any::BigInt(value));
+    self
+  }
+
+  pub fn set_last_modified_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, LAST_MODIFIED, Any::BigInt(value));
+    }
+    self
+  }
 
   pub fn set_type_options(self, type_options: TypeOptions) -> Self {
     let map_ref: MapRef = self.map_ref.get_or_init(self.txn, FIELD_TYPE_OPTION);

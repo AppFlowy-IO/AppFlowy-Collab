@@ -24,7 +24,6 @@ use crate::rows::{
 
 use crate::util::encoded_collab;
 use crate::views::{OrderObjectPosition, RowOrder};
-use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -514,14 +513,65 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
     }
   }
 
-  impl_bool_update!(set_visibility, set_visibility_if_not_none, ROW_VISIBILITY);
-  impl_i32_update!(set_height, set_height_at_if_not_none, ROW_HEIGHT);
-  impl_i64_update!(set_created_at, set_created_at_if_not_none, CREATED_AT);
-  impl_i64_update!(
-    set_last_modified,
-    set_last_modified_if_not_none,
-    LAST_MODIFIED
-  );
+  pub fn set_visibility(self, value: bool) -> Self {
+    self.map_ref.insert(self.txn, ROW_VISIBILITY, value);
+    self
+  }
+
+  pub fn set_visibility_if_not_none(self, value: Option<bool>) -> Self {
+    if let Some(value) = value {
+      self.map_ref.insert(self.txn, ROW_VISIBILITY, value);
+    }
+    self
+  }
+
+  pub fn set_height(self, value: i32) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, ROW_HEIGHT, Any::BigInt(value as i64));
+    self
+  }
+
+  pub fn set_height_at_if_not_none(self, value: Option<i32>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, ROW_HEIGHT, Any::BigInt(value as i64));
+    }
+    self
+  }
+
+  pub fn set_created_at(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, CREATED_AT, Any::BigInt(value));
+    self
+  }
+
+  pub fn set_created_at_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, CREATED_AT, Any::BigInt(value));
+    }
+    self
+  }
+
+  pub fn set_last_modified(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, LAST_MODIFIED, Any::BigInt(value));
+    self
+  }
+
+  pub fn set_last_modified_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, LAST_MODIFIED, Any::BigInt(value));
+    }
+    self
+  }
 
   pub fn set_database_id(self, database_id: DatabaseId) -> Self {
     self

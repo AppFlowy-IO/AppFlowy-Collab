@@ -14,11 +14,11 @@ use uuid::Uuid;
 
 use crate::folder_observe::ViewChangeSender;
 
+use crate::UserId;
 use crate::revision::RevisionMapping;
 use crate::section::{Section, SectionItem, SectionMap};
 use crate::space_info::SpaceInfo;
 use crate::{ParentChildRelations, RepeatedViewIdentifier, ViewIdentifier, subscribe_view_change};
-use crate::{UserId, impl_any_update, impl_i64_update, impl_option_i64_update, impl_str_update};
 use collab_entity::define::ViewId;
 
 pub(crate) const FOLDER_VIEW_ID: &str = "id";
@@ -651,19 +651,123 @@ pub struct ViewUpdate<'a, 'b, 'c> {
 }
 
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
-  impl_str_update!(set_name, set_name_if_not_none, FOLDER_VIEW_NAME);
-  impl_str_update!(set_bid, set_bid_if_not_none, VIEW_PARENT_ID);
-  impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
-  impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
-  impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
-  impl_option_i64_update!(set_created_by, VIEW_CREATED_BY);
-  impl_i64_update!(
-    set_last_edited_time,
-    set_last_edited_time_if_not_none,
-    VIEW_LAST_EDITED_TIME
-  );
-  impl_option_i64_update!(set_last_edited_by, VIEW_LAST_EDITED_BY);
-  impl_str_update!(set_extra, set_extra_if_not_none, VIEW_EXTRA);
+  pub fn set_name<T: AsRef<str>>(self, value: T) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, FOLDER_VIEW_NAME, value.as_ref());
+    self
+  }
+
+  pub fn set_name_if_not_none<T: AsRef<str>>(self, value: Option<T>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, FOLDER_VIEW_NAME, value.as_ref());
+    }
+    self
+  }
+
+  pub fn set_bid<T: AsRef<str>>(self, value: T) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, VIEW_PARENT_ID, value.as_ref());
+    self
+  }
+
+  pub fn set_bid_if_not_none<T: AsRef<str>>(self, value: Option<T>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, VIEW_PARENT_ID, value.as_ref());
+    }
+    self
+  }
+
+  pub fn set_desc<T: AsRef<str>>(self, value: T) -> Self {
+    self.map_ref.insert(self.txn, VIEW_DESC, value.as_ref());
+    self
+  }
+
+  pub fn set_desc_if_not_none<T: AsRef<str>>(self, value: Option<T>) -> Self {
+    if let Some(value) = value {
+      self.map_ref.insert(self.txn, VIEW_DESC, value.as_ref());
+    }
+    self
+  }
+
+  pub fn set_layout(self, value: ViewLayout) -> Self {
+    self.map_ref.insert(self.txn, VIEW_LAYOUT, value);
+    self
+  }
+
+  pub fn set_layout_if_not_none(self, value: Option<ViewLayout>) -> Self {
+    if let Some(value) = value {
+      self.map_ref.insert(self.txn, VIEW_LAYOUT, value);
+    }
+    self
+  }
+
+  pub fn set_created_at(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, VIEW_CREATE_AT, Any::BigInt(value));
+    self
+  }
+
+  pub fn set_created_at_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, VIEW_CREATE_AT, Any::BigInt(value));
+    }
+    self
+  }
+
+  pub fn set_created_by(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, VIEW_CREATED_BY, Any::BigInt(value));
+    }
+    self
+  }
+
+  pub fn set_last_edited_time(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, VIEW_LAST_EDITED_TIME, Any::BigInt(value));
+    self
+  }
+
+  pub fn set_last_edited_time_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, VIEW_LAST_EDITED_TIME, Any::BigInt(value));
+    }
+    self
+  }
+
+  pub fn set_last_edited_by(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, VIEW_LAST_EDITED_BY, Any::BigInt(value));
+    }
+    self
+  }
+
+  pub fn set_extra<T: AsRef<str>>(self, value: T) -> Self {
+    self.map_ref.insert(self.txn, VIEW_EXTRA, value.as_ref());
+    self
+  }
+
+  pub fn set_extra_if_not_none<T: AsRef<str>>(self, value: Option<T>) -> Self {
+    if let Some(value) = value {
+      self.map_ref.insert(self.txn, VIEW_EXTRA, value.as_ref());
+    }
+    self
+  }
 
   pub fn new(
     uid: UserId,
