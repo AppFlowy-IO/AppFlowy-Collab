@@ -179,7 +179,6 @@ where
             self.remove_range(encoded_update.key().as_ref(), update_end.as_ref())?;
             break;
           }
-          update_count += 1;
         }
       } else {
         tracing::error!(

@@ -114,7 +114,7 @@ pub fn insert_doc_update<'a, K, S>(
   db: &S,
   doc_id: DocID,
   object_id: &K,
-  version: Option<&CollabVersion>,
+  _version: Option<&CollabVersion>,
   value: Vec<u8>,
 ) -> Result<Vec<u8>, CollabError>
 where

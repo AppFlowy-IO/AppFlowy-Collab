@@ -9,7 +9,7 @@ use crate::error::CollabError;
 use crate::preclude::Collab;
 use std::sync::Arc;
 use tracing::trace;
-use yrs::{Doc, TransactionMut};
+use yrs::TransactionMut;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum CollabPluginType {

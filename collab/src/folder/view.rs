@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::core::collab::CollabVersion;
 use crate::preclude::{Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut};
 use anyhow::bail;
 use dashmap::DashMap;
@@ -906,7 +907,6 @@ pub struct View {
   /// The id for given parent view
   #[serde(with = "crate::preclude::serde_option_uuid")]
   pub parent_view_id: Option<ViewId>,
-  pub id: ViewId,
   /// The version of the view, used when corresponding page has been reverted to past state.
   pub version: Option<CollabVersion>,
   /// The name that display on the left sidebar
