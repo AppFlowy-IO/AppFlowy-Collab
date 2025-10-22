@@ -58,16 +58,7 @@ async-recursion = "1.1"
 sanitize-filename = "0.5.0"
 indexmap = { version = "2.3", features = ["serde"] }
 zip = "0.6.6"
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3" }
-js-sys = "0.3"
-getrandom = { version = "0.2", features = ["js"] }
-indexed_db_futures = { version = "0.4" }
-async-stream = "0.3"
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-tracing-wasm = "0.2"
+rocksdb = { version = "0.22.0", default-features = false, features = ["zstd"], optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "sync", "rt"] }
@@ -93,6 +84,3 @@ import_csv = []
 [build-dependencies]
 prost-build = "0.12"
 protoc-bin-vendored = "3.0.0"
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rocksdb = { version = "0.22.0", default-features = false, features = ["zstd"], optional = true }

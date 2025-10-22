@@ -1,11 +1,11 @@
 use crate::database::entity::FieldType;
 use std::str::FromStr;
 
-use crate::database::error::DatabaseError;
 use crate::database::rows::{Cell, new_cell_builder};
 use crate::database::template::entity::CELL_DATA;
 use crate::database::template::util::{ToCellString, TypeOptionCellData};
 use crate::entity::uuid_validation::RowId;
+use crate::error::CollabError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yrs::Any;
@@ -16,7 +16,7 @@ pub struct RelationCellData {
 }
 
 impl FromStr for RelationCellData {
-  type Err = DatabaseError;
+  type Err = CollabError;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     if s.is_empty() {
@@ -26,7 +26,7 @@ impl FromStr for RelationCellData {
     let mut ids = Vec::new();
     for id_str in s.split(", ") {
       let row_id = uuid::Uuid::parse_str(id_str).map_err(|_| {
-        DatabaseError::Internal(anyhow::anyhow!("Invalid row ID in relation: {}", id_str))
+        CollabError::Internal(anyhow::anyhow!("Invalid row ID in relation: {}", id_str))
       })?;
       ids.push(row_id);
     }

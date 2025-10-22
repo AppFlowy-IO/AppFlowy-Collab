@@ -1,9 +1,9 @@
 use crate::database::database::timestamp;
 use crate::database::entity::{CreateDatabaseParams, CreateViewParams};
-use crate::database::error::DatabaseError;
 use crate::database::fields::Field;
 use crate::database::rows::CreateRowParams;
 use crate::database::template::entity::DatabaseTemplate;
+use crate::error::CollabError;
 
 /// This trait that provides methods to extend the [TypeOption::CellData] functionalities.
 pub trait TypeOptionCellData {
@@ -16,23 +16,21 @@ pub trait ToCellString {
   fn to_cell_string(&self) -> String;
 }
 
-pub fn construct_create_database_params<T>(
-  template: T,
-) -> Result<CreateDatabaseParams, DatabaseError>
+pub fn construct_create_database_params<T>(template: T) -> Result<CreateDatabaseParams, CollabError>
 where
   T: TryInto<DatabaseTemplate>,
   <T as TryInto<DatabaseTemplate>>::Error: ToString,
 {
   let template = template
     .try_into()
-    .map_err(|err| DatabaseError::ImportData(err.to_string()))?;
+    .map_err(|err| CollabError::DatabaseImportData(err.to_string()))?;
   let params = create_database_params_from_template(template)?;
   Ok(params)
 }
 
 pub(crate) fn create_database_params_from_template(
   template: DatabaseTemplate,
-) -> Result<CreateDatabaseParams, DatabaseError> {
+) -> Result<CreateDatabaseParams, CollabError> {
   let database_id = template.database_id;
   let timestamp = timestamp();
 
@@ -53,7 +51,7 @@ pub(crate) fn create_database_params_from_template(
   let mut rows = vec![];
   for row_template in template.rows {
     let row_id = uuid::Uuid::parse_str(&row_template.row_id).map_err(|_| {
-      DatabaseError::Internal(anyhow::anyhow!("Invalid row ID: {}", row_template.row_id))
+      CollabError::Internal(anyhow::anyhow!("Invalid row ID: {}", row_template.row_id))
     })?;
     rows.push(CreateRowParams {
       id: row_id,

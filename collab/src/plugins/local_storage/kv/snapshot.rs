@@ -3,6 +3,7 @@ use std::panic;
 use std::panic::AssertUnwindSafe;
 
 use crate::entity::CollabType;
+use crate::error::CollabError;
 use crate::plugins::local_storage::kv::keys::*;
 use crate::plugins::local_storage::kv::*;
 use serde::{Deserialize, Serialize};
@@ -12,13 +13,13 @@ use yrs::{ReadTxn, Snapshot};
 impl<'a, T> SnapshotAction<'a> for T
 where
   T: KVStore<'a>,
-  PersistenceError: From<<Self as KVStore<'a>>::Error>,
+  CollabError: From<<Self as KVStore<'a>>::Error>,
 {
 }
 
 pub trait SnapshotAction<'a>: KVStore<'a> + Sized
 where
-  PersistenceError: From<<Self as KVStore<'a>>::Error>,
+  CollabError: From<<Self as KVStore<'a>>::Error>,
 {
   /// Create a snapshot for the given object id.
   /// The snapshot contains the updates prior to the given update_key. For example,
@@ -30,7 +31,7 @@ where
     object_id: &K,
     txn: &T,
     snapshot: Snapshot,
-  ) -> Result<(), PersistenceError>
+  ) -> Result<(), CollabError>
   where
     K: AsRef<[u8]> + ?Sized + Debug,
     T: ReadTxn,
@@ -61,7 +62,7 @@ where
     uid: i64,
     object_id: &K,
     snapshot_data: Vec<u8>,
-  ) -> Result<(), PersistenceError>
+  ) -> Result<(), CollabError>
   where
     K: AsRef<[u8]> + ?Sized + Debug,
   {
@@ -124,7 +125,7 @@ where
     &self,
     uid: i64,
     object_id: &K,
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<(), CollabError> {
     if let Some(snapshot_id) = get_snapshot_id(uid, self, object_id) {
       let start = make_snapshot_update_key(snapshot_id, 0);
       let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
@@ -138,7 +139,7 @@ where
     &self,
     uid: i64,
     object_id: &K,
-  ) -> Result<SnapshotID, PersistenceError> {
+  ) -> Result<SnapshotID, CollabError> {
     if let Some(snapshot_id) = get_snapshot_id(uid, self, object_id.as_ref()) {
       Ok(snapshot_id)
     } else {
@@ -165,7 +166,7 @@ where
 pub fn try_encode_snapshot<T: ReadTxn>(
   txn: &T,
   snapshot: Snapshot,
-) -> Result<Vec<u8>, PersistenceError> {
+) -> Result<Vec<u8>, CollabError> {
   let mut encoded_data = vec![];
   let result = {
     let mut wrapper = AssertUnwindSafe(&mut encoded_data);
@@ -180,7 +181,7 @@ pub fn try_encode_snapshot<T: ReadTxn>(
   };
   match result {
     Ok(_) => Ok(encoded_data),
-    Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
+    Err(e) => Err(CollabError::PersistenceInvalidData(format!("{:?}", e))),
   }
 }
 
@@ -191,7 +192,7 @@ pub trait SnapshotPersistence: Send + Sync {
     object_id: &str,
     collab_type: &CollabType,
     encoded_v1: Vec<u8>,
-  ) -> Result<(), PersistenceError>;
+  ) -> Result<(), CollabError>;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -212,7 +213,7 @@ impl CollabSnapshot {
 }
 
 impl TryFrom<&[u8]> for CollabSnapshot {
-  type Error = PersistenceError;
+  type Error = CollabError;
 
   fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
     Ok(bincode::deserialize(value)?)

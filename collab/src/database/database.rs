@@ -7,7 +7,6 @@ use anyhow::anyhow;
 
 use crate::database::blocks::{Block, BlockEvent, InitRowChan};
 use crate::database::database_state::DatabaseNotify;
-use crate::database::error::DatabaseError;
 use crate::database::fields::{
   Field, FieldChangeReceiver, FieldMap, FieldUpdate, TypeOptionCellReader, TypeOptionCellWriter,
   type_option_cell_reader, type_option_cell_writer,
@@ -26,6 +25,7 @@ use crate::database::views::{
 };
 use crate::database::workspace_database::DatabaseMeta;
 use crate::entity::uuid_validation::{RowId, try_parse_database_view_id};
+use crate::error::CollabError;
 
 use crate::database::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -101,12 +101,12 @@ pub async fn default_database_collab(
   client_id: ClientID,
   params: Option<CreateDatabaseParams>,
   context: DatabaseContext,
-) -> Result<(DatabaseBody, Collab), DatabaseError> {
+) -> Result<(DatabaseBody, Collab), CollabError> {
   let collab = Collab::new_with_options(
     CollabOrigin::Empty,
     CollabOptions::new(*database_id, client_id),
   )
-  .map_err(|e| DatabaseError::Internal(e.into()))?;
+  .map_err(|e| CollabError::Internal(e.into()))?;
   let collab = match params {
     None => DatabaseBody::create(collab, *database_id, context, vec![], vec![], vec![]).await?,
     Some(params) => {
@@ -131,12 +131,14 @@ impl Database {
   pub async fn arc_open(
     database_id: &str,
     context: DatabaseContext,
-  ) -> Result<Arc<RwLock<Self>>, DatabaseError> {
+  ) -> Result<Arc<RwLock<Self>>, CollabError> {
     if database_id.is_empty() {
-      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
+      return Err(CollabError::DatabaseInvalidId(
+        "database_id is empty".to_string(),
+      ));
     }
 
-    let object_id = Uuid::parse_str(database_id).map_err(|e| DatabaseError::Internal(e.into()))?;
+    let object_id = Uuid::parse_str(database_id).map_err(|e| CollabError::Internal(e.into()))?;
     let collab = context
       .database_collab_service
       .clone()
@@ -146,12 +148,14 @@ impl Database {
     Ok(collab)
   }
 
-  pub async fn open(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+  pub async fn open(database_id: &str, context: DatabaseContext) -> Result<Self, CollabError> {
     if database_id.is_empty() {
-      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
+      return Err(CollabError::DatabaseInvalidId(
+        "database_id is empty".to_string(),
+      ));
     }
 
-    let object_id = Uuid::parse_str(database_id).map_err(|e| DatabaseError::Internal(e.into()))?;
+    let object_id = Uuid::parse_str(database_id).map_err(|e| CollabError::Internal(e.into()))?;
     let database = context
       .database_collab_service
       .clone()
@@ -164,7 +168,7 @@ impl Database {
   pub async fn create(
     context: DatabaseContext,
     params: CreateDatabaseParams,
-  ) -> Result<Self, DatabaseError> {
+  ) -> Result<Self, CollabError> {
     trace!(
       "[Database] create {}, client_id: {}",
       params.database_id,
@@ -189,7 +193,7 @@ impl Database {
   pub async fn arc_create(
     context: DatabaseContext,
     params: CreateDatabaseParams,
-  ) -> Result<Arc<RwLock<Self>>, DatabaseError> {
+  ) -> Result<Arc<RwLock<Self>>, CollabError> {
     trace!(
       "[Database] create {}, client_id: {}",
       params.database_id,
@@ -214,7 +218,7 @@ impl Database {
     template: T,
     database_collab_service: Arc<dyn DatabaseCollabService>,
     database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
-  ) -> Result<Database, DatabaseError>
+  ) -> Result<Database, CollabError>
   where
     T: TryInto<DatabaseTemplate> + Send + Sync + 'static,
     <T as TryInto<DatabaseTemplate>>::Error: ToString,
@@ -222,10 +226,10 @@ impl Database {
     let params = tokio::task::spawn_blocking(move || {
       template
         .try_into()
-        .map_err(|err| DatabaseError::ImportData(err.to_string()))
+        .map_err(|err| CollabError::DatabaseImportData(err.to_string()))
     })
     .await
-    .map_err(|e| DatabaseError::Internal(e.into()))??
+    .map_err(|e| CollabError::Internal(e.into()))??
     .into_params()?;
 
     let context = DatabaseContext {
@@ -242,7 +246,7 @@ impl Database {
   pub async fn create_arc_with_view(
     params: CreateDatabaseParams,
     context: DatabaseContext,
-  ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
+  ) -> Result<Arc<RwLock<Database>>, CollabError> {
     let database = Self::arc_create(context, params).await?;
     Ok(database)
   }
@@ -250,12 +254,12 @@ impl Database {
   pub async fn create_with_view(
     params: CreateDatabaseParams,
     context: DatabaseContext,
-  ) -> Result<Database, DatabaseError> {
+  ) -> Result<Database, CollabError> {
     let database = Self::create(context, params).await?;
     Ok(database)
   }
 
-  pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, DatabaseError> {
+  pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, CollabError> {
     let database_id = *self.collab.object_id();
     let encoded_database_collab = EncodedCollabInfo {
       object_id: database_id,
@@ -305,7 +309,7 @@ impl Database {
     })
   }
 
-  pub fn validate(&self) -> Result<(), DatabaseError> {
+  pub fn validate(&self) -> Result<(), CollabError> {
     CollabType::Database.validate_require_data(&self.collab)?;
     Ok(())
   }
@@ -373,7 +377,7 @@ impl Database {
   }
 
   /// Return the database id with a transaction
-  pub fn get_database_id(&self) -> Result<DatabaseId, DatabaseError> {
+  pub fn get_database_id(&self) -> Result<DatabaseId, CollabError> {
     let txn = self.collab.transact();
     self.body.get_database_id(&txn)
   }
@@ -382,7 +386,7 @@ impl Database {
   /// This row will be inserted to the end of rows of each view that
   /// reference the given database. Return the row order if the row is
   /// created successfully. Otherwise, return None.
-  pub async fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
+  pub async fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, CollabError> {
     let client_id = self.collab_service.database_client_id().await;
     let params = CreateRowParamsValidator::validate(params)?;
     let row_order = self.body.block.create_new_row(params, client_id).await?;
@@ -425,7 +429,7 @@ impl Database {
     &mut self,
     view_id: &str,
     params: CreateRowParams,
-  ) -> Result<(usize, RowOrder), DatabaseError> {
+  ) -> Result<(usize, RowOrder), CollabError> {
     let client_id = self.collab_service.database_client_id().await;
     let row_position = params.row_position.clone();
     let row_order = self.body.create_row(params, client_id).await?;
@@ -497,7 +501,7 @@ impl Database {
   }
 
   /// Return the [Row] with the given row id.
-  pub async fn get_row(&self, row_id: &RowId) -> Result<Row, DatabaseError> {
+  pub async fn get_row(&self, row_id: &RowId) -> Result<Row, CollabError> {
     let row = self.body.block.get_database_row(row_id).await;
     let database_id = self.get_database_id()?;
     match row {
@@ -550,7 +554,7 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> BoxStream<'a, Result<Arc<RwLock<DatabaseRow>>, DatabaseError>> {
+  ) -> BoxStream<'a, Result<Arc<RwLock<DatabaseRow>>, CollabError>> {
     let row_ids_chunk_stream = stream::iter(
       row_ids
         .into_iter()
@@ -568,7 +572,7 @@ impl Database {
         async move {
           if let Some(ref token) = cancel_token {
             if token.is_cancelled() {
-              return Err(DatabaseError::ActionCancelled);
+              return Err(CollabError::DatabaseActionCancelled);
             }
           }
 
@@ -618,7 +622,7 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> Result<BoxStream<'_, Result<Row, DatabaseError>>, DatabaseError> {
+  ) -> Result<BoxStream<'_, Result<Row, CollabError>>, CollabError> {
     let row_orders = self.get_row_orders_for_view(view_id);
     self
       .get_rows_from_row_orders(row_orders, chunk_size, cancel_token, auto_fetch)
@@ -655,7 +659,7 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> Result<BoxStream<'_, Result<Row, DatabaseError>>, DatabaseError> {
+  ) -> Result<BoxStream<'_, Result<Row, CollabError>>, CollabError> {
     let row_ids = row_orders.iter().map(|order| order.id).collect();
     let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token, auto_fetch);
     let database_id = self.get_database_id()?;
@@ -1352,7 +1356,7 @@ impl Database {
   }
 
   /// Create a linked view to existing database
-  pub fn create_linked_view(&mut self, params: CreateViewParams) -> Result<(), DatabaseError> {
+  pub fn create_linked_view(&mut self, params: CreateViewParams) -> Result<(), CollabError> {
     let mut txn = self.collab.transact_mut();
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let inline_view_id = self.body.parse_view_id(&inline_view_id)?;
@@ -1397,7 +1401,7 @@ impl Database {
   pub async fn duplicate_row(
     &self,
     row_id: &RowId,
-  ) -> Result<Option<CreateRowParams>, DatabaseError> {
+  ) -> Result<Option<CreateRowParams>, CollabError> {
     let database_id = self.get_database_id()?;
     let Some(database_row) = self.body.block.get_database_row(row_id).await else {
       return Ok(None);
@@ -1456,7 +1460,7 @@ impl Database {
     &self,
     chunk_size: usize,
     auto_fetch: bool,
-  ) -> Result<DatabaseData, DatabaseError> {
+  ) -> Result<DatabaseData, CollabError> {
     let txn = self.collab.transact();
 
     let database_id = self.body.get_database_id(&txn)?;
@@ -1491,7 +1495,7 @@ impl Database {
     self.body.views.get_view(&txn, &view_id)
   }
 
-  pub async fn to_json_value(&self) -> Result<JsonValue, DatabaseError> {
+  pub async fn to_json_value(&self) -> Result<JsonValue, CollabError> {
     let database_data = self.get_database_data(20, false).await?;
     Ok(serde_json::to_value(&database_data).unwrap())
   }
@@ -1501,7 +1505,7 @@ impl Database {
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
     auto_fetch: bool,
-  ) -> Result<BoxStream<'_, Result<Row, DatabaseError>>, DatabaseError> {
+  ) -> Result<BoxStream<'_, Result<Row, CollabError>>, CollabError> {
     let row_orders = {
       let txn = self.collab.transact();
       let inline_view_id = self.body.get_inline_view_id(&txn);
@@ -1519,7 +1523,7 @@ impl Database {
   pub async fn collect_all_rows(
     &self,
     auto_fetch: bool,
-  ) -> Result<Vec<Result<Row, DatabaseError>>, DatabaseError> {
+  ) -> Result<Vec<Result<Row, CollabError>>, CollabError> {
     let rows_stream = self.get_all_rows(20, None, auto_fetch).await?;
     Ok(rows_stream.collect::<Vec<_>>().await)
   }
@@ -1628,7 +1632,7 @@ pub fn gen_row_id() -> crate::entity::uuid_validation::RowId {
 
 pub fn get_row_document_id(
   row_id: &crate::entity::uuid_validation::RowId,
-) -> Result<String, DatabaseError> {
+) -> Result<String, CollabError> {
   Ok(meta_id_from_row_id(row_id, RowMetaKey::DocumentId))
 }
 
@@ -1669,21 +1673,21 @@ pub struct DatabaseData {
 }
 
 impl DatabaseData {
-  pub fn to_json(&self) -> Result<String, DatabaseError> {
+  pub fn to_json(&self) -> Result<String, CollabError> {
     let s = serde_json::to_string(self)?;
     Ok(s)
   }
 
-  pub fn from_json(json: &str) -> Result<Self, DatabaseError> {
+  pub fn from_json(json: &str) -> Result<Self, CollabError> {
     let database = serde_json::from_str(json)?;
     Ok(database)
   }
 
-  pub fn to_json_bytes(&self) -> Result<Vec<u8>, DatabaseError> {
+  pub fn to_json_bytes(&self) -> Result<Vec<u8>, CollabError> {
     Ok(self.to_json()?.as_bytes().to_vec())
   }
 
-  pub fn from_json_bytes(json: Vec<u8>) -> Result<Self, DatabaseError> {
+  pub fn from_json_bytes(json: Vec<u8>) -> Result<Self, CollabError> {
     let database = serde_json::from_slice(&json)?;
     Ok(database)
   }
@@ -1710,21 +1714,21 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   )
 }
 
-pub fn reset_inline_view_id<F>(collab: &mut Collab, f: F) -> Result<(), DatabaseError>
+pub fn reset_inline_view_id<F>(collab: &mut Collab, f: F) -> Result<(), CollabError>
 where
   F: FnOnce(String) -> String,
 {
   let mut txn = collab.context.transact_mut();
   if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
     let map = MetaMap::new(container);
-    let inline_view_id = map.get_inline_view_id(&txn).ok_or_else(|| {
-      DatabaseError::NoRequiredData("Can not find the inline view id".to_string())
-    })?;
+    let inline_view_id = map
+      .get_inline_view_id(&txn)
+      .ok_or_else(|| CollabError::NoRequiredData("Can not find the inline view id".to_string()))?;
     let new_inline_view_id = f(inline_view_id);
     map.set_inline_view_id(&mut txn, &new_inline_view_id);
     Ok(())
   } else {
-    Err(DatabaseError::NoRequiredData(
+    Err(CollabError::NoRequiredData(
       "Can not find the database metas".to_string(),
     ))
   }
@@ -1790,14 +1794,14 @@ pub struct DatabaseBody {
 }
 
 impl DatabaseBody {
-  pub fn open(collab: Collab, context: DatabaseContext) -> Result<(Self, Collab), DatabaseError> {
+  pub fn open(collab: Collab, context: DatabaseContext) -> Result<(Self, Collab), CollabError> {
     CollabType::Database.validate_require_data(&collab)?;
     let body = Self::from_collab(
       &collab,
       context.database_row_collab_service,
       Some(context.notifier),
     )
-    .ok_or_else(|| DatabaseError::NoRequiredData("Can not open database".to_string()))?;
+    .ok_or_else(|| CollabError::NoRequiredData("Can not open database".to_string()))?;
     Ok((body, collab))
   }
 
@@ -1808,7 +1812,7 @@ impl DatabaseBody {
     new_rows: Vec<CreateRowParams>,
     new_fields: Vec<Field>,
     new_views: Vec<CreateViewParams>,
-  ) -> Result<(Self, Collab), DatabaseError> {
+  ) -> Result<(Self, Collab), CollabError> {
     let origin = collab.origin().clone();
     let mut txn = collab.context.transact_mut();
     let root: MapRef = collab.data.get_or_init(&mut txn, DATABASE);
@@ -1962,13 +1966,13 @@ impl DatabaseBody {
     inline_view_id
   }
 
-  pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> Result<DatabaseId, DatabaseError> {
+  pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> Result<DatabaseId, CollabError> {
     let database_id_str: String = self
       .root
       .get_with_txn(txn, DATABASE_ID)
-      .ok_or_else(|| DatabaseError::Internal(anyhow!("Database ID not found")))?;
+      .ok_or_else(|| CollabError::Internal(anyhow!("Database ID not found")))?;
     crate::entity::uuid_validation::try_parse_database_id(&database_id_str).ok_or_else(|| {
-      DatabaseError::Internal(anyhow!("Invalid database ID format: {}", database_id_str))
+      CollabError::Internal(anyhow!("Invalid database ID format: {}", database_id_str))
     })
   }
 
@@ -1979,7 +1983,7 @@ impl DatabaseBody {
     &self,
     params: CreateRowParams,
     client_id: ClientID,
-  ) -> Result<RowOrder, DatabaseError> {
+  ) -> Result<RowOrder, CollabError> {
     let row_order = self.block.create_new_row(params, client_id).await?;
     Ok(row_order)
   }
@@ -2165,7 +2169,7 @@ impl DatabaseBody {
     params: CreateViewParams,
     field_orders: Vec<FieldOrder>,
     row_orders: Vec<RowOrder>,
-  ) -> Result<(), DatabaseError> {
+  ) -> Result<(), CollabError> {
     let params = CreateViewParamsValidator::validate(params)?;
     let database_id = self.get_database_id(txn)?;
     let view = DatabaseView {
@@ -2199,7 +2203,7 @@ impl DatabaseBody {
     params: CreateViewParams,
     field_orders: Vec<FieldOrder>,
     row_orders: Vec<RowOrder>,
-  ) -> Result<(), DatabaseError> {
+  ) -> Result<(), CollabError> {
     let mut params = CreateViewParamsValidator::validate(params)?;
     let (deps_fields, deps_field_settings) = params.take_deps_fields();
 
@@ -2225,9 +2229,9 @@ impl DatabaseBody {
   }
 
   /// Helper function to safely convert string view ID to DatabaseViewId
-  fn parse_view_id(&self, view_id: &str) -> Result<DatabaseViewId, DatabaseError> {
+  fn parse_view_id(&self, view_id: &str) -> Result<DatabaseViewId, CollabError> {
     try_parse_database_view_id(view_id).ok_or_else(|| {
-      DatabaseError::InvalidDatabaseViewId(format!("Invalid UUID format for view_id: {}", view_id))
+      CollabError::DatabaseInvalidViewId(format!("Invalid UUID format for view_id: {}", view_id))
     })
   }
 }
@@ -2235,7 +2239,7 @@ impl DatabaseBody {
 pub fn try_fixing_database(
   collab: &mut Collab,
   database_meta: DatabaseMeta,
-) -> Result<(), DatabaseError> {
+) -> Result<(), CollabError> {
   // check if inline view id
   let inline_view_id = {
     let txn = collab.context.transact();

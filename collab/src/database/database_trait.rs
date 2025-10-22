@@ -4,7 +4,6 @@ use crate::core::collab::{CollabOptions, DataSource};
 use crate::core::collab_plugin::CollabPersistence;
 use crate::core::origin::CollabOrigin;
 use crate::database::entity::CreateDatabaseParams;
-use crate::database::error::DatabaseError;
 use crate::database::rows::{DatabaseRow, Row, RowChangeSender, default_database_row_from_row};
 use crate::entity::CollabType;
 use crate::entity::EncodedCollab;
@@ -59,7 +58,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     is_new: bool,
     data: Option<DatabaseDataVariant>,
     context: DatabaseContext,
-  ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
+  ) -> Result<Arc<RwLock<Database>>, CollabError> {
     let database = self
       .build_database(object_id, is_new, data, context)
       .await?;
@@ -72,13 +71,13 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     is_new: bool,
     data: Option<DatabaseDataVariant>,
     context: DatabaseContext,
-  ) -> Result<Database, DatabaseError>;
+  ) -> Result<Database, CollabError>;
 
   async fn build_workspace_database_collab(
     &self,
     object_id: &ObjectId,
     encoded_collab: Option<EncodedCollab>,
-  ) -> Result<Collab, DatabaseError>;
+  ) -> Result<Collab, CollabError>;
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
 }
@@ -92,21 +91,21 @@ pub trait DatabaseRowCollabService: Send + Sync + 'static {
     row_id: &RowId,
     data: DatabaseRowDataVariant,
     sender: Option<RowChangeSender>,
-  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError>;
+  ) -> Result<Arc<RwLock<DatabaseRow>>, CollabError>;
 
   async fn build_arc_database_row(
     &self,
     row_id: &RowId,
     data: Option<DatabaseRowDataVariant>,
     sender: Option<RowChangeSender>,
-  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError>;
+  ) -> Result<Arc<RwLock<DatabaseRow>>, CollabError>;
 
   async fn batch_build_arc_database_row(
     &self,
     row_ids: &[RowId],
     sender: Option<RowChangeSender>,
     auto_fetch: bool,
-  ) -> Result<HashMap<RowId, Arc<RwLock<DatabaseRow>>>, DatabaseError>;
+  ) -> Result<HashMap<RowId, Arc<RwLock<DatabaseRow>>>, CollabError>;
 }
 
 #[async_trait]
@@ -117,13 +116,13 @@ pub trait DatabaseCollabReader: Send + Sync + 'static {
     &self,
     object_id: &ObjectId,
     collab_type: CollabType,
-  ) -> Result<EncodedCollab, DatabaseError>;
+  ) -> Result<EncodedCollab, CollabError>;
 
   async fn reader_batch_get_collabs(
     &self,
     object_ids: Vec<ObjectId>,
     collab_type: CollabType,
-  ) -> Result<EncodeCollabByOid, DatabaseError>;
+  ) -> Result<EncodeCollabByOid, CollabError>;
 
   fn reader_persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
     None
@@ -147,7 +146,7 @@ where
     _is_new: bool,
     data: Option<DatabaseDataVariant>,
     context: DatabaseContext,
-  ) -> Result<Database, DatabaseError> {
+  ) -> Result<Database, CollabError> {
     let client_id = self.reader_client_id().await;
     let collab_service = context.database_collab_service.clone();
     let collab_type = CollabType::Database;
@@ -182,7 +181,7 @@ where
     &self,
     object_id: &ObjectId,
     encoded_collab: Option<EncodedCollab>,
-  ) -> Result<Collab, DatabaseError> {
+  ) -> Result<Collab, CollabError> {
     let collab_type = CollabType::WorkspaceDatabase;
     let client_id = self.reader_client_id().await;
     match encoded_collab {
@@ -219,7 +218,7 @@ where
     row_id: &RowId,
     data: DatabaseRowDataVariant,
     sender: Option<RowChangeSender>,
-  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
+  ) -> Result<Arc<RwLock<DatabaseRow>>, CollabError> {
     let client_id = self.reader_client_id().await;
     let collab_type = CollabType::DatabaseRow;
     let data = data.into_encode_collab(client_id);
@@ -241,7 +240,7 @@ where
     row_id: &RowId,
     data: Option<DatabaseRowDataVariant>,
     sender: Option<RowChangeSender>,
-  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
+  ) -> Result<Arc<RwLock<DatabaseRow>>, CollabError> {
     if let Some(cache) = self.database_row_cache() {
       if let Some(cached_row) = cache.get(row_id) {
         return Ok(cached_row.clone());
@@ -269,7 +268,7 @@ where
     row_ids: &[RowId],
     sender: Option<RowChangeSender>,
     _auto_fetch: bool,
-  ) -> Result<HashMap<RowId, Arc<RwLock<DatabaseRow>>>, DatabaseError> {
+  ) -> Result<HashMap<RowId, Arc<RwLock<DatabaseRow>>>, CollabError> {
     let mut result = HashMap::new();
     let mut uncached_row_ids = Vec::new();
 
@@ -308,7 +307,7 @@ where
                 sender,
               )
               .await?;
-            Ok::<_, DatabaseError>((row_id, database_row))
+            Ok::<_, CollabError>((row_id, database_row))
           }
         });
 
@@ -330,7 +329,7 @@ async fn build_collab(
   object_id: &ObjectId,
   _object_type: CollabType,
   encoded_collab: EncodedCollab,
-) -> Result<Collab, DatabaseError> {
+) -> Result<Collab, CollabError> {
   let options = CollabOptions::new(*object_id, client_id).with_data_source(encoded_collab.into());
   Ok(Collab::new_with_options(CollabOrigin::Empty, options).unwrap())
 }
@@ -367,8 +366,8 @@ impl DatabaseCollabReader for NoPersistenceDatabaseCollabService {
     &self,
     object_id: &ObjectId,
     _collab_type: CollabType,
-  ) -> Result<EncodedCollab, DatabaseError> {
-    Err(DatabaseError::Internal(anyhow!(
+  ) -> Result<EncodedCollab, CollabError> {
+    Err(CollabError::Internal(anyhow!(
       "No persistence service available to get collab for {}",
       object_id
     )))
@@ -378,7 +377,7 @@ impl DatabaseCollabReader for NoPersistenceDatabaseCollabService {
     &self,
     object_ids: Vec<ObjectId>,
     collab_type: CollabType,
-  ) -> Result<EncodeCollabByOid, DatabaseError> {
+  ) -> Result<EncodeCollabByOid, CollabError> {
     let map: HashMap<ObjectId, _> = object_ids
       .into_par_iter()
       .filter_map(|object_id| {
@@ -386,14 +385,14 @@ impl DatabaseCollabReader for NoPersistenceDatabaseCollabService {
         let options = CollabOptions::new(object_id, self.client_id)
           .with_data_source(CollabPersistenceImpl { persistence }.into());
         let result = Collab::new_with_options(CollabOrigin::Empty, options)
-          .map_err(|err| DatabaseError::Internal(err.into()))
+          .map_err(|err| CollabError::Internal(err.into()))
           .and_then(|collab| {
             collab
               .encode_collab_v1(|collab| {
                 collab_type.validate_require_data(collab)?;
                 Ok(())
               })
-              .map_err(DatabaseError::Internal)
+              .map_err(CollabError::Internal)
           });
 
         match result {
@@ -417,7 +416,7 @@ pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
     &self,
     object_id: &ObjectId,
     encoded_collab: EncodedCollab,
-  ) -> Result<(), DatabaseError>;
+  ) -> Result<(), CollabError>;
 
   fn get_encoded_collab(
     &self,
@@ -425,7 +424,7 @@ pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
     collab_type: CollabType,
   ) -> Option<EncodedCollab>;
 
-  fn delete_collab(&self, object_id: &ObjectId) -> Result<(), DatabaseError>;
+  fn delete_collab(&self, object_id: &ObjectId) -> Result<(), CollabError>;
 
   fn is_collab_exist(&self, object_id: &ObjectId) -> bool;
 }

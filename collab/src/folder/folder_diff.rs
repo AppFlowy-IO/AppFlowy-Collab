@@ -11,7 +11,6 @@ use crate::preclude::{
 use arc_swap::ArcSwapOption;
 
 use super::Folder;
-use super::error::FolderError;
 use super::view::FOLDER_VIEW_ID;
 
 impl Folder {
@@ -19,14 +18,14 @@ impl Folder {
     &self,
     encoded_collab: EncodedCollab,
     client_id: ClientID,
-  ) -> Result<Vec<FolderViewChange>, FolderError> {
+  ) -> Result<Vec<FolderViewChange>, CollabError> {
     //TODO: this entire method should be reimplemented into standard diff comparison
     let changes = Arc::new(ArcSwapOption::default());
     let this_txn = self.collab.transact();
     let workspace_id = self
       .body
       .get_workspace_id(&this_txn)
-      .ok_or_else(|| FolderError::NoRequiredData("workspace id".to_string()))?;
+      .ok_or_else(|| CollabError::FolderMissingRequiredData("workspace id".to_string()))?;
 
     let mut other = Folder::from_collab_doc_state(
       CollabOrigin::Empty,
@@ -78,7 +77,7 @@ impl Folder {
       let mut other_txn = other.collab.transact_mut();
       let sv = other_txn.state_vector();
       let data = this_txn.encode_state_as_update_v1(&sv);
-      let update = Update::decode_v1(&data).map_err(|err| FolderError::Internal(err.into()))?;
+      let update = Update::decode_v1(&data).map_err(|err| CollabError::Internal(err.into()))?;
 
       other_txn
         .apply_update(update)

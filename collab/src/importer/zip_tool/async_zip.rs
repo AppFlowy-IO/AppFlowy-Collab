@@ -19,7 +19,7 @@ use tokio::fs::{OpenOptions, create_dir_all};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
-use crate::importer::error::ImporterError;
+use crate::error::CollabError;
 use crate::importer::zip_tool::util::{
   has_multi_part_extension, has_multi_part_suffix, is_multi_part_zip_signature, remove_part_suffix,
   sanitize_file_path,
@@ -37,7 +37,7 @@ pub async fn async_unzip<R>(
   mut zip_reader: ZipFileReader<Ready<R>>,
   out_dir: PathBuf,
   default_file_name: Option<String>,
-) -> Result<UnzipFile, ImporterError>
+) -> Result<UnzipFile, CollabError>
 where
   R: AsyncBufRead + Unpin,
 {
@@ -106,7 +106,7 @@ where
                   entry_reader.entry(),
                   err,
                 );
-                return Err(ImporterError::Internal(anyhow!(
+                return Err(CollabError::Internal(anyhow!(
                   "Unexpected EOF while reading: {}",
                   filename
                 )));
@@ -140,7 +140,7 @@ where
   // move all unzip file content into parent
   match root_dir {
     None => match default_file_name {
-      None => Err(ImporterError::FileNotFound),
+      None => Err(CollabError::ImporterFileNotFound),
       Some(default_file_name) => {
         if fs::metadata(&out_dir).await.is_err() {
           fs::create_dir_all(&out_dir)
@@ -198,18 +198,18 @@ pub async fn unzip_single_file(
   archive: File,
   out_dir: &Path,
   mut root_dir: Option<String>,
-) -> Result<UnzipFile, ImporterError> {
+) -> Result<UnzipFile, CollabError> {
   let archive = BufReader::new(archive).compat();
   let mut reader = SeekZipFileReader::new(archive)
     .await
-    .map_err(|err| ImporterError::Internal(err.into()))?;
+    .map_err(|err| CollabError::Internal(err.into()))?;
 
   for index in 0..reader.file().entries().len() {
     let entry = reader.file().entries().get(index).unwrap();
     let file_name = entry
       .filename()
       .as_str()
-      .map_err(|err| ImporterError::Internal(err.into()))?;
+      .map_err(|err| CollabError::Internal(err.into()))?;
     if root_dir.is_none() && file_name.ends_with('/') {
       root_dir = Some(file_name.split('/').next().unwrap_or(file_name).to_string());
     }
@@ -221,11 +221,11 @@ pub async fn unzip_single_file(
     // https://github.com/python/cpython/blob/820ef62833bd2d84a141adedd9a05998595d6b6d/Lib/zipfile.py#L528
     let entry_is_dir = entry
       .dir()
-      .map_err(|err| ImporterError::Internal(err.into()))?;
+      .map_err(|err| CollabError::Internal(err.into()))?;
     let mut entry_reader = reader
       .reader_without_entry(index)
       .await
-      .map_err(|err| ImporterError::Internal(err.into()))?;
+      .map_err(|err| CollabError::Internal(err.into()))?;
 
     if entry_is_dir {
       if !path.exists() {
@@ -248,7 +248,7 @@ pub async fn unzip_single_file(
     }
   }
   match root_dir {
-    None => Err(ImporterError::FileNotFound),
+    None => Err(CollabError::ImporterFileNotFound),
     Some(root_dir) => Ok(UnzipFile {
       file_name: root_dir.clone(),
       unzip_dir_path: out_dir.join(root_dir),

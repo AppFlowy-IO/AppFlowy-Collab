@@ -1,6 +1,6 @@
 use crate::entity::CollabType;
 use crate::entity::EncodedCollab;
-use crate::importer::error::ImporterError;
+use crate::error::CollabError;
 use crate::importer::notion::NotionImporter;
 use crate::importer::notion::page::CollabResource;
 use crate::importer::util::{Either, unzip_from_path_or_memory};
@@ -17,9 +17,9 @@ pub async fn import_notion_zip_file(
   workspace_id: &str,
   zip_file: PathBuf,
   output_dir: PathBuf,
-) -> Result<RepeatedImportedCollabInfo, ImporterError> {
+) -> Result<RepeatedImportedCollabInfo, CollabError> {
   if !zip_file.exists() {
-    return Err(ImporterError::FileNotFound);
+    return Err(CollabError::ImporterFileNotFound);
   }
 
   let unzip_file = unzip_from_path_or_memory(Either::Left(zip_file), output_dir).await?;

@@ -3,8 +3,8 @@ use crate::database::views::{DatabaseLayout, LayoutSettings};
 use crate::entity::uuid_validation::{DatabaseId, DatabaseViewId};
 use crate::preclude::Any;
 
-use crate::database::error::DatabaseError;
 use crate::database::template::util::create_database_params_from_template;
+use crate::error::CollabError;
 use std::collections::HashMap;
 
 pub const CELL_DATA: &str = "data";
@@ -17,7 +17,7 @@ pub struct DatabaseTemplate {
 }
 
 impl DatabaseTemplate {
-  pub fn into_params(self) -> Result<CreateDatabaseParams, DatabaseError> {
+  pub fn into_params(self) -> Result<CreateDatabaseParams, CollabError> {
     create_database_params_from_template(self)
   }
 }

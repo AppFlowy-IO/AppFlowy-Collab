@@ -5,7 +5,7 @@ use super::super::{
   ParseResult,
 };
 use crate::document::blocks::{Block, BlockType};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 
 /// Parse the numbered list block.
 ///
@@ -18,7 +18,7 @@ pub struct NumberedListParser;
 const NUMBER_KEY: &str = "number";
 
 impl BlockParser for NumberedListParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, CollabError> {
     let text_extractor = DefaultDocumentTextExtractor;
     let content = text_extractor.extract_text_from_block(block, context)?;
 

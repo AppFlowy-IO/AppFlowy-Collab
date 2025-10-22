@@ -1,9 +1,10 @@
 use std::fmt::Debug;
 
 use crate::document::{
-  DocumentError, DocumentParser,
+  DocumentParser,
   blocks::{Block, DocumentData},
 };
+use crate::error::CollabError;
 use crate::preclude::Attrs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,7 +136,7 @@ impl ParseResult {
 }
 
 pub trait BlockParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError>;
+  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, CollabError>;
 
   fn block_type(&self) -> &'static str;
 

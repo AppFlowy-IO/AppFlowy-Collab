@@ -4,8 +4,6 @@ use lazy_static::lazy_static;
 use std::cmp;
 use std::sync::{Arc, atomic};
 
-use crate::{if_native, if_wasm};
-
 //    scope        system time since epoch         node id sequence number
 //   |<-2->| <-----------------41--------------->| <--8--> |<----12---->|
 //           101010100000011010101111101100101000
@@ -93,19 +91,12 @@ impl DocIDGen {
     }
   }
 
-  if_wasm! {
-     fn timestamp() -> u64 {
-      js_sys::Date::now() as u64 - Self::EPOCH
-     }
-  }
-
-  if_native! {
-    fn timestamp() -> u64 {
-      std::time::SystemTime::now()
+  fn timestamp() -> u64 {
+    std::time::SystemTime::now()
       .duration_since(std::time::SystemTime::UNIX_EPOCH)
       .expect("Clock moved backwards!")
-      .as_millis() as u64 - Self::EPOCH
-    }
+      .as_millis() as u64
+      - Self::EPOCH
   }
 }
 

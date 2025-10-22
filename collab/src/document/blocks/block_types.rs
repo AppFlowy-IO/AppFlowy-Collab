@@ -2,7 +2,7 @@ use std::{fmt::Display, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 
-use super::super::error::DocumentError;
+use crate::error::CollabError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum BlockType {
@@ -119,7 +119,7 @@ impl BlockType {
 }
 
 impl FromStr for BlockType {
-  type Err = DocumentError;
+  type Err = CollabError;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     Ok(Self::from_block_ty(s))

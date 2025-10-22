@@ -17,10 +17,10 @@ use crate::util::AnyExt;
 
 use crate::database::database::timestamp;
 
-use crate::database::error::DatabaseError;
 use crate::database::rows::{
   Cell, Cells, CellsUpdate, RowChangeSender, RowMeta, RowMetaUpdate, subscribe_row_data_change,
 };
+use crate::error::CollabError;
 
 use crate::core::collab::CollabOptions;
 use crate::core::origin::CollabOrigin;
@@ -48,14 +48,14 @@ pub struct DatabaseRow {
 pub fn default_database_row_from_row(row: Row, client_id: ClientID) -> EncodedCollab {
   let collab = default_database_row_collab(row, client_id);
   collab
-    .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
+    .encode_collab_v1(|_collab| Ok::<_, CollabError>(()))
     .unwrap()
 }
 
 pub fn default_database_row_data(row: Row, client_id: ClientID) -> EncodedCollab {
   let collab = default_database_row_collab(row, client_id);
   collab
-    .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
+    .encode_collab_v1(|_collab| Ok::<_, CollabError>(()))
     .unwrap()
 }
 
@@ -79,7 +79,7 @@ impl DatabaseRow {
     row_id: RowId,
     mut collab: Collab,
     change_tx: Option<RowChangeSender>,
-  ) -> Result<Self, DatabaseError> {
+  ) -> Result<Self, CollabError> {
     let body = DatabaseRowBody::open(row_id, &mut collab)?;
     if let Some(change_tx) = change_tx {
       subscribe_row_data_change(row_id, &body.data, change_tx);
@@ -108,12 +108,12 @@ impl DatabaseRow {
     }
   }
 
-  pub fn encoded_collab(&self) -> Result<EncodedCollab, DatabaseError> {
+  pub fn encoded_collab(&self) -> Result<EncodedCollab, CollabError> {
     let row_encoded = encoded_collab(&self.collab, &CollabType::DatabaseRow)?;
     Ok(row_encoded)
   }
 
-  pub fn validate(&self) -> Result<(), DatabaseError> {
+  pub fn validate(&self) -> Result<(), CollabError> {
     CollabType::DatabaseRow.validate_require_data(&self.collab)?;
     Ok(())
   }
@@ -213,7 +213,7 @@ pub struct DatabaseRowBody {
 }
 
 impl DatabaseRowBody {
-  pub fn open(row_id: RowId, collab: &mut Collab) -> Result<Self, DatabaseError> {
+  pub fn open(row_id: RowId, collab: &mut Collab) -> Result<Self, CollabError> {
     CollabType::DatabaseRow.validate_require_data(collab)?;
     Ok(Self::create_with_data(row_id, collab, None))
   }
@@ -271,7 +271,7 @@ impl DatabaseRowBody {
     &mut self,
     txn: &mut TransactionMut,
     new_row_id: RowId,
-  ) -> Result<(), DatabaseError> {
+  ) -> Result<(), CollabError> {
     self.update(txn, |update| {
       update.set_row_id(new_row_id);
     });
@@ -281,7 +281,7 @@ impl DatabaseRowBody {
 
   /// Attempts to get the document id for the row.
   /// Returns None if there is no document.
-  pub fn document_id<T: ReadTxn>(&self, txn: &T) -> Result<Option<String>, DatabaseError> {
+  pub fn document_id<T: ReadTxn>(&self, txn: &T) -> Result<Option<String>, CollabError> {
     let row_uuid = self.row_id;
     let is_doc_empty_key = meta_id_from_row_id(&row_uuid, RowMetaKey::IsDocumentEmpty);
     let is_doc_empty = self.meta.get(txn, &is_doc_empty_key);
@@ -708,7 +708,7 @@ pub struct CreateRowParams {
 pub(crate) struct CreateRowParamsValidator;
 
 impl CreateRowParamsValidator {
-  pub(crate) fn validate(mut params: CreateRowParams) -> Result<CreateRowParams, DatabaseError> {
+  pub(crate) fn validate(mut params: CreateRowParams) -> Result<CreateRowParams, CollabError> {
     // RowId is always valid since it's a UUID type
 
     let timestamp = timestamp();

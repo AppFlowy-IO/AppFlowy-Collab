@@ -3,7 +3,7 @@ use super::delta::Delta;
 use super::util::*;
 use crate::document::blocks::{Block, BlockType, DocumentData, DocumentMeta};
 use crate::document::document_data::generate_id;
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 use markdown::mdast::AlignKind;
 use markdown::{Constructs, ParseOptions, mdast, to_mdast};
 use serde_json::Value;
@@ -46,9 +46,9 @@ impl MDImporter {
     }
   }
 
-  pub fn import(&self, document_id: &str, md: String) -> Result<DocumentData, DocumentError> {
+  pub fn import(&self, document_id: &str, md: String) -> Result<DocumentData, CollabError> {
     let md_node =
-      to_mdast(&md, &self.parse_options).map_err(|_| DocumentError::ParseMarkdownError)?;
+      to_mdast(&md, &self.parse_options).map_err(|_| CollabError::DocumentParseMarkdown)?;
 
     let mut document_data = DocumentData {
       page_id: document_id.to_string(),

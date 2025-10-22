@@ -1,9 +1,10 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Weak};
 
+use crate::error::CollabError;
 use crate::plugins::local_storage::kv::doc::CollabKVAction;
 use crate::plugins::local_storage::kv::snapshot::SnapshotPersistence;
-use crate::plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
+use crate::plugins::local_storage::kv::KVTransactionDB;
 use crate::plugins::CollabKVDB;
 use crate::preclude::Collab;
 use crate::entity::CollabType;
@@ -99,8 +100,8 @@ impl CollabSnapshot {
     object_id: String,
     collab_type: CollabType,
     state: Arc<AtomicU8>,
-  ) -> Result<(), PersistenceError> {
-    let result: Result<(), PersistenceError> = tokio::task::spawn_blocking(move || {
+  ) -> Result<(), CollabError> {
+    let result: Result<(), CollabError> = tokio::task::spawn_blocking(move || {
       let mut collab = Collab::new(uid, object_id.clone(), "1", vec![], false);
       db.read_txn()
         .load_doc_with_txn(uid, &object_id, &mut collab.transact_mut())?;

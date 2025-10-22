@@ -3,7 +3,7 @@ use std::io::Write;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
-use crate::plugins::local_storage::kv::PersistenceError;
+use crate::error::CollabError;
 use crate::plugins::local_storage::kv::keys::*;
 use crate::plugins::local_storage::kv::oid::{DocIDGen, OID};
 use crate::plugins::local_storage::kv::snapshot::CollabSnapshot;
@@ -23,19 +23,19 @@ pub trait KVTransactionDB: Send + Sync + 'static {
 
   fn with_write_txn<'a, 'b, Output>(
     &'b self,
-    f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, PersistenceError>,
-  ) -> Result<Output, PersistenceError>
+    f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, CollabError>,
+  ) -> Result<Output, CollabError>
   where
     'b: 'a;
 
-  fn flush(&self) -> Result<(), PersistenceError>;
+  fn flush(&self) -> Result<(), CollabError>;
 }
 
 pub trait KVStore<'a> {
   type Range: Iterator<Item = Self::Entry>;
   type Entry: KVEntry;
   type Value: AsRef<[u8]>;
-  type Error: Into<PersistenceError> + Debug;
+  type Error: Into<CollabError> + Debug;
 
   /// Get a value by key
   fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error>;
@@ -96,11 +96,11 @@ pub fn insert_snapshot_update<'a, K, S>(
   snapshot_id: SnapshotID,
   object_id: &K,
   data: Vec<u8>,
-) -> Result<(), PersistenceError>
+) -> Result<(), CollabError>
 where
   K: AsRef<[u8]> + ?Sized + Debug,
   S: KVStore<'a>,
-  PersistenceError: From<<S as KVStore<'a>>::Error>,
+  CollabError: From<<S as KVStore<'a>>::Error>,
 {
   let snapshot = CollabSnapshot::new(data).to_vec();
   let update_key = create_update_key(snapshot_id, store, object_id, make_snapshot_update_key)?;
@@ -113,17 +113,17 @@ pub fn insert_doc_update<'a, K, S>(
   doc_id: DocID,
   object_id: &K,
   value: Vec<u8>,
-) -> Result<Vec<u8>, PersistenceError>
+) -> Result<Vec<u8>, CollabError>
 where
   K: AsRef<[u8]> + ?Sized + Debug,
   S: KVStore<'a>,
-  PersistenceError: From<<S as KVStore<'a>>::Error>,
+  CollabError: From<<S as KVStore<'a>>::Error>,
 {
   let update_key = create_update_key(doc_id, db, object_id, make_doc_update_key)?;
   if let Ok(Some(_)) = db.get(update_key.as_ref()) {
     // The duplicate key might corrupt the document data when restoring from the disk,
     // So we return an error here.
-    return Err(PersistenceError::DuplicateUpdateKey);
+    return Err(CollabError::PersistenceDuplicateUpdateKey);
   }
   db.insert(update_key.as_ref(), value)?;
   Ok(update_key.to_vec())
@@ -133,11 +133,11 @@ pub fn get_last_update_key<'a, S, F>(
   store: &S,
   id: OID,
   make_update_key: F,
-) -> Result<Key<16>, PersistenceError>
+) -> Result<Key<16>, CollabError>
 where
   F: Fn(OID, Clock) -> Key<16>,
   S: KVStore<'a>,
-  PersistenceError: From<<S as KVStore<'a>>::Error>,
+  CollabError: From<<S as KVStore<'a>>::Error>,
 {
   let last_clock = get_last_update_clock(store, id, &make_update_key)?;
   Ok(make_update_key(id, last_clock))
@@ -148,12 +148,12 @@ fn create_update_key<'a, F, K, S>(
   store: &S,
   _object_id: &K,
   make_update_key: F,
-) -> Result<Key<16>, PersistenceError>
+) -> Result<Key<16>, CollabError>
 where
   F: Fn(OID, Clock) -> Key<16>,
   K: AsRef<[u8]> + ?Sized + Debug,
   S: KVStore<'a>,
-  PersistenceError: From<<S as KVStore<'a>>::Error>,
+  CollabError: From<<S as KVStore<'a>>::Error>,
 {
   let last_clock = get_last_update_clock(store, id, &make_update_key)?;
   let clock = last_clock + 1;
@@ -166,11 +166,11 @@ fn get_last_update_clock<'a, S, F>(
   store: &S,
   id: OID,
   make_update_key: &F,
-) -> Result<Clock, PersistenceError>
+) -> Result<Clock, CollabError>
 where
   F: Fn(OID, Clock) -> Key<16>,
   S: KVStore<'a>,
-  PersistenceError: From<<S as KVStore<'a>>::Error>,
+  CollabError: From<<S as KVStore<'a>>::Error>,
 {
   let max_key = make_update_key(id, Clock::MAX);
   if let Ok(Some(entry)) = store.next_back_entry(max_key.as_ref()) {
@@ -191,10 +191,10 @@ where
   Some(OID::from_be_bytes(bytes))
 }
 
-pub fn insert_doc_id_for_key<'a, S>(store: &S, key: Key<20>) -> Result<DocID, PersistenceError>
+pub fn insert_doc_id_for_key<'a, S>(store: &S, key: Key<20>) -> Result<DocID, CollabError>
 where
   S: KVStore<'a>,
-  PersistenceError: From<<S as KVStore<'a>>::Error>,
+  CollabError: From<<S as KVStore<'a>>::Error>,
 {
   let new_id = DocIDGen::next_id();
   store.insert(key.as_ref(), new_id.to_be_bytes())?;
@@ -211,11 +211,11 @@ pub fn make_update_key_prefix(prefix: &[u8], oid: OID) -> Key<12> {
 pub trait TransactionMutExt<'doc> {
   /// Applies an update to the document. If the update is invalid, it will return an error.
   /// It allows to catch panics from `apply_update`.
-  fn try_apply_update(&mut self, update: Update) -> Result<(), PersistenceError>;
+  fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError>;
 }
 
 impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
-  fn try_apply_update(&mut self, update: Update) -> Result<(), PersistenceError> {
+  fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError> {
     self.apply_update(update)?;
     Ok(())
   }
@@ -225,7 +225,7 @@ impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
 pub trait KVRange<'a> {
   type Range: Iterator<Item = Self::Entry>;
   type Entry: KVEntry;
-  type Error: Into<PersistenceError>;
+  type Error: Into<CollabError>;
 
   fn kv_range(self) -> Result<Self::Range, Self::Error>;
 }

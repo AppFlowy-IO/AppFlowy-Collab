@@ -1,10 +1,10 @@
-use crate::database::error::DatabaseError;
 use crate::database::rows::{
   Cell, CreateRowParams, DatabaseRow, Row, RowChangeSender, RowDetail, RowMeta, RowMetaKey,
   RowMetaUpdate, RowUpdate, meta_id_from_row_id,
 };
 use crate::database::views::RowOrder;
 use crate::entity::uuid_validation::{DatabaseId, RowId};
+use crate::error::CollabError;
 
 use crate::lock::RwLock;
 use std::sync::Arc;
@@ -21,8 +21,7 @@ pub enum BlockEvent {
   DidFetchRow(Vec<RowDetail>),
 }
 
-pub type InitRowChan =
-  tokio::sync::oneshot::Sender<Result<Arc<RwLock<DatabaseRow>>, DatabaseError>>;
+pub type InitRowChan = tokio::sync::oneshot::Sender<Result<Arc<RwLock<DatabaseRow>>, CollabError>>;
 
 /// Each [Block] contains a list of [DatabaseRow]s. Each [DatabaseRow] represents a row in the database.
 /// Currently, we only use one [Block] to manage all the rows in the database. In the future, we
@@ -54,7 +53,7 @@ impl Block {
     self.notifier.subscribe()
   }
 
-  pub async fn batch_load_rows(&self, row_ids: Vec<RowId>) -> Result<(), DatabaseError> {
+  pub async fn batch_load_rows(&self, row_ids: Vec<RowId>) -> Result<(), CollabError> {
     let cloned_notifier = self.notifier.clone();
     let mut row_on_disk_details = vec![];
     for row_id in row_ids.into_iter() {
@@ -93,7 +92,7 @@ impl Block {
     &self,
     row_params: T,
     _client_id: ClientID,
-  ) -> Result<RowOrder, DatabaseError> {
+  ) -> Result<RowOrder, CollabError> {
     let params = row_params.into();
     let row: Row = params.clone().into();
     let row_id = row.id;
@@ -211,18 +210,18 @@ impl Block {
   pub async fn get_or_init_database_row(
     &self,
     row_id: &RowId,
-  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
+  ) -> Result<Arc<RwLock<DatabaseRow>>, CollabError> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     self.init_database_row(row_id, Some(tx));
     rx.await
-      .map_err(|e| DatabaseError::Internal(anyhow::anyhow!(e)))?
+      .map_err(|e| CollabError::Internal(anyhow::anyhow!(e)))?
   }
 
   pub async fn init_database_rows(
     &self,
     row_ids: Vec<RowId>,
     auto_fetch: bool,
-  ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
+  ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, CollabError> {
     // Retain only rows that are not in the cache
     let uncached_rows = self
       .collab_service

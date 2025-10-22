@@ -1,6 +1,6 @@
 use super::super::{BlockParser, ParseContext, ParseResult};
 use crate::document::blocks::{Block, BlockType};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 
 /// Parse the simple table cell block.
 ///
@@ -9,7 +9,7 @@ use crate::document::error::DocumentError;
 pub struct SimpleTableCellParser;
 
 impl BlockParser for SimpleTableCellParser {
-  fn parse(&self, _block: &Block, _context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, _block: &Block, _context: &ParseContext) -> Result<ParseResult, CollabError> {
     Ok(ParseResult::container("".to_string()))
   }
 

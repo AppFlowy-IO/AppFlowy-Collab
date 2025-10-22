@@ -1,7 +1,7 @@
+use crate::error::CollabError;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use thiserror::Error;
 
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Delta {
@@ -15,32 +15,16 @@ pub struct Operation {
   attributes: Vec<(String, Value)>,
 }
 
-#[derive(Error, Debug)]
-pub enum ConversionError {
-  #[error("Invalid structure: expected an object")]
-  NotAnObject,
-  #[error("Missing 'insert' field")]
-  MissingInsert,
-  #[error("'insert' field is not a string")]
-  InsertNotString,
-  #[error("'attributes' field is not an object")]
-  AttributesNotObject,
-  #[error("Invalid attribute")]
-  InvalidAttribute,
-  #[error("Invalid insert")]
-  InvalidInsert,
-}
-
 impl TryFrom<Value> for Operation {
-  type Error = ConversionError;
+  type Error = CollabError;
 
   fn try_from(value: Value) -> Result<Self, Self::Error> {
-    let obj = value.as_object().ok_or(ConversionError::NotAnObject)?;
+    let obj = value.as_object().ok_or(CollabError::DeltaNotObject)?;
 
     let insert = obj
       .get("insert")
       .and_then(Value::as_str)
-      .ok_or(ConversionError::MissingInsert)?
+      .ok_or(CollabError::DeltaMissingInsert)?
       .to_owned();
 
     let attributes = obj
@@ -59,7 +43,7 @@ impl TryFrom<Value> for Operation {
 }
 
 impl TryFrom<Operation> for Value {
-  type Error = ConversionError;
+  type Error = CollabError;
 
   fn try_from(op: Operation) -> Result<Self, Self::Error> {
     let attributes: HashMap<String, Value> = op.attributes.into_iter().collect();

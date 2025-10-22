@@ -1,11 +1,11 @@
 use crate::database::entity::FieldType;
-use crate::database::error::DatabaseError;
 use crate::database::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
 use crate::database::rows::{Cell, new_cell_builder};
 use crate::database::template::entity::CELL_DATA;
 use crate::database::template::util::{ToCellString, TypeOptionCellData};
+use crate::error::CollabError;
 use crate::preclude::Any;
 use crate::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
@@ -86,8 +86,8 @@ impl URLCellData {
     }
   }
 
-  pub fn to_json(&self) -> Result<String, DatabaseError> {
-    serde_json::to_string(self).map_err(|err| DatabaseError::Internal(err.into()))
+  pub fn to_json(&self) -> Result<String, CollabError> {
+    serde_json::to_string(self).map_err(|err| CollabError::Internal(err.into()))
   }
 }
 

@@ -1,4 +1,4 @@
-use crate::importer::error::ImporterError;
+use crate::error::CollabError;
 use crate::importer::zip_tool::util::{
   has_multi_part_extension, has_multi_part_suffix, is_multi_part_zip_signature, remove_part_suffix,
   sanitize_file_path,
@@ -22,12 +22,12 @@ pub fn sync_unzip(
   file_path: PathBuf,
   out_dir: PathBuf,
   default_file_name: Option<String>,
-) -> Result<UnzipFile, ImporterError> {
+) -> Result<UnzipFile, CollabError> {
   let file = File::open(file_path)
-    .map_err(|e| ImporterError::Internal(anyhow!("Failed to open zip file: {:?}", e)))?;
+    .map_err(|e| CollabError::Internal(anyhow!("Failed to open zip file: {:?}", e)))?;
 
   let mut archive = ZipArchive::new(file)
-    .map_err(|e| ImporterError::Internal(anyhow!("Failed to read zip archive: {:?}", e)))?;
+    .map_err(|e| CollabError::Internal(anyhow!("Failed to read zip archive: {:?}", e)))?;
 
   let mut root_dir = None;
   let mut parts = vec![];
@@ -42,14 +42,14 @@ pub fn sync_unzip(
 
   if !out_dir.exists() {
     fs::create_dir_all(&out_dir)
-      .map_err(|e| ImporterError::Internal(anyhow!("Failed to create dir: {:?}", e)))?;
+      .map_err(|e| CollabError::Internal(anyhow!("Failed to create dir: {:?}", e)))?;
   }
 
   // Iterate through each file in the archive
   for i in 0..archive.len() {
     let mut entry = archive
       .by_index(i)
-      .map_err(|e| ImporterError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
+      .map_err(|e| CollabError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
 
     let filename = entry.name().to_string();
     // Skip zip files within subdirectories
@@ -61,11 +61,11 @@ pub fn sync_unzip(
     let output_path = out_dir.join(&filename);
     if entry.is_dir() {
       fs::create_dir_all(&output_path)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to create dir: {:?}", e)))?;
+        .map_err(|e| CollabError::Internal(anyhow!("Failed to create dir: {:?}", e)))?;
     } else {
       if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)
-          .map_err(|e| ImporterError::Internal(anyhow!("Failed to create parent dir: {:?}", e)))?;
+          .map_err(|e| CollabError::Internal(anyhow!("Failed to create parent dir: {:?}", e)))?;
       }
 
       // Create and write the file
@@ -74,7 +74,7 @@ pub fn sync_unzip(
         .create_new(true)
         .open(&output_path)
         .map_err(|e| {
-          ImporterError::Internal(anyhow!(
+          CollabError::Internal(anyhow!(
             "Failed to create or open file with path: {:?}, error: {:?}",
             output_path,
             e
@@ -82,9 +82,9 @@ pub fn sync_unzip(
         }) {
         Ok(mut outfile) => {
           let mut buffer = vec![];
-          entry.read_to_end(&mut buffer).map_err(|e| {
-            ImporterError::Internal(anyhow!("Failed to read entry content: {:?}", e))
-          })?;
+          entry
+            .read_to_end(&mut buffer)
+            .map_err(|e| CollabError::Internal(anyhow!("Failed to read entry content: {:?}", e)))?;
 
           // Check if it's a multipart zip file
           if buffer.len() >= 4 {
@@ -107,7 +107,7 @@ pub fn sync_unzip(
 
           outfile
             .write_all(&buffer)
-            .map_err(|e| ImporterError::Internal(anyhow!("Failed to write file: {:?}", e)))?;
+            .map_err(|e| CollabError::Internal(anyhow!("Failed to write file: {:?}", e)))?;
         },
         Err(err) => {
           warn!("{}", err);
@@ -129,7 +129,7 @@ pub fn sync_unzip(
   // Move all unzipped file content into parent
   match root_dir {
     None => match default_file_name {
-      None => Err(ImporterError::FileNotFound),
+      None => Err(CollabError::ImporterFileNotFound),
       Some(root_dir) => Ok(UnzipFile {
         dir_name: root_dir,
         unzip_dir: out_dir,
@@ -163,15 +163,15 @@ fn unzip_single_file(
   archive_file: File,
   out_dir: &Path,
   mut root_dir: Option<String>,
-) -> Result<UnzipFile, ImporterError> {
+) -> Result<UnzipFile, CollabError> {
   let mut archive = ZipArchive::new(archive_file)
-    .map_err(|e| ImporterError::Internal(anyhow!("Failed to read zip archive: {:?}", e)))?;
+    .map_err(|e| CollabError::Internal(anyhow!("Failed to read zip archive: {:?}", e)))?;
 
   // Iterate through each file in the archive
   for i in 0..archive.len() {
     let mut entry = archive
       .by_index(i)
-      .map_err(|e| ImporterError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
+      .map_err(|e| CollabError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
 
     let entry_name = entry.name();
     if entry_name == ".DS_Store" || entry_name.starts_with("__MACOSX") {
@@ -194,14 +194,14 @@ fn unzip_single_file(
     if entry.is_dir() {
       if !path.exists() {
         fs::create_dir_all(&path)
-          .map_err(|e| ImporterError::Internal(anyhow!("Failed to create directory: {:?}", e)))?;
+          .map_err(|e| CollabError::Internal(anyhow!("Failed to create directory: {:?}", e)))?;
       }
     } else {
       // Ensure parent directories exist
       if let Some(parent) = path.parent() {
         if !parent.exists() {
           fs::create_dir_all(parent).map_err(|e| {
-            ImporterError::Internal(anyhow!("Failed to create parent directory: {:?}", e))
+            CollabError::Internal(anyhow!("Failed to create parent directory: {:?}", e))
           })?;
         }
       }
@@ -212,7 +212,7 @@ fn unzip_single_file(
         .create_new(true)
         .open(&path)
         .map_err(|e| {
-          ImporterError::Internal(anyhow!(
+          CollabError::Internal(anyhow!(
             "Failed to create part file: {:?}, path:{:?}",
             e,
             path
@@ -220,13 +220,13 @@ fn unzip_single_file(
         })?;
 
       io::copy(&mut entry, &mut outfile)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to write file: {:?}", e)))?;
+        .map_err(|e| CollabError::Internal(anyhow!("Failed to write file: {:?}", e)))?;
     }
   }
 
   // Return result with root directory info
   match root_dir {
-    None => Err(ImporterError::FileNotFound),
+    None => Err(CollabError::ImporterFileNotFound),
     Some(root_dir) => Ok(UnzipFile {
       dir_name: root_dir.clone(),
       unzip_dir: out_dir.join(root_dir),
@@ -240,12 +240,12 @@ pub fn sync_simple_unzip(
   zip_path: PathBuf,
   output_dir: PathBuf,
   workspace_name: Option<String>,
-) -> Result<UnzipFile, ImporterError> {
+) -> Result<UnzipFile, CollabError> {
   let file = File::open(&zip_path)
-    .map_err(|e| ImporterError::Internal(anyhow!("Failed to open zip file: {:?}", e)))?;
+    .map_err(|e| CollabError::Internal(anyhow!("Failed to open zip file: {:?}", e)))?;
 
   let mut archive = ZipArchive::new(file)
-    .map_err(|e| ImporterError::Internal(anyhow!("Failed to read zip archive: {:?}", e)))?;
+    .map_err(|e| CollabError::Internal(anyhow!("Failed to read zip archive: {:?}", e)))?;
 
   let output_dir = if let Some(name) = workspace_name {
     output_dir.join(name)
@@ -254,15 +254,14 @@ pub fn sync_simple_unzip(
   };
 
   if !output_dir.exists() {
-    std::fs::create_dir_all(&output_dir).map_err(|e| {
-      ImporterError::Internal(anyhow!("Failed to create output directory: {:?}", e))
-    })?;
+    std::fs::create_dir_all(&output_dir)
+      .map_err(|e| CollabError::Internal(anyhow!("Failed to create output directory: {:?}", e)))?;
   }
 
   for i in 0..archive.len() {
     let mut file = archive
       .by_index(i)
-      .map_err(|e| ImporterError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
+      .map_err(|e| CollabError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
 
     let output_path = match file.enclosed_name() {
       Some(path) => output_dir.join(path),
@@ -271,12 +270,12 @@ pub fn sync_simple_unzip(
 
     if file.is_dir() {
       std::fs::create_dir_all(&output_path)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to create directory: {:?}", e)))?;
+        .map_err(|e| CollabError::Internal(anyhow!("Failed to create directory: {:?}", e)))?;
     } else {
       if let Some(p) = output_path.parent() {
         if !p.exists() {
           std::fs::create_dir_all(p).map_err(|e| {
-            ImporterError::Internal(anyhow!("Failed to create parent directory: {:?}", e))
+            CollabError::Internal(anyhow!("Failed to create parent directory: {:?}", e))
           })?;
         }
       }
@@ -285,10 +284,10 @@ pub fn sync_simple_unzip(
         .write(true)
         .create_new(true)
         .open(&output_path)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to create file: {:?}", e)))?;
+        .map_err(|e| CollabError::Internal(anyhow!("Failed to create file: {:?}", e)))?;
 
       std::io::copy(&mut file, &mut outfile)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to extract file: {:?}", e)))?;
+        .map_err(|e| CollabError::Internal(anyhow!("Failed to extract file: {:?}", e)))?;
     }
   }
 

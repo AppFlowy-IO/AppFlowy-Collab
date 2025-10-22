@@ -10,7 +10,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, BufReader};
 
-use crate::importer::error::ImporterError;
+use crate::error::CollabError;
 use crate::importer::zip_tool::util::{is_multi_part_zip, is_multi_part_zip_file};
 use tracing::warn;
 
@@ -58,7 +58,7 @@ async fn async_calculate_file_id(file_path: &PathBuf) -> Result<String, Error> {
 pub async fn unzip_from_path_or_memory(
   input: Either<PathBuf, Vec<u8>>,
   out: PathBuf,
-) -> Result<PathBuf, ImporterError> {
+) -> Result<PathBuf, CollabError> {
   match input {
     Either::Left(path) => {
       if is_multi_part_zip(&path).await.unwrap_or(false) {

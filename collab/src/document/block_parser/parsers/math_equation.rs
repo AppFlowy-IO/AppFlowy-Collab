@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use super::super::{BlockParser, OutputFormat, ParseContext, ParseResult};
 use crate::document::blocks::{Block, BlockType};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 
 /// Parse the math equation block.
 ///
@@ -14,7 +14,7 @@ pub struct MathEquationParser;
 const FORMULA_KEY: &str = "formula";
 
 impl BlockParser for MathEquationParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, CollabError> {
     let formula = block
       .data
       .get(FORMULA_KEY)

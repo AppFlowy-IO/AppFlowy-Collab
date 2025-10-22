@@ -2,9 +2,9 @@ use crate::preclude::ClientID;
 use std::collections::HashMap;
 
 use super::blocks::{Block, DocumentData, DocumentMeta};
-use super::error::DocumentError;
 use crate::document::Document;
 use crate::entity::EncodedCollab;
+use crate::error::CollabError;
 use nanoid::nanoid;
 use uuid::Uuid;
 
@@ -87,7 +87,7 @@ pub fn default_document_data(document_id: &str) -> DocumentData {
 pub fn default_document_collab_data(
   document_id: &str,
   client_id: ClientID,
-) -> Result<EncodedCollab, DocumentError> {
+) -> Result<EncodedCollab, CollabError> {
   let document_data = default_document_data(document_id);
   let document = Document::create(document_id, document_data, client_id)?;
   document.encode_collab()

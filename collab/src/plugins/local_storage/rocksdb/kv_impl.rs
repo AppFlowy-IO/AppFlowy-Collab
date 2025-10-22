@@ -3,8 +3,9 @@ use std::ops::RangeBounds;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::error::CollabError;
 use crate::plugins::local_storage::kv::doc::CollabKVAction;
-use crate::plugins::local_storage::kv::{KVEntry, KVStore, KVTransactionDB, PersistenceError};
+use crate::plugins::local_storage::kv::{KVEntry, KVStore, KVTransactionDB};
 use rocksdb::Direction::Forward;
 use rocksdb::{
   DBIteratorWithThreadMode, Direction, ErrorKind, IteratorMode, Options, ReadOptions,
@@ -20,7 +21,7 @@ pub struct KVTransactionDBRocksdbImpl {
 impl KVTransactionDBRocksdbImpl {
   /// Open a new RocksDB database at the given path.
   /// If the database is corrupted, try to repair it. If it cannot be repaired, return an error.
-  pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
+  pub fn open(path: impl AsRef<Path>) -> Result<Self, CollabError> {
     let auto_repair = false;
     let txn_db_opts = TransactionDBOptions::default();
     let mut db_opts = Options::default();
@@ -88,19 +89,19 @@ impl KVTransactionDBRocksdbImpl {
               // If the database is corrupted, try to repair it
               // tracing::info!("Trying to repair collab database");
               TransactionDB::<SingleThreaded>::repair(&db_opts, &path).map_err(|err| {
-                PersistenceError::RocksdbRepairFail(format!(
+                CollabError::PersistenceRocksdbRepairFail(format!(
                   "Failed to repair collab database: {:?}",
                   err
                 ))
               })?;
               TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path).map_err(|err| {
-                PersistenceError::RocksdbRepairFail(format!(
+                CollabError::PersistenceRocksdbRepairFail(format!(
                   "Failed to repair collab database: {:?}",
                   err
                 ))
               })
             } else {
-              Err(PersistenceError::RocksdbCorruption(e.to_string()))
+              Err(CollabError::PersistenceRocksdbCorruption(e.to_string()))
             }
           },
           _ => Err(e.into()),
@@ -116,7 +117,7 @@ impl KVTransactionDBRocksdbImpl {
     uid: i64,
     workspace_id: &str,
     object_id: &str,
-  ) -> Result<bool, PersistenceError> {
+  ) -> Result<bool, CollabError> {
     let read_txn = self.read_txn();
     Ok(read_txn.is_exist(uid, workspace_id, object_id))
   }
@@ -126,7 +127,7 @@ impl KVTransactionDBRocksdbImpl {
     uid: i64,
     workspace_id: &str,
     doc_id: &str,
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<(), CollabError> {
     self.with_write_txn(|txn| txn.delete_doc(uid, workspace_id, doc_id))?;
     Ok(())
   }
@@ -164,8 +165,8 @@ impl KVTransactionDB for KVTransactionDBRocksdbImpl {
 
   fn with_write_txn<'a, 'b, Output>(
     &'b self,
-    f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, PersistenceError>,
-  ) -> Result<Output, PersistenceError>
+    f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, CollabError>,
+  ) -> Result<Output, CollabError>
   where
     'b: 'a,
   {
@@ -179,7 +180,7 @@ impl KVTransactionDB for KVTransactionDBRocksdbImpl {
     Ok(result)
   }
 
-  fn flush(&self) -> Result<(), PersistenceError> {
+  fn flush(&self) -> Result<(), CollabError> {
     Ok(())
   }
 }
@@ -195,7 +196,7 @@ impl<'a, DB: Send + Sync> RocksdbKVStoreImpl<'a, DB> {
     Self(txn)
   }
 
-  pub fn commit_transaction(self) -> Result<(), PersistenceError> {
+  pub fn commit_transaction(self) -> Result<(), CollabError> {
     self.0.commit()?;
     Ok(())
   }
@@ -205,7 +206,7 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksdbKVStoreImpl<'a, DB> {
   type Range = RocksdbRange<'a, DB>;
   type Entry = RocksdbEntry;
   type Value = Vec<u8>;
-  type Error = PersistenceError;
+  type Error = CollabError;
 
   fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error> {
     if let Some(value) = self.0.get(key)? {

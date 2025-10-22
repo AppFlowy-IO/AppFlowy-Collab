@@ -1,6 +1,6 @@
 use super::super::{BlockParser, OutputFormat, ParseContext, ParseResult};
 use crate::document::blocks::{Block, BlockType};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 
 /// Parse the simple table row block.
 ///
@@ -9,7 +9,7 @@ use crate::document::error::DocumentError;
 pub struct SimpleTableRowParser;
 
 impl BlockParser for SimpleTableRowParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, CollabError> {
     if block.children.is_empty() {
       return Ok(ParseResult::new("".to_string()));
     }

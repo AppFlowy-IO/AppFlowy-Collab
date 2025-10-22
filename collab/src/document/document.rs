@@ -24,7 +24,7 @@ use super::blocks::{
   deserialize_text_delta, parse_event,
 };
 use super::document_awareness::DocumentAwarenessState;
-use super::error::DocumentError;
+use crate::error::CollabError;
 
 /// The page_id is a reference that points to the block's id.
 /// The block that is referenced by this page_id is the first block of the document.
@@ -49,7 +49,7 @@ pub struct Document {
 impl Document {
   /// Opening a document with given [Collab]
   /// If the required fields are not present in the current [Collab] instance, it will return an error.
-  pub fn open(mut collab: Collab) -> Result<Self, DocumentError> {
+  pub fn open(mut collab: Collab) -> Result<Self, CollabError> {
     CollabType::Document.validate_require_data(&collab)?;
     let body = DocumentBody::new(&mut collab, None)?;
     Ok(Self { collab, body })
@@ -62,15 +62,15 @@ impl Document {
     doc_state: DataSource,
     document_id: &str,
     client_id: ClientID,
-  ) -> Result<Self, DocumentError> {
+  ) -> Result<Self, CollabError> {
     let document_uuid = Uuid::parse_str(document_id)
-      .map_err(|_| DocumentError::Internal(anyhow!("Invalid document id:")))?;
+      .map_err(|_| CollabError::Internal(anyhow!("Invalid document id:")))?;
     let options = CollabOptions::new(document_uuid, client_id).with_data_source(doc_state);
     let collab = Collab::new_with_options(origin, options)?;
     Document::open(collab)
   }
 
-  pub fn create_with_data(mut collab: Collab, data: DocumentData) -> Result<Self, DocumentError> {
+  pub fn create_with_data(mut collab: Collab, data: DocumentData) -> Result<Self, CollabError> {
     let body = DocumentBody::new(&mut collab, Some(data))?;
     Ok(Self { collab, body })
   }
@@ -79,9 +79,9 @@ impl Document {
     document_id: &str,
     data: DocumentData,
     client_id: ClientID,
-  ) -> Result<Self, DocumentError> {
+  ) -> Result<Self, CollabError> {
     let document_uuid = Uuid::parse_str(document_id)
-      .map_err(|_| DocumentError::Internal(anyhow!("Invalid document id:")))?;
+      .map_err(|_| CollabError::Internal(anyhow!("Invalid document id:")))?;
     let options = CollabOptions::new(document_uuid, client_id);
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)?;
     Self::create_with_data(collab, data)
@@ -92,18 +92,18 @@ impl Document {
     (self.collab, self.body)
   }
 
-  pub fn validate(&self) -> Result<(), DocumentError> {
+  pub fn validate(&self) -> Result<(), CollabError> {
     CollabType::Document
       .validate_require_data(&self.collab)
-      .map_err(|_| DocumentError::NoRequiredData)?;
+      .map_err(|_| CollabError::DocumentMissingRequiredData)?;
     Ok(())
   }
 
-  pub fn encode_collab(&self) -> Result<EncodedCollab, DocumentError> {
+  pub fn encode_collab(&self) -> Result<EncodedCollab, CollabError> {
     self.collab.encode_collab_v1(|collab| {
       CollabType::Document
         .validate_require_data(collab)
-        .map_err(|_| DocumentError::NoRequiredData)
+        .map_err(|_| CollabError::DocumentMissingRequiredData)
     })
   }
 
@@ -127,7 +127,7 @@ impl Document {
   }
 
   /// Get document data.
-  pub fn get_document_data(&self) -> Result<DocumentData, DocumentError> {
+  pub fn get_document_data(&self) -> Result<DocumentData, CollabError> {
     let txn = self.collab.transact();
     self.body.get_document_data(&txn)
   }
@@ -160,7 +160,7 @@ impl Document {
   }
 
   /// Apply actions to the document.
-  pub fn apply_action(&mut self, actions: Vec<BlockAction>) -> Result<(), DocumentError> {
+  pub fn apply_action(&mut self, actions: Vec<BlockAction>) -> Result<(), CollabError> {
     let mut txn = self.collab.transact_mut();
     for action in actions {
       #[cfg(feature = "verbose_log")]
@@ -213,12 +213,12 @@ impl Document {
     &mut self,
     block: Block,
     prev_id: Option<String>,
-  ) -> Result<Block, DocumentError> {
+  ) -> Result<Block, CollabError> {
     let mut txn = self.collab.transact_mut();
     self.body.insert_block(&mut txn, block, prev_id)
   }
 
-  pub fn delete_block(&mut self, block_id: &str) -> Result<(), DocumentError> {
+  pub fn delete_block(&mut self, block_id: &str) -> Result<(), CollabError> {
     let mut txn = self.collab.transact_mut();
     self.body.delete_block(&mut txn, block_id)
   }
@@ -236,7 +236,7 @@ impl Document {
   pub fn get_block_ids<T: AsRef<str>>(
     &self,
     block_types: Vec<T>,
-  ) -> Result<Vec<String>, DocumentError> {
+  ) -> Result<Vec<String>, CollabError> {
     let txn = self.collab.transact();
     let blocks = self.body.block_operation.get_all_blocks(&txn);
     let block_ids = blocks
@@ -314,7 +314,7 @@ impl Document {
     &mut self,
     block_id: T,
     delta: Vec<TextDelta>,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     if delta.is_empty() {
       return Ok(());
     }
@@ -326,14 +326,14 @@ impl Document {
       let external_id = block
         .external_id
         .as_ref()
-        .ok_or(DocumentError::ExternalIdIsNotFound)?;
+        .ok_or(CollabError::DocumentExternalIdNotFound)?;
       self
         .body
         .text_operation
         .set_delta(&mut txn, external_id, delta);
       Ok(())
     } else {
-      Err(DocumentError::BlockIsNotFound)
+      Err(CollabError::DocumentBlockNotFound)
     }
   }
 
@@ -348,7 +348,7 @@ impl Document {
     &mut self,
     block_id: &str,
     data: HashMap<String, Value>,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     let mut txn = self.collab.transact_mut();
     self
       .body
@@ -360,7 +360,7 @@ impl Document {
     block_id: &str,
     parent_id: Option<String>,
     prev_id: Option<String>,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     let mut txn = self.collab.transact_mut();
     self.body.move_block(&mut txn, block_id, parent_id, prev_id)
   }
@@ -476,7 +476,7 @@ impl BorrowMut<Collab> for Document {
 }
 
 impl TryFrom<Collab> for Document {
-  type Error = DocumentError;
+  type Error = CollabError;
 
   #[inline]
   fn try_from(collab: Collab) -> Result<Self, Self::Error> {
@@ -496,10 +496,7 @@ impl DocumentBody {
   /// not present in the current [Collab] instance, they will be initialized.
   ///
   /// If [DocumentData] was provided it will be applied on the document.
-  pub(crate) fn new(
-    collab: &mut Collab,
-    data: Option<DocumentData>,
-  ) -> Result<Self, DocumentError> {
+  pub(crate) fn new(collab: &mut Collab, data: Option<DocumentData>) -> Result<Self, CollabError> {
     let mut txn = collab.context.transact_mut();
     // { document: {:} }
     let root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
@@ -544,7 +541,7 @@ impl DocumentBody {
     children_operation: &ChildrenOperation,
     text_operation: &TextOperation,
     block_operation: &BlockOperation,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     root.insert(txn, PAGE_ID, data.page_id);
 
     for (_, block) in data.blocks {
@@ -598,7 +595,7 @@ impl DocumentBody {
     &mut self,
     txn: &mut TransactionMut,
     doc_data: Option<DocumentData>,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     self
       .block_operation
       .get_all_blocks(txn)
@@ -663,7 +660,7 @@ impl DocumentBody {
     txn: &mut TransactionMut,
     block: Block,
     prev_id: Option<String>,
-  ) -> Result<Block, DocumentError> {
+  ) -> Result<Block, CollabError> {
     let block = self.block_operation.create_block_with_txn(txn, block)?;
     self.insert_block_to_parent(txn, &block, prev_id)
   }
@@ -673,16 +670,16 @@ impl DocumentBody {
     txn: &mut TransactionMut,
     block: &Block,
     prev_id: Option<String>,
-  ) -> Result<Block, DocumentError> {
+  ) -> Result<Block, CollabError> {
     let parent_id = &block.parent;
     // If the parent is not found, return an error.
     if parent_id.is_empty() {
-      return Err(DocumentError::ParentIsNotFound);
+      return Err(CollabError::DocumentParentNotFound);
     }
 
     let parent = match self.block_operation.get_block_with_txn(txn, parent_id) {
       Some(parent) => parent,
-      None => return Err(DocumentError::ParentIsNotFound),
+      None => return Err(CollabError::DocumentParentNotFound),
     };
 
     let parent_children_id = &parent.children;
@@ -722,14 +719,10 @@ impl DocumentBody {
   /// 1. delete all the children of this block
   /// 2. delete the block from its parent
   /// 3. delete the block from the block map
-  pub fn delete_block(
-    &self,
-    txn: &mut TransactionMut,
-    block_id: &str,
-  ) -> Result<(), DocumentError> {
+  pub fn delete_block(&self, txn: &mut TransactionMut, block_id: &str) -> Result<(), CollabError> {
     let block = match self.block_operation.get_block_with_txn(txn, block_id) {
       Some(block) => block,
-      None => return Err(DocumentError::BlockIsNotFound),
+      None => return Err(CollabError::DocumentBlockNotFound),
     };
 
     let external_id = &block.external_id;
@@ -771,10 +764,10 @@ impl DocumentBody {
     data: HashMap<String, Value>,
     external_id: Option<String>,
     external_type: Option<String>,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     let block = match self.block_operation.get_block_with_txn(txn, block_id) {
       Some(block) => block,
-      None => return Err(DocumentError::BlockIsNotFound),
+      None => return Err(CollabError::DocumentBlockNotFound),
     };
     self.block_operation.set_block_with_txn(
       txn,
@@ -786,12 +779,12 @@ impl DocumentBody {
     )
   }
 
-  pub fn get_document_data<T: ReadTxn>(&self, txn: &T) -> Result<DocumentData, DocumentError> {
+  pub fn get_document_data<T: ReadTxn>(&self, txn: &T) -> Result<DocumentData, CollabError> {
     let page_id = self
       .root
       .get(txn, PAGE_ID)
       .and_then(|v| v.cast::<String>().ok())
-      .ok_or(DocumentError::PageIdIsEmpty)?;
+      .ok_or(CollabError::DocumentPageIdEmpty)?;
 
     let blocks = self.block_operation.get_all_blocks(txn);
     let children_map = self.children_operation.get_all_children(txn);
@@ -814,25 +807,25 @@ impl DocumentBody {
     block_id: &str,
     parent_id: Option<String>,
     prev_id: Option<String>,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     // If the parent is not found, return an error.
     let new_parent = match parent_id {
       Some(parent_id) => match self.block_operation.get_block_with_txn(txn, &parent_id) {
         Some(parent) => parent,
-        None => return Err(DocumentError::ParentIsNotFound),
+        None => return Err(CollabError::DocumentParentNotFound),
       },
-      None => return Err(DocumentError::ParentIsNotFound),
+      None => return Err(CollabError::DocumentParentNotFound),
     };
 
     let block = match self.block_operation.get_block_with_txn(txn, block_id) {
       Some(block) => block,
-      None => return Err(DocumentError::BlockIsNotFound),
+      None => return Err(CollabError::DocumentBlockNotFound),
     };
 
     // If the old parent is not found, return an error.
     let old_parent = match self.block_operation.get_block_with_txn(txn, &block.parent) {
       Some(parent) => parent,
-      None => return Err(DocumentError::ParentIsNotFound),
+      None => return Err(CollabError::DocumentParentNotFound),
     };
 
     let new_parent_children_id = new_parent.children;
@@ -876,7 +869,7 @@ impl DocumentBody {
     &self,
     txn: &mut TransactionMut,
     payload: BlockActionPayload,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     if let Some(mut block) = payload.block {
       // Check if the block's parent_id is empty, if it is empty, assign the parent_id to the block
       if block.parent.is_empty() && payload.parent_id.is_some() {
@@ -884,7 +877,7 @@ impl DocumentBody {
       }
       self.insert_block(txn, block, payload.prev_id).map(|_| ())
     } else {
-      Err(DocumentError::BlockIsNotFound)
+      Err(CollabError::DocumentBlockNotFound)
     }
   }
 
@@ -892,14 +885,14 @@ impl DocumentBody {
     &self,
     txn: &mut TransactionMut,
     payload: BlockActionPayload,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     if let Some(block) = payload.block {
       let data = &block.data;
       let external_id = block.external_id;
       let external_type = block.external_type;
       self.update_block_data(txn, &block.id, data.to_owned(), external_id, external_type)
     } else {
-      Err(DocumentError::BlockIsNotFound)
+      Err(CollabError::DocumentBlockNotFound)
     }
   }
 
@@ -907,11 +900,11 @@ impl DocumentBody {
     &self,
     txn: &mut TransactionMut,
     payload: BlockActionPayload,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     if let Some(block) = payload.block {
       self.delete_block(txn, &block.id)
     } else {
-      Err(DocumentError::BlockIsNotFound)
+      Err(CollabError::DocumentBlockNotFound)
     }
   }
 
@@ -919,11 +912,11 @@ impl DocumentBody {
     &self,
     txn: &mut TransactionMut,
     payload: BlockActionPayload,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     if let Some(block) = payload.block {
       self.move_block(txn, &block.id, payload.parent_id, payload.prev_id)
     } else {
-      Err(DocumentError::BlockIsNotFound)
+      Err(CollabError::DocumentBlockNotFound)
     }
   }
 
@@ -931,17 +924,17 @@ impl DocumentBody {
     &self,
     txn: &mut TransactionMut,
     payload: BlockActionPayload,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     if let Some(text_id) = payload.text_id {
       if let Some(delta) = payload.delta {
         let delta = deserialize_text_delta(&delta).ok().unwrap_or_default();
         self.text_operation.apply_delta(txn, &text_id, delta);
         Ok(())
       } else {
-        Err(DocumentError::TextActionParamsError)
+        Err(CollabError::DocumentTextActionParams)
       }
     } else {
-      Err(DocumentError::TextActionParamsError)
+      Err(CollabError::DocumentTextActionParams)
     }
   }
 }

@@ -14,7 +14,6 @@ use std::sync::Arc;
 use tracing::error;
 use uuid::Uuid;
 
-use super::error::FolderError;
 use super::folder_observe::ViewChangeSender;
 use super::hierarchy_builder::{FlattedViews, ParentChildViews};
 use super::revision::RevisionMapping;
@@ -24,6 +23,7 @@ use super::{
   ViewChangeReceiver, ViewId, ViewUpdate, ViewsMap, Workspace,
 };
 use crate::entity::uuid_validation::WorkspaceId;
+use crate::error::CollabError;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 #[serde(transparent)]
@@ -95,12 +95,14 @@ pub struct Folder {
 }
 
 impl Folder {
-  pub fn open(mut collab: Collab, notifier: Option<FolderNotify>) -> Result<Self, FolderError> {
+  pub fn open(mut collab: Collab, notifier: Option<FolderNotify>) -> Result<Self, CollabError> {
     let body = FolderBody::open(&mut collab, notifier)?;
     let folder = Folder { collab, body };
     if folder.get_workspace_id().is_none() {
       // When the folder is opened, the workspace id must be present.
-      Err(FolderError::NoRequiredData("missing workspace id".into()))
+      Err(CollabError::FolderMissingRequiredData(
+        "missing workspace id".into(),
+      ))
     } else {
       Ok(folder)
     }
@@ -116,9 +118,9 @@ impl Folder {
     collab_doc_state: DataSource,
     workspace_id: &str,
     client_id: ClientID,
-  ) -> Result<Self, FolderError> {
+  ) -> Result<Self, CollabError> {
     let workspace_uuid = Uuid::parse_str(workspace_id)
-      .map_err(|_| FolderError::Internal(anyhow!("Invalid workspace id format")))?;
+      .map_err(|_| CollabError::Internal(anyhow!("Invalid workspace id format")))?;
     let options = CollabOptions::new(workspace_uuid, client_id).with_data_source(collab_doc_state);
     let collab = Collab::new_with_options(origin, options)?;
     Self::open(collab, None)
@@ -128,19 +130,19 @@ impl Folder {
     self.collab.remove_all_plugins();
   }
 
-  pub fn validate(&self) -> Result<(), FolderError> {
+  pub fn validate(&self) -> Result<(), CollabError> {
     CollabType::Folder
       .validate_require_data(&self.collab)
-      .map_err(|err| FolderError::NoRequiredData(err.to_string()))?;
+      .map_err(|err| CollabError::FolderMissingRequiredData(err.to_string()))?;
     Ok(())
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_collab(&self) -> Result<EncodedCollab, FolderError> {
+  pub fn encode_collab(&self) -> Result<EncodedCollab, CollabError> {
     self.collab.encode_collab_v1(|collab| {
       CollabType::Folder
         .validate_require_data(collab)
-        .map_err(|err| FolderError::NoRequiredData(err.to_string()))
+        .map_err(|err| CollabError::FolderMissingRequiredData(err.to_string()))
     })
   }
 
@@ -596,17 +598,21 @@ impl BorrowMut<Collab> for Folder {
   }
 }
 
-pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
+pub fn check_folder_is_valid(collab: &Collab) -> Result<String, CollabError> {
   let txn = collab.transact();
   let meta: MapRef = collab
     .data
     .get_with_path(&txn, vec![FOLDER, FOLDER_META])
-    .ok_or_else(|| FolderError::NoRequiredData("No meta data".to_string()))?;
+    .ok_or_else(|| CollabError::FolderMissingRequiredData("No meta data".to_string()))?;
   match meta.get_with_txn::<_, String>(&txn, FOLDER_WORKSPACE_ID) {
-    None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
+    None => Err(CollabError::FolderMissingRequiredData(
+      "No workspace id".to_string(),
+    )),
     Some(workspace_id) => {
       if workspace_id.is_empty() {
-        Err(FolderError::NoRequiredData("No workspace id".to_string()))
+        Err(CollabError::FolderMissingRequiredData(
+          "No workspace id".to_string(),
+        ))
       } else {
         Ok(workspace_id)
       }
@@ -624,7 +630,7 @@ pub struct FolderBody {
 }
 
 impl FolderBody {
-  pub fn open(collab: &mut Collab, notifier: Option<FolderNotify>) -> Result<Self, FolderError> {
+  pub fn open(collab: &mut Collab, notifier: Option<FolderNotify>) -> Result<Self, CollabError> {
     CollabType::Folder.validate_require_data(collab)?;
     Ok(Self::open_with(collab, notifier, None))
   }

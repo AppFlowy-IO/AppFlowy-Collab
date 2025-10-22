@@ -1,3 +1,4 @@
+use crate::error::CollabError;
 use crate::plugins::local_storage::kv::keys::*;
 use crate::plugins::local_storage::kv::snapshot::SnapshotAction;
 use crate::plugins::local_storage::kv::*;
@@ -11,7 +12,7 @@ use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
 
 pub trait CollabKVAction<'a>: KVStore<'a> + Sized + 'a
 where
-  PersistenceError: From<<Self as KVStore<'a>>::Error>,
+  CollabError: From<<Self as KVStore<'a>>::Error>,
 {
   /// Create a new document with the given object id.
   fn create_new_doc<T: ReadTxn>(
@@ -20,10 +21,10 @@ where
     workspace_id: &str,
     object_id: &str,
     txn: &T,
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<(), CollabError> {
     if self.is_exist(uid, workspace_id, object_id) {
       tracing::warn!("🟡{:?} already exist", object_id);
-      return Err(PersistenceError::DocumentAlreadyExist);
+      return Err(CollabError::PersistenceDocumentAlreadyExist);
     }
     let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
     let doc_state = txn.encode_diff_v1(&StateVector::default());
@@ -44,7 +45,7 @@ where
     object_id: &str,
     state_vector: Vec<u8>,
     doc_state: Vec<u8>,
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<(), CollabError> {
     let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
     let start = make_doc_start_key(doc_id);
     let end = make_doc_end_key(doc_id);
@@ -73,7 +74,7 @@ where
     object_id: &str,
     state_vector: Vec<u8>,
     doc_state: Vec<u8>,
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<(), CollabError> {
     let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
 
     // Remove the updates
@@ -105,7 +106,7 @@ where
     workspace_id: &str,
     object_id: &str,
     txn: &mut TransactionMut,
-  ) -> Result<u32, PersistenceError> {
+  ) -> Result<u32, CollabError> {
     let mut update_count = 0;
 
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
@@ -119,7 +120,7 @@ where
           },
           Err(err) => {
             error!("🔴{:?} decode doc state error: {}", object_id, err);
-            return Err(PersistenceError::Yrs(err));
+            return Err(CollabError::DecodeUpdate(err));
           },
         }
 
@@ -133,7 +134,7 @@ where
           // Decode the update and apply it to the transaction. If the update is invalid, we will
           // remove the update and the following updates.
           if let Err(e) = Update::decode_v1(encoded_update.value())
-            .map_err(PersistenceError::Yrs)
+            .map_err(CollabError::DecodeUpdate)
             .and_then(|update| {
               // trace!("apply update: {:#?}", update);
               txn.try_apply_update(update)
@@ -156,7 +157,7 @@ where
       Ok(update_count)
     } else {
       tracing::trace!("[Client] => {:?} not exist", object_id);
-      Err(PersistenceError::RecordNotFound(format!(
+      Err(CollabError::PersistenceRecordNotFound(format!(
         "doc with given object id: {:?} is not found",
         object_id
       )))
@@ -169,7 +170,7 @@ where
     workspace_id: &str,
     object_id: &str,
     doc: &Doc,
-  ) -> Result<u32, PersistenceError> {
+  ) -> Result<u32, CollabError> {
     let mut txn = doc.transact_mut();
     self.load_doc_with_txn(uid, workspace_id, object_id, &mut txn)
   }
@@ -181,7 +182,7 @@ where
     workspace_id: &str,
     object_id: &str,
     update: &[u8],
-  ) -> Result<Vec<u8>, PersistenceError> {
+  ) -> Result<Vec<u8>, CollabError> {
     match get_doc_id(uid, self, workspace_id, object_id) {
       None => {
         tracing::error!(
@@ -189,7 +190,7 @@ where
           uid,
           object_id
         );
-        Err(PersistenceError::RecordNotFound(format!(
+        Err(CollabError::PersistenceRecordNotFound(format!(
           "doc with given object id: {:?} is not found",
           object_id
         )))
@@ -205,7 +206,7 @@ where
     workspace_id: &str,
     object_id: &str,
     end: &[u8],
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<(), CollabError> {
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
       let start = make_doc_update_key(doc_id, 0);
       self.remove_range(start.as_ref(), end.as_ref())?;
@@ -218,7 +219,7 @@ where
     uid: i64,
     workspace_id: &str,
     object_id: &str,
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<(), CollabError> {
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
       let start = make_doc_update_key(doc_id, 0);
       let end = make_doc_update_key(doc_id, Clock::MAX);
@@ -234,7 +235,7 @@ where
     object_id: &str,
     doc_state: &[u8],
     sv: &[u8],
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<(), CollabError> {
     let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
     let start = make_doc_start_key(doc_id);
     let end = make_doc_end_key(doc_id);
@@ -254,7 +255,7 @@ where
     uid: i64,
     workspace_id: &str,
     object_id: &str,
-  ) -> Result<Vec<Vec<u8>>, PersistenceError> {
+  ) -> Result<Vec<Vec<u8>>, CollabError> {
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
       let start = make_doc_update_key(doc_id, 0);
       let end = make_doc_update_key(doc_id, Clock::MAX);
@@ -271,12 +272,7 @@ where
 
   /// Delete the document from the persistence
   /// This will remove all the updates and the document state
-  fn delete_doc(
-    &self,
-    uid: i64,
-    workspace_id: &str,
-    object_id: &str,
-  ) -> Result<(), PersistenceError> {
+  fn delete_doc(&self, uid: i64, workspace_id: &str, object_id: &str) -> Result<(), CollabError> {
     if let Some(did) = get_doc_id(uid, self, workspace_id, object_id) {
       tracing::trace!("[Client {}] => [{}] delete {:?} doc", uid, did, object_id);
       let key = make_doc_id_key_v1(
@@ -305,8 +301,7 @@ where
 
   fn get_all_docs(
     &self,
-  ) -> Result<OIDIter<<Self as KVStore<'a>>::Range, <Self as KVStore<'a>>::Entry>, PersistenceError>
-  {
+  ) -> Result<OIDIter<<Self as KVStore<'a>>::Range, <Self as KVStore<'a>>::Entry>, CollabError> {
     let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
     let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
     let iter = self.range(from.as_ref()..to.as_ref())?;
@@ -317,7 +312,7 @@ where
     &self,
     uid: i64,
     workspace_id: &str,
-  ) -> Result<impl Iterator<Item = String>, PersistenceError> {
+  ) -> Result<impl Iterator<Item = String>, CollabError> {
     let uid_bytes = uid.to_be_bytes();
     let workspace_bytes = workspace_id.as_bytes();
 
@@ -339,7 +334,7 @@ where
     }))
   }
 
-  fn get_all_workspace_ids(&self) -> Result<Vec<String>, PersistenceError> {
+  fn get_all_workspace_ids(&self) -> Result<Vec<String>, CollabError> {
     let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
     let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
     let iter = self.range(from.as_ref()..to.as_ref())?;
@@ -362,7 +357,7 @@ where
     uid: i64,
     workspace_id: &str,
     object_id: &str,
-  ) -> Result<Vec<Update>, PersistenceError> {
+  ) -> Result<Vec<Update>, CollabError> {
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
       let start = make_doc_update_key(doc_id, 0);
       let end = make_doc_update_key(doc_id, Clock::MAX);
@@ -375,7 +370,7 @@ where
       }
       Ok(updates)
     } else {
-      Err(PersistenceError::RecordNotFound(format!(
+      Err(CollabError::PersistenceRecordNotFound(format!(
         "The document with given object id: {:?} is not found",
         object_id,
       )))
@@ -410,7 +405,7 @@ where
 impl<'a, T> CollabKVAction<'a> for T
 where
   T: KVStore<'a> + 'a,
-  PersistenceError: From<<Self as KVStore<'a>>::Error>,
+  CollabError: From<<Self as KVStore<'a>>::Error>,
 {
 }
 
@@ -420,10 +415,10 @@ fn get_or_create_did<'a, S>(
   store: &S,
   workspace_id: &str,
   object_id: &str,
-) -> Result<DocID, PersistenceError>
+) -> Result<DocID, CollabError>
 where
   S: KVStore<'a>,
-  PersistenceError: From<<S as KVStore<'a>>::Error>,
+  CollabError: From<<S as KVStore<'a>>::Error>,
 {
   if let Some(did) = get_doc_id(uid, store, workspace_id, object_id) {
     Ok(did)
@@ -490,10 +485,10 @@ fn extract_uuid_from_key(key: &[u8]) -> Option<[u8; 16]> {
   }
 }
 
-pub fn migrate_old_keys<'a, S>(store: &'a S, workspace_id: &str) -> Result<(), PersistenceError>
+pub fn migrate_old_keys<'a, S>(store: &'a S, workspace_id: &str) -> Result<(), CollabError>
 where
   S: KVStore<'a>,
-  PersistenceError: From<<S as KVStore<'a>>::Error>,
+  CollabError: From<<S as KVStore<'a>>::Error>,
 {
   let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
   let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);

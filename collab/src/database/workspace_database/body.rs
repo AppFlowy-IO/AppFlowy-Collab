@@ -1,10 +1,10 @@
 use crate::core::collab::{CollabOptions, DataSource};
 use crate::core::origin::CollabOrigin;
 use crate::database::database::timestamp;
-use crate::database::error::DatabaseError;
 use crate::entity::CollabType;
 use crate::entity::EncodedCollab;
 use crate::entity::define::WORKSPACE_DATABASES;
+use crate::error::CollabError;
 use crate::preclude::{
   Array, ArrayPrelim, ArrayRef, Collab, Map, MapExt, MapPrelim, MapRef, ReadTxn, TransactionMut,
   YrsValue,
@@ -24,20 +24,20 @@ pub struct WorkspaceDatabase {
 pub fn default_workspace_database_data(
   object_id: &str,
   client_id: ClientID,
-) -> Result<EncodedCollab, DatabaseError> {
+) -> Result<EncodedCollab, CollabError> {
   let object_uuid = Uuid::parse_str(object_id)
-    .map_err(|err| DatabaseError::Internal(anyhow!("Invalid object_id UUID: {}", err)))?;
+    .map_err(|err| CollabError::Internal(anyhow!("Invalid object_id UUID: {}", err)))?;
   let options = CollabOptions::new(object_uuid, client_id);
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options)
-    .map_err(|err| DatabaseError::Internal(anyhow!("Failed to create collab: {}", err)))?;
+    .map_err(|err| CollabError::Internal(anyhow!("Failed to create collab: {}", err)))?;
   let _ = WorkspaceDatabaseBody::create(&mut collab);
   collab
-    .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
-    .map_err(|err| DatabaseError::Internal(anyhow!("Failed to encode collab: {}", err)))
+    .encode_collab_v1(|_collab| Ok::<_, CollabError>(()))
+    .map_err(|err| CollabError::Internal(anyhow!("Failed to encode collab: {}", err)))
 }
 
 impl WorkspaceDatabase {
-  pub fn open(mut collab: Collab) -> Result<Self, DatabaseError> {
+  pub fn open(mut collab: Collab) -> Result<Self, CollabError> {
     CollabType::WorkspaceDatabase.validate_require_data(&collab)?;
     let body = WorkspaceDatabaseBody::open(&mut collab)?;
     Ok(Self { body, collab })
@@ -53,12 +53,12 @@ impl WorkspaceDatabase {
     origin: CollabOrigin,
     collab_doc_state: DataSource,
     client_id: ClientID,
-  ) -> Result<Self, DatabaseError> {
+  ) -> Result<Self, CollabError> {
     let object_uuid = Uuid::parse_str(object_id)
-      .map_err(|err| DatabaseError::Internal(anyhow!("Invalid object_id UUID: {}", err)))?;
+      .map_err(|err| CollabError::Internal(anyhow!("Invalid object_id UUID: {}", err)))?;
     let options = CollabOptions::new(object_uuid, client_id).with_data_source(collab_doc_state);
     let collab = Collab::new_with_options(origin, options)
-      .map_err(|err| DatabaseError::Internal(anyhow!("Failed to create collab: {}", err)))?;
+      .map_err(|err| CollabError::Internal(anyhow!("Failed to create collab: {}", err)))?;
     Self::open(collab)
   }
 
@@ -131,16 +131,16 @@ impl WorkspaceDatabase {
       .find(|record| record.database_id == database_id)
   }
 
-  pub fn validate(&self) -> Result<(), DatabaseError> {
+  pub fn validate(&self) -> Result<(), CollabError> {
     CollabType::WorkspaceDatabase.validate_require_data(&self.collab)?;
     Ok(())
   }
 
-  pub fn encode_collab_v1(&self) -> Result<EncodedCollab, DatabaseError> {
+  pub fn encode_collab_v1(&self) -> Result<EncodedCollab, CollabError> {
     self.validate()?;
     self
       .collab
-      .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
+      .encode_collab_v1(|_collab| Ok::<_, CollabError>(()))
   }
 }
 
@@ -216,12 +216,12 @@ pub struct WorkspaceDatabaseBody {
 }
 
 impl WorkspaceDatabaseBody {
-  pub fn open(collab: &mut Collab) -> Result<Self, DatabaseError> {
+  pub fn open(collab: &mut Collab) -> Result<Self, CollabError> {
     let txn = collab.context.transact();
     let array_ref = collab
       .data
       .get_with_txn(&txn, WORKSPACE_DATABASES)
-      .ok_or_else(|| DatabaseError::NoRequiredData(WORKSPACE_DATABASES.to_string()))?;
+      .ok_or_else(|| CollabError::NoRequiredData(WORKSPACE_DATABASES.to_string()))?;
     Ok(Self { array_ref })
   }
 

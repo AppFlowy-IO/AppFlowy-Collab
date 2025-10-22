@@ -1,6 +1,6 @@
 use super::{BlockParser, ParseContext, ParseResult};
 use crate::document::blocks::Block;
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -43,7 +43,7 @@ impl BlockParserRegistry {
     &self,
     block: &Block,
     context: &ParseContext,
-  ) -> Result<ParseResult, DocumentError> {
+  ) -> Result<ParseResult, CollabError> {
     if let Some(parser) = self.get_parser(&block.ty) {
       parser.parse(block, context)
     } else {

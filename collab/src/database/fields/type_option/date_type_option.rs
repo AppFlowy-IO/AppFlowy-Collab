@@ -1,6 +1,6 @@
 use crate::database::entity::FieldType;
 
-use crate::database::error::DatabaseError;
+use crate::error::CollabError;
 use chrono::{DateTime, Timelike};
 use chrono::{Datelike, Local, TimeZone};
 
@@ -248,7 +248,7 @@ impl DateTypeOption {
     &self,
     include_time: bool,
     time_str: Option<&str>,
-  ) -> Result<Option<NaiveTime>, DatabaseError> {
+  ) -> Result<Option<NaiveTime>, CollabError> {
     match (include_time, time_str) {
       (true, Some(time_str)) => {
         let result =

@@ -1,12 +1,12 @@
 use crate::database::database::gen_option_id;
 
 use crate::database::entity::FieldType;
-use crate::database::error::DatabaseError;
 use crate::database::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
 use crate::database::rows::{Cell, new_cell_builder};
 use crate::database::template::entity::CELL_DATA;
+use crate::error::CollabError;
 
 use crate::database::template::util::{ToCellString, TypeOptionCellData};
 use crate::util::AnyMapExt;
@@ -385,7 +385,7 @@ impl From<&Cell> for SelectOptionIds {
 }
 
 impl FromStr for SelectOptionIds {
-  type Err = DatabaseError;
+  type Err = CollabError;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     if s.is_empty() {

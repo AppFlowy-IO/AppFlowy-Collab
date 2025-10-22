@@ -5,7 +5,7 @@ use super::super::{
   ParseResult,
 };
 use crate::document::blocks::{Block, BlockType};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 
 /// Parse the heading block.
 ///
@@ -21,7 +21,7 @@ const MIN_LEVEL: usize = 1;
 const LEVEL_KEY: &str = "level";
 
 impl BlockParser for HeadingParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, CollabError> {
     let text_extractor = DefaultDocumentTextExtractor;
     let content = text_extractor.extract_text_from_block(block, context)?;
 

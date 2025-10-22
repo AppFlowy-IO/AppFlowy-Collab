@@ -2,7 +2,6 @@
 use crate::database::database::{
   DatabaseData, gen_database_id, gen_database_view_id, gen_row_id, timestamp,
 };
-use crate::database::error::DatabaseError;
 use crate::database::fields::checkbox_type_option::CheckboxTypeOption;
 use crate::database::fields::checklist_type_option::ChecklistTypeOption;
 use crate::database::fields::date_type_option::{DateTypeOption, TimeTypeOption};
@@ -22,6 +21,7 @@ use crate::database::views::{
   DatabaseLayout, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap,
   GroupSettingMap, LayoutSetting, LayoutSettings, OrderObjectPosition, RowOrder, SortMap,
 };
+use crate::error::CollabError;
 
 use crate::entity::CollabType;
 use crate::entity::EncodedCollab;
@@ -201,7 +201,7 @@ impl From<DatabaseView> for CreateViewParams {
 pub(crate) struct CreateViewParamsValidator;
 
 impl CreateViewParamsValidator {
-  pub(crate) fn validate(params: CreateViewParams) -> Result<CreateViewParams, DatabaseError> {
+  pub(crate) fn validate(params: CreateViewParams) -> Result<CreateViewParams, CollabError> {
     Ok(params)
   }
 }

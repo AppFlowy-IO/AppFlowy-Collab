@@ -6,7 +6,7 @@ use super::{
   SimpleTableParser, SimpleTableRowParser, SubpageParser, TodoListParser, ToggleListParser,
 };
 use crate::document::blocks::{Block, DocumentData};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -72,22 +72,18 @@ impl DocumentParser {
     &self,
     document_data: &DocumentData,
     format: OutputFormat,
-  ) -> Result<String, DocumentError> {
+  ) -> Result<String, CollabError> {
     // find the page block first
     let page_block = document_data
       .blocks
       .get(&document_data.page_id)
-      .ok_or(DocumentError::PageBlockNotFound)?;
+      .ok_or(CollabError::DocumentPageBlockNotFound)?;
 
     let context = ParseContext::new(document_data, self, format);
     self.parse_block(page_block, &context)
   }
 
-  pub fn parse_block(
-    &self,
-    block: &Block,
-    context: &ParseContext,
-  ) -> Result<String, DocumentError> {
+  pub fn parse_block(&self, block: &Block, context: &ParseContext) -> Result<String, CollabError> {
     let result = self.registry.parse_block(block, context)?;
 
     if result.is_container {
@@ -115,7 +111,7 @@ impl DocumentParser {
     &self,
     child_ids: &[String],
     context: &ParseContext,
-  ) -> Result<String, DocumentError> {
+  ) -> Result<String, CollabError> {
     let mut result = "".to_string();
 
     for child_id in child_ids {

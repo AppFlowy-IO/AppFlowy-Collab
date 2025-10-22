@@ -1,6 +1,6 @@
 use super::super::{BlockParser, ParseContext, ParseResult};
 use crate::document::blocks::{Block, BlockType};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 
 /// Parse the image block.
 ///
@@ -12,7 +12,7 @@ pub struct ImageParser;
 const URL_KEY: &str = "url";
 
 impl BlockParser for ImageParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, CollabError> {
     // Extract the URL from block data
     let url = block
       .data

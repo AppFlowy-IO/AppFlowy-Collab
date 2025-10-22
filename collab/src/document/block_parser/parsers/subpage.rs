@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use super::super::{BlockParser, OutputFormat, ParseContext, ParseResult};
 use crate::document::blocks::{Block, BlockType};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 
 /// Parse the subpage block.
 ///
@@ -14,7 +14,7 @@ pub struct SubpageParser;
 const VIEW_ID_KEY: &str = "viewId";
 
 impl BlockParser for SubpageParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, CollabError> {
     let view_id = block
       .data
       .get(VIEW_ID_KEY)

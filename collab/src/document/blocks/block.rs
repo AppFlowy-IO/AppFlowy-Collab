@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use super::super::error::DocumentError;
 use super::{Block, ChildrenOperation, hashmap_to_json_str, json_str_to_hashmap};
+use crate::error::CollabError;
 use crate::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut};
 use serde_json::Value;
 
@@ -49,9 +49,9 @@ impl BlockOperation {
     &self,
     txn: &mut TransactionMut,
     block: Block,
-  ) -> Result<Block, DocumentError> {
+  ) -> Result<Block, CollabError> {
     if self.root.get(txn, &block.id).is_some() {
-      return Err(DocumentError::BlockAlreadyExists);
+      return Err(CollabError::DocumentBlockAlreadyExists);
     }
 
     let block_id = block.id.clone();
@@ -78,7 +78,7 @@ impl BlockOperation {
     // Return the created block.
     self
       .get_block_with_txn(txn, &block_id)
-      .ok_or(DocumentError::BlockCreateError)
+      .ok_or(CollabError::DocumentBlockCreate)
   }
 
   /// Delete a block
@@ -86,10 +86,10 @@ impl BlockOperation {
     &self,
     txn: &mut TransactionMut,
     id: &str,
-  ) -> Result<Block, DocumentError> {
+  ) -> Result<Block, CollabError> {
     let block = self
       .get_block_with_txn(txn, id)
-      .ok_or(DocumentError::BlockIsNotFound)?;
+      .ok_or(CollabError::DocumentBlockNotFound)?;
     self.root.remove(txn, id);
 
     // Delete the children for each block.
@@ -118,11 +118,11 @@ impl BlockOperation {
     parent_id: Option<&str>,
     external_id: Option<String>,
     external_type: Option<String>,
-  ) -> Result<(), DocumentError> {
+  ) -> Result<(), CollabError> {
     let map: MapRef = self
       .root
       .get_with_txn(txn, id)
-      .ok_or(DocumentError::BlockIsNotFound)?;
+      .ok_or(CollabError::DocumentBlockNotFound)?;
 
     // Update parent field with the given parent id.
     if let Some(parent_id) = parent_id {

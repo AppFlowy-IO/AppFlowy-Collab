@@ -1,4 +1,4 @@
-use crate::importer::error::ImporterError;
+use crate::error::CollabError;
 use std::fmt::Display;
 
 use fancy_regex::Regex;
@@ -464,10 +464,10 @@ fn process_md_file(
 }
 
 // Main function to get all links from a markdown file
-pub(crate) fn get_md_links(md_file_path: &Path) -> Result<Vec<Vec<ExternalLink>>, ImporterError> {
+pub(crate) fn get_md_links(md_file_path: &Path) -> Result<Vec<Vec<ExternalLink>>, CollabError> {
   let content = std::fs::read_to_string(md_file_path)?;
   let ast =
-    to_mdast(&content, &ParseOptions::default()).map_err(ImporterError::ParseMarkdownError)?;
+    to_mdast(&content, &ParseOptions::default()).map_err(CollabError::ImporterParseMarkdown)?;
   let mut links = Vec::new();
   collect_links_from_node(&ast, &mut links);
   Ok(
@@ -513,7 +513,7 @@ fn link_type_from_extension(extension: Option<&str>) -> ExternalLinkType {
   }
 }
 
-pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>, ImporterError> {
+pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>, CollabError> {
   let path_str = percent_decode_str(path_str).decode_utf8()?.to_string();
   let mut result = Vec::new();
   let re = Regex::new(r"^(.*?)\s*([a-f0-9]{32})(?:\.(\w+))?$").unwrap();
@@ -542,7 +542,7 @@ pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>
           });
         }
       } else {
-        return Err(ImporterError::Internal(anyhow::anyhow!(
+        return Err(CollabError::Internal(anyhow::anyhow!(
           "Non-UTF8 path component"
         )));
       }
@@ -614,28 +614,28 @@ fn get_file_extension(path: &Path, include_partial_csv: bool) -> FileExtension {
       _ => FileExtension::Unknown,
     })
 }
-fn name_and_id_from_path(path: &Path) -> Result<(String, Option<String>), ImporterError> {
+fn name_and_id_from_path(path: &Path) -> Result<(String, Option<String>), CollabError> {
   let re =
     Regex::new(r"^(.*?)(?:\s+([a-f0-9]{32}))?(?:_[a-zA-Z0-9]+)?(?:\.[a-zA-Z0-9]+)?\s*$").unwrap();
 
   let input = path
     .file_name()
     .and_then(|name| name.to_str())
-    .ok_or(ImporterError::InvalidPathFormat)?;
+    .ok_or(CollabError::ImporterInvalidPathFormat)?;
 
   if let Ok(Some(captures)) = re.captures(input) {
     let file_name = captures
       .get(1)
       .map(|m| m.as_str().trim().to_string())
       .filter(|s| !s.is_empty())
-      .ok_or(ImporterError::InvalidPathFormat)?;
+      .ok_or(CollabError::ImporterInvalidPathFormat)?;
 
     let file_id = captures.get(2).map(|m| m.as_str().to_string());
     return Ok((file_name, file_id));
   }
 
   // Fallback for cases where no ID is present but a valid name exists
-  Err(ImporterError::InvalidPathFormat)
+  Err(CollabError::ImporterInvalidPathFormat)
 }
 
 /// - If the file is a `.csv` and contains `_all`, it's considered a `CSV`.
@@ -680,12 +680,12 @@ fn notion_file_from_path(path: &Path, no_subpages: bool) -> Option<NotionFile> {
   }
 }
 
-pub(crate) fn file_name_from_path(path: &Path) -> Result<String, ImporterError> {
+pub(crate) fn file_name_from_path(path: &Path) -> Result<String, CollabError> {
   path
     .file_name()
-    .ok_or_else(|| ImporterError::InvalidPath("can't get file name".to_string()))?
+    .ok_or_else(|| CollabError::ImporterInvalidPath("can't get file name".to_string()))?
     .to_str()
-    .ok_or_else(|| ImporterError::InvalidPath("file name is not a valid string".to_string()))
+    .ok_or_else(|| CollabError::ImporterInvalidPath("file name is not a valid string".to_string()))
     .map(|s| s.to_string())
 }
 

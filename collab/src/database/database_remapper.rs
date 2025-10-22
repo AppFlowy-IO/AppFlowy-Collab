@@ -12,12 +12,12 @@ use crate::database::database::{
 };
 use crate::database::database_trait::NoPersistenceDatabaseCollabService;
 use crate::database::entity::{CreateDatabaseParams, CreateViewParams, DatabaseView};
-use crate::database::error::DatabaseError;
 use crate::database::rows::{CreateRowParams, Row, RowMeta};
 use crate::database::util::encoded_collab;
 use crate::database::views::{OrderObjectPosition, RowOrder};
 use crate::entity::CollabType;
 use crate::entity::uuid_validation::RowId;
+use crate::error::CollabError;
 
 pub struct DatabaseCollabRemapper {
   id_mapping: HashMap<Uuid, Uuid>,
@@ -49,7 +49,7 @@ impl DatabaseCollabRemapper {
     database_id: &str,
     user_id: &str,
     db_state: &[u8],
-  ) -> Result<Vec<u8>, DatabaseError> {
+  ) -> Result<Vec<u8>, CollabError> {
     let database_data = self
       .collab_bytes_to_database_data(database_id, user_id, db_state)
       .await?;
@@ -66,19 +66,19 @@ impl DatabaseCollabRemapper {
     database_id: &str,
     user_id: &str,
     db_state: &[u8],
-  ) -> Result<DatabaseData, DatabaseError> {
+  ) -> Result<DatabaseData, CollabError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
     let data_source = DataSource::DocStateV1(db_state.to_owned());
 
     let database_uuid =
-      Uuid::parse_str(database_id).map_err(|err| DatabaseError::Internal(err.into()))?;
+      Uuid::parse_str(database_id).map_err(|err| CollabError::Internal(err.into()))?;
     let options = CollabOptions::new(database_uuid, client_id).with_data_source(data_source);
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)
-      .map_err(|e| DatabaseError::Internal(anyhow::Error::new(e)))?;
+      .map_err(|e| CollabError::Internal(anyhow::Error::new(e)))?;
     let collab_service = Arc::new(NoPersistenceDatabaseCollabService::new(client_id));
     let database_body = DatabaseBody::from_collab(&collab, collab_service.clone(), None)
       .ok_or_else(|| {
-        DatabaseError::NoRequiredData("Cannot parse database from collab".to_string())
+        CollabError::NoRequiredData("Cannot parse database from collab".to_string())
       })?;
     let database = Database {
       collab,
@@ -94,7 +94,7 @@ impl DatabaseCollabRemapper {
     database_data: DatabaseData,
     _database_id: &str,
     user_id: &str,
-  ) -> Result<Vec<u8>, DatabaseError> {
+  ) -> Result<Vec<u8>, CollabError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
 
     let remapped_database_id = database_data.database_id;
@@ -227,7 +227,7 @@ impl DatabaseCollabRemapper {
   pub fn remap_database_data(
     &self,
     mut database_data: DatabaseData,
-  ) -> Result<DatabaseData, DatabaseError> {
+  ) -> Result<DatabaseData, CollabError> {
     if let Some(new_database_id) = self.id_mapping.get(&database_data.database_id) {
       database_data.database_id = *new_database_id;
     }

@@ -6,7 +6,6 @@ pub mod database_remapper;
 pub mod database_state;
 pub mod database_trait;
 pub mod entity;
-pub mod error;
 pub mod fields;
 pub mod meta;
 pub mod rows;

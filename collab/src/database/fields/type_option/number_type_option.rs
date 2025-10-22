@@ -1,10 +1,10 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use crate::database::error::DatabaseError;
 use crate::database::fields::number_type_option::number_currency::Currency;
 use crate::database::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
+use crate::error::CollabError;
 use std::fmt::Display;
 
 use crate::preclude::Any;
@@ -107,7 +107,7 @@ impl NumberTypeOption {
   pub fn format_cell_data<T: AsRef<str>>(
     &self,
     num_cell_data: T,
-  ) -> Result<NumberCellFormat, DatabaseError> {
+  ) -> Result<NumberCellFormat, CollabError> {
     match self.format {
       NumberFormat::Num => {
         if SCIENTIFIC_NOTATION_REGEX
@@ -182,7 +182,7 @@ impl NumberCellFormat {
   }
 
   /// The num_str might contain currency symbol, e.g. $1,000.00
-  pub fn from_format_str(num_str: &str, format: &NumberFormat) -> Result<Self, DatabaseError> {
+  pub fn from_format_str(num_str: &str, format: &NumberFormat) -> Result<Self, CollabError> {
     if num_str.is_empty() {
       return Ok(Self::default());
     }

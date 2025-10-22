@@ -1,4 +1,4 @@
-use crate::importer::error::ImporterError;
+use crate::error::CollabError;
 use crate::importer::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 
 use crate::database::database::{Database, get_row_document_id};
@@ -134,7 +134,7 @@ impl NotionPage {
     search_view(&self.children, id)
   }
 
-  pub async fn as_document(&self) -> Result<(Document, CollabResource), ImporterError> {
+  pub async fn as_document(&self) -> Result<(Document, CollabResource), CollabError> {
     let external_link_views = self.get_external_link_notion_view();
     match &self.notion_file {
       NotionFile::Markdown { file_path, .. } => {
@@ -184,7 +184,7 @@ impl NotionPage {
 
         let resource = CollabResource {
           object_id: Uuid::parse_str(&self.view_id).map_err(|_| {
-            ImporterError::Internal(anyhow::anyhow!(
+            CollabError::Internal(anyhow::anyhow!(
               "Invalid UUID format for view_id: {}",
               self.view_id
             ))
@@ -194,7 +194,7 @@ impl NotionPage {
 
         Ok((document, resource))
       },
-      _ => Err(ImporterError::InvalidFileType(format!(
+      _ => Err(CollabError::ImporterInvalidFileType(format!(
         "File type is not supported for document: {:?}",
         self.notion_file
       ))),
@@ -496,7 +496,7 @@ impl NotionPage {
     }
   }
 
-  pub async fn as_database(&self) -> Result<DatabaseImportContent, ImporterError> {
+  pub async fn as_database(&self) -> Result<DatabaseImportContent, CollabError> {
     match &self.notion_file {
       NotionFile::CSV {
         file_path,
@@ -520,8 +520,8 @@ impl NotionPage {
         // create csv template, we need to set the view id as csv template view id
         let mut csv_template =
           CSVTemplate::try_from_reader(content.as_bytes(), true, Some(csv_resource))?;
-        let view_uuid = uuid::Uuid::parse_str(&self.view_id)
-          .map_err(|err| ImporterError::Internal(err.into()))?;
+        let view_uuid =
+          uuid::Uuid::parse_str(&self.view_id).map_err(|err| CollabError::Internal(err.into()))?;
         csv_template.reset_view_id(view_uuid);
         let database_id = csv_template.database_id;
 
@@ -571,7 +571,7 @@ impl NotionPage {
           resource,
         })
       },
-      _ => Err(ImporterError::InvalidFileType(format!(
+      _ => Err(CollabError::ImporterInvalidFileType(format!(
         "File type is not supported for database: {:?}",
         self.notion_file
       ))),
@@ -579,7 +579,7 @@ impl NotionPage {
   }
 
   #[async_recursion::async_recursion(?Send)]
-  pub async fn build_imported_collab(&self) -> Result<Option<ImportedCollabInfo>, ImporterError> {
+  pub async fn build_imported_collab(&self) -> Result<Option<ImportedCollabInfo>, CollabError> {
     let name = self.notion_name.clone();
     match &self.notion_file {
       NotionFile::CSV { .. } => {
@@ -587,7 +587,7 @@ impl NotionPage {
         let database_id = content
           .database
           .get_database_id()
-          .map_err(|e| ImporterError::Internal(e.into()))?;
+          .map_err(|e| CollabError::Internal(e.into()))?;
         let mut resources = vec![content.resource];
         let view_ids = content
           .database
@@ -672,7 +672,7 @@ impl NotionPage {
           imported_collabs: vec![imported_collab],
           resources: vec![CollabResource {
             object_id: Uuid::parse_str(&self.view_id).map_err(|_| {
-              ImporterError::Internal(anyhow::anyhow!(
+              CollabError::Internal(anyhow::anyhow!(
                 "Invalid UUID format for view_id: {}",
                 self.view_id
               ))

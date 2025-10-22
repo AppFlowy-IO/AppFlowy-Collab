@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::blocks::{Block, DocumentData, DocumentMeta, TextDelta};
-use super::error::DocumentError;
 use crate::document::Document;
+use crate::error::CollabError;
 
 const INLINE_DATABASE_BLOCK_TYPES: &[&str] = &["grid", "board", "calendar"];
 const PARENT_ID_KEY: &str = "parent_id";
@@ -37,7 +37,7 @@ impl DocumentCollabRemapper {
     doc_id: &str,
     user_id: &str,
     doc: Document,
-  ) -> Result<Document, DocumentError> {
+  ) -> Result<Document, CollabError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
     let document_data = doc.get_document_data()?;
     let remapped_data = self.remap_document_data(document_data)?;
@@ -45,7 +45,7 @@ impl DocumentCollabRemapper {
     let doc_uuid = Uuid::parse_str(doc_id).unwrap_or_else(|_| Uuid::new_v4());
     let new_options = CollabOptions::new(doc_uuid, client_id);
     let new_collab = Collab::new_with_options(CollabOrigin::Empty, new_options)
-      .map_err(|e| DocumentError::Internal(anyhow::Error::new(e)))?;
+      .map_err(|e| CollabError::Internal(anyhow::Error::new(e)))?;
     let new_document = Document::create_with_data(new_collab, remapped_data)?;
 
     Ok(new_document)
@@ -56,23 +56,20 @@ impl DocumentCollabRemapper {
     doc_id: &str,
     user_id: &str,
     doc_state: &[u8],
-  ) -> Result<Vec<u8>, DocumentError> {
+  ) -> Result<Vec<u8>, CollabError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
     let doc_uuid = Uuid::parse_str(doc_id).unwrap_or_else(|_| Uuid::new_v4());
     let options = CollabOptions::new(doc_uuid, client_id)
       .with_data_source(DataSource::DocStateV1(doc_state.to_owned()));
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)
-      .map_err(|e| DocumentError::Internal(anyhow::Error::new(e)))?;
+      .map_err(|e| CollabError::Internal(anyhow::Error::new(e)))?;
     let document = Document::open(collab)?;
     let new_document = self.remap_collab_doc(doc_id, user_id, document)?;
     let updated_state = new_document.encode_collab()?;
     Ok(updated_state.doc_state.to_vec())
   }
 
-  fn remap_document_data(
-    &self,
-    document_data: DocumentData,
-  ) -> Result<DocumentData, DocumentError> {
+  fn remap_document_data(&self, document_data: DocumentData) -> Result<DocumentData, CollabError> {
     let remapped_blocks = self.remap_blocks(document_data.blocks);
     let remapped_text_map = self.remap_text_map(document_data.meta.text_map);
 
@@ -151,7 +148,7 @@ impl DocumentCollabRemapper {
   fn remap_mention_ids_in_text_deltas(
     &self,
     text_deltas: Vec<TextDelta>,
-  ) -> Result<Option<Vec<TextDelta>>, DocumentError> {
+  ) -> Result<Option<Vec<TextDelta>>, CollabError> {
     let mut updated_deltas = Vec::new();
     let mut has_changes = false;
 
@@ -183,9 +180,9 @@ impl DocumentCollabRemapper {
   fn remap_mention_object_to_string(
     &self,
     mention_data: &crate::preclude::Any,
-  ) -> Result<Option<String>, DocumentError> {
+  ) -> Result<Option<String>, CollabError> {
     let mention_str = serde_json::to_string(mention_data)
-      .map_err(|e| DocumentError::Internal(anyhow::Error::new(e)))?;
+      .map_err(|e| CollabError::Internal(anyhow::Error::new(e)))?;
     let mut mention_map: serde_json::Map<String, serde_json::Value> =
       match serde_json::from_str(&mention_str) {
         Ok(map) => map,
@@ -199,7 +196,7 @@ impl DocumentCollabRemapper {
       if let Some(new_page_id) = self.id_mapping.get(page_id) {
         mention_map.insert(MENTION_PAGE_ID_KEY.to_string(), new_page_id.clone().into());
         let updated_str = serde_json::to_string(&mention_map)
-          .map_err(|e| DocumentError::Internal(anyhow::Error::new(e)))?;
+          .map_err(|e| CollabError::Internal(anyhow::Error::new(e)))?;
         return Ok(Some(updated_str));
       }
     }

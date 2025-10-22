@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use super::super::{BlockParser, OutputFormat, ParseContext, ParseResult};
 use crate::document::blocks::{Block, BlockType};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 
 /// Parse the file block.
 ///
@@ -16,7 +16,7 @@ const NAME_KEY: &str = "name";
 const URL_KEY: &str = "url";
 
 impl BlockParser for FileBlockParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, CollabError> {
     let name = block
       .data
       .get(NAME_KEY)

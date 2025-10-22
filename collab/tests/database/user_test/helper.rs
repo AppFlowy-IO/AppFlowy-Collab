@@ -6,13 +6,13 @@ use async_trait::async_trait;
 use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::database::database::{gen_database_id, gen_field_id};
-use collab::database::error::DatabaseError;
 use collab::database::fields::Field;
 use collab::database::rows::{CreateRowParams, DatabaseRow};
 use collab::database::views::DatabaseLayout;
 use collab::database::workspace_database::{RowRelationChange, RowRelationUpdateReceiver};
 use collab::entity::CollabType;
 use collab::entity::uuid_validation::{ObjectId, RowId};
+use collab::error::CollabError;
 use collab::preclude::Collab;
 use dashmap::DashMap;
 use tokio::sync::mpsc::{Receiver, channel};
@@ -78,7 +78,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
     &self,
     object_id: &collab::entity::uuid_validation::ObjectId,
     encoded_collab: EncodedCollab,
-  ) -> Result<(), DatabaseError> {
+  ) -> Result<(), CollabError> {
     let db_write = self.db.write_txn();
     let _ = db_write.upsert_doc_with_doc_state(
       self.uid,
@@ -89,7 +89,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
     );
     db_write
       .commit_transaction()
-      .map_err(|err| DatabaseError::Internal(err.into()))?;
+      .map_err(|err| CollabError::Internal(err.into()))?;
     Ok(())
   }
 
@@ -109,7 +109,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
   fn delete_collab(
     &self,
     object_id: &collab::entity::uuid_validation::ObjectId,
-  ) -> Result<(), DatabaseError> {
+  ) -> Result<(), CollabError> {
     let write_txn = self.db.write_txn();
     write_txn
       .delete_doc(self.uid, self.workspace_id.as_str(), &object_id.to_string())
@@ -134,7 +134,7 @@ impl DatabaseCollabReader for TestUserDatabaseServiceImpl {
     &self,
     object_id: &ObjectId,
     collab_type: CollabType,
-  ) -> Result<EncodedCollab, DatabaseError> {
+  ) -> Result<EncodedCollab, CollabError> {
     let options = CollabOptions::new(*object_id, self.client_id);
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let object_id_str = collab.object_id().to_string();
@@ -143,16 +143,14 @@ impl DatabaseCollabReader for TestUserDatabaseServiceImpl {
     let _ = db_read.load_doc_with_txn(self.uid, &self.workspace_id, &object_id_str, &mut txn);
     drop(txn);
 
-    collab
-      .encode_collab_v1(|collab| collab_type.validate_require_data(collab))
-      .map_err(|e| e.into())
+    collab.encode_collab_v1(|collab| collab_type.validate_require_data(collab))
   }
 
   async fn reader_batch_get_collabs(
     &self,
     object_ids: Vec<ObjectId>,
     collab_type: CollabType,
-  ) -> Result<EncodeCollabByOid, DatabaseError> {
+  ) -> Result<EncodeCollabByOid, CollabError> {
     let mut map = EncodeCollabByOid::new();
     for object_id in object_ids {
       let options = CollabOptions::new(object_id, self.client_id);
@@ -163,9 +161,8 @@ impl DatabaseCollabReader for TestUserDatabaseServiceImpl {
       let _ = db_read.load_doc_with_txn(self.uid, &self.workspace_id, &object_id_str, &mut txn);
       drop(txn);
 
-      let encoded_collab = collab
-        .encode_collab_v1(|collab| collab_type.validate_require_data(collab))
-        .unwrap();
+      let encoded_collab =
+        collab.encode_collab_v1(|collab| collab_type.validate_require_data(collab))?;
       map.insert(object_id, encoded_collab);
     }
     Ok(map)

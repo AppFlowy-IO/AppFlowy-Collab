@@ -1,6 +1,6 @@
-use super::super::error::DocumentError;
 use super::text_entities::TextDelta;
 use super::{BlockEvent, BlockEventPayload, DeltaType};
+use crate::error::CollabError;
 use crate::preclude::text::YChange;
 use crate::preclude::{
   Array, Delta, EntryChange, Event, Map, PathSegment, ReadTxn, Text, TextRef, TransactionMut,
@@ -10,13 +10,13 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 /// block data json string to hashmap
-pub fn json_str_to_hashmap(json_str: &str) -> Result<HashMap<String, Value>, DocumentError> {
-  serde_json::from_str(json_str).map_err(|_| DocumentError::ConvertDataError)
+pub fn json_str_to_hashmap(json_str: &str) -> Result<HashMap<String, Value>, CollabError> {
+  serde_json::from_str(json_str).map_err(|_| CollabError::DocumentConvertData)
 }
 
 /// block data hashmap to json string
-pub fn hashmap_to_json_str(data: HashMap<String, Value>) -> Result<String, DocumentError> {
-  serde_json::to_string(&data).map_err(|_| DocumentError::ConvertDataError)
+pub fn hashmap_to_json_str(data: HashMap<String, Value>) -> Result<String, CollabError> {
+  serde_json::to_string(&data).map_err(|_| CollabError::DocumentConvertData)
 }
 
 /// parse block change event to BlockEvent

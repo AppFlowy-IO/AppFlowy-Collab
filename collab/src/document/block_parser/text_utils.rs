@@ -1,7 +1,7 @@
 use super::OutputFormat;
 use super::traits::ParseContext;
 use crate::document::blocks::{AttrKey, Block, TextDelta};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 use crate::preclude::{Any, Attrs};
 
 pub trait DocumentTextExtractor {
@@ -10,21 +10,21 @@ pub trait DocumentTextExtractor {
     &self,
     block: &Block,
     context: &ParseContext,
-  ) -> Result<String, DocumentError>;
+  ) -> Result<String, CollabError>;
 
   /// Get the plain text from the delta json string with delegate support
   fn extract_plain_text_from_delta_with_context(
     &self,
     delta_json: &str,
     context: Option<&ParseContext>,
-  ) -> Result<String, DocumentError>;
+  ) -> Result<String, CollabError>;
 
   /// Get the markdown text from the delta json string with delegate support
   fn extract_markdown_text_from_delta_with_context(
     &self,
     delta_json: &str,
     context: Option<&ParseContext>,
-  ) -> Result<String, DocumentError>;
+  ) -> Result<String, CollabError>;
 }
 
 pub struct DefaultDocumentTextExtractor;
@@ -34,7 +34,7 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
     &self,
     block: &Block,
     context: &ParseContext,
-  ) -> Result<String, DocumentError> {
+  ) -> Result<String, CollabError> {
     let external_id = block.external_id.as_ref();
     if let Some(external_id) = external_id {
       let delta_json = context
@@ -64,9 +64,9 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
     &self,
     delta_json: &str,
     context: Option<&ParseContext>,
-  ) -> Result<String, DocumentError> {
-    let deltas: Vec<TextDelta> = serde_json::from_str(delta_json)
-      .map_err(|_| DocumentError::ParseDeltaJsonToTextDeltaError)?;
+  ) -> Result<String, CollabError> {
+    let deltas: Vec<TextDelta> =
+      serde_json::from_str(delta_json).map_err(|_| CollabError::DocumentParseDeltaJson)?;
 
     let mut result = "".to_string();
 
@@ -93,9 +93,9 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
     &self,
     delta_json: &str,
     context: Option<&ParseContext>,
-  ) -> Result<String, DocumentError> {
-    let deltas: Vec<TextDelta> = serde_json::from_str(delta_json)
-      .map_err(|_| DocumentError::ParseDeltaJsonToTextDeltaError)?;
+  ) -> Result<String, CollabError> {
+    let deltas: Vec<TextDelta> =
+      serde_json::from_str(delta_json).map_err(|_| CollabError::DocumentParseDeltaJson)?;
 
     let mut result = "".to_string();
 

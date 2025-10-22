@@ -1,6 +1,8 @@
 use std::ops::Deref;
 use std::time::Duration;
 
+use crate::error::CollabError;
+
 pub const DEFAULT_RWLOCK_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug)]
@@ -39,17 +41,17 @@ impl<T: ?Sized> RwLock<T> {
     }
   }
 
-  pub async fn read_err(&self) -> Result<tokio::sync::RwLockReadGuard<'_, T>, RwLockError> {
+  pub async fn read_err(&self) -> Result<tokio::sync::RwLockReadGuard<'_, T>, CollabError> {
     match tokio::time::timeout(DEFAULT_RWLOCK_TIMEOUT, self.inner.read()).await {
       Ok(guard) => Ok(guard),
-      Err(_) => Err(RwLockError::ReadTimeout(DEFAULT_RWLOCK_TIMEOUT)),
+      Err(_) => Err(CollabError::RwLockReadTimeout(DEFAULT_RWLOCK_TIMEOUT)),
     }
   }
 
-  pub async fn write_err(&self) -> Result<tokio::sync::RwLockWriteGuard<'_, T>, RwLockError> {
+  pub async fn write_err(&self) -> Result<tokio::sync::RwLockWriteGuard<'_, T>, CollabError> {
     match tokio::time::timeout(DEFAULT_RWLOCK_TIMEOUT, self.inner.write()).await {
       Ok(guard) => Ok(guard),
-      Err(_) => Err(RwLockError::WriteTimeout(DEFAULT_RWLOCK_TIMEOUT)),
+      Err(_) => Err(CollabError::RwLockWriteTimeout(DEFAULT_RWLOCK_TIMEOUT)),
     }
   }
 }
@@ -73,14 +75,6 @@ impl<T: Default> Default for RwLock<T> {
   fn default() -> Self {
     Self::new(T::default())
   }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum RwLockError {
-  #[error("Read lock timeout: {0:?}")]
-  ReadTimeout(Duration),
-  #[error("Write lock timeout: {0:?}")]
-  WriteTimeout(Duration),
 }
 
 #[derive(Debug)]
@@ -108,10 +102,10 @@ impl<T: ?Sized> Mutex<T> {
     }
   }
 
-  pub async fn lock_err(&self) -> Result<tokio::sync::MutexGuard<'_, T>, MutexError> {
+  pub async fn lock_err(&self) -> Result<tokio::sync::MutexGuard<'_, T>, CollabError> {
     match tokio::time::timeout(DEFAULT_RWLOCK_TIMEOUT, self.inner.lock()).await {
       Ok(guard) => Ok(guard),
-      Err(_) => Err(MutexError::LockTimeout(DEFAULT_RWLOCK_TIMEOUT)),
+      Err(_) => Err(CollabError::MutexLockTimeout(DEFAULT_RWLOCK_TIMEOUT)),
     }
   }
 }
@@ -135,12 +129,6 @@ impl<T: Default> Default for Mutex<T> {
   fn default() -> Self {
     Self::new(T::default())
   }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum MutexError {
-  #[error("Lock timeout: {0:?}")]
-  LockTimeout(Duration),
 }
 
 #[cfg(test)]

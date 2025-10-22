@@ -2,7 +2,6 @@ use crate::util::{async_unzip_asset, setup_log, sync_unzip_asset};
 use collab::database::database::Database;
 use collab::database::entity::FieldType;
 use collab::database::entity::FieldType::*;
-use collab::database::error::DatabaseError;
 use collab::database::fields::media_type_option::MediaCellData;
 use collab::database::fields::{Field, TypeOptionCellReader};
 use collab::database::rows::Row;
@@ -14,9 +13,9 @@ use collab::preclude::Collab;
 
 use collab::document::importer::define::URL_FIELD;
 use collab::entity::CollabType;
+use collab::error::CollabError;
 use collab::folder::hierarchy_builder::ParentChildViews;
 use collab::folder::{Folder, View, default_folder_data};
-use collab::importer::error::ImporterError;
 use collab::importer::imported_collab::{ImportType, ImportedCollabInfo, import_notion_zip_file};
 use collab::importer::notion::page::NotionPage;
 use collab::importer::notion::{CSVContentCache, NotionImporter, is_csv_contained_cached};
@@ -399,7 +398,7 @@ async fn import_empty_zip_test() {
   )
   .unwrap();
   let err = importer.import().await.unwrap_err();
-  assert!(matches!(err, ImporterError::CannotImport));
+  assert!(matches!(err, CollabError::ImporterCannotImport));
 }
 
 #[tokio::test]
@@ -680,7 +679,7 @@ fn assert_database_rows_with_csv_rows(
   csv_rows: Vec<CSVRow>,
   database: Database,
   fields: Vec<Field>,
-  rows: Vec<Result<Row, DatabaseError>>,
+  rows: Vec<Result<Row, CollabError>>,
   mut expected_files: HashMap<&str, &str>,
 ) {
   let type_option_by_field_id = fields

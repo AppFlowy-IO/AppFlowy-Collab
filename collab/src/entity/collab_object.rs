@@ -8,6 +8,7 @@ use super::define::{
 };
 use super::proto;
 use super::uuid_validation::ObjectId;
+use crate::error::CollabError;
 use crate::preclude::{ArrayRef, Collab, MapExt, MapRef};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -29,12 +30,6 @@ pub enum CollabType {
   /// No strict validation is applied when handling objects of this type(check out the [CollabType::validate_require_data]
   /// for more information), which means errors might not be caught as strictly as with known types.
   Unknown = 6,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum CollabValidateError {
-  #[error("No required data: {0}")]
-  NoRequiredData(String),
 }
 
 impl CollabType {
@@ -67,7 +62,7 @@ impl CollabType {
   /// - `Ok(())` if the collab object contains all the required data for its type.
   /// - `Err(Error)` if the required data is missing or if the collab object does not meet
   ///   the validation criteria for its type.
-  pub fn validate_require_data(&self, collab: &Collab) -> Result<(), CollabValidateError> {
+  pub fn validate_require_data(&self, collab: &Collab) -> Result<(), CollabError> {
     let txn = collab.transact();
     match self {
       CollabType::Document => {
@@ -188,8 +183,8 @@ pub fn validate_data_for_folder(collab: &Collab, workspace_id: &str) -> Result<(
 }
 
 #[inline]
-fn no_required_data_error(collab_type: &CollabType, reason: &str) -> CollabValidateError {
-  CollabValidateError::NoRequiredData(format!("{}:{}", collab_type, reason))
+fn no_required_data_error(collab_type: &CollabType, reason: &str) -> CollabError {
+  CollabError::NoRequiredData(format!("{}:{}", collab_type, reason))
 }
 
 impl Display for CollabType {

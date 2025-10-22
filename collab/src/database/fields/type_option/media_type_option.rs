@@ -5,9 +5,9 @@ use crate::database::fields::{
 };
 use crate::database::rows::{Cell, new_cell_builder};
 
-use crate::database::error::DatabaseError;
 use crate::database::template::entity::CELL_DATA;
 use crate::database::template::util::{ToCellString, TypeOptionCellData};
+use crate::error::CollabError;
 use crate::util::AnyMapExt;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
@@ -147,7 +147,7 @@ impl ToCellString for MediaCellData {
 }
 
 impl FromStr for MediaCellData {
-  type Err = DatabaseError;
+  type Err = CollabError;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     if s.is_empty() {

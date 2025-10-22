@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use super::super::{BlockParser, OutputFormat, ParseContext, ParseResult};
 use crate::document::blocks::{Block, BlockType};
-use crate::document::error::DocumentError;
+use crate::error::CollabError;
 
 /// Parse the link preview block.
 ///
@@ -14,7 +14,7 @@ pub struct LinkPreviewParser;
 const URL_KEY: &str = "url";
 
 impl BlockParser for LinkPreviewParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, CollabError> {
     let url = block
       .data
       .get(URL_KEY)

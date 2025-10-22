@@ -12,7 +12,6 @@ pub use view::*;
 pub use workspace::*;
 
 mod entities;
-pub mod error;
 mod folder;
 pub mod folder_diff;
 mod folder_migration;

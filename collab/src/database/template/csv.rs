@@ -1,10 +1,10 @@
 use crate::database::database::{gen_database_id, gen_database_view_id};
 use crate::database::entity::FieldType;
-use crate::database::error::DatabaseError;
 use crate::database::template::builder::{DatabaseTemplateBuilder, FileUrlBuilder};
 use crate::database::template::date_parse::cast_string_to_timestamp;
 use crate::database::template::entity::DatabaseTemplate;
 use crate::entity::uuid_validation::{DatabaseId, DatabaseViewId};
+use crate::error::CollabError;
 use percent_encoding::percent_decode_str;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -35,7 +35,7 @@ impl CSVTemplate {
     reader: impl io::Read,
     auto_field_type: bool,
     mut csv_resource: Option<CSVResource>,
-  ) -> Result<Self, DatabaseError> {
+  ) -> Result<Self, CollabError> {
     let mut fields: Vec<CSVField> = vec![];
 
     let mut reader = csv::Reader::from_reader(reader);
@@ -47,7 +47,7 @@ impl CSVTemplate {
         });
       }
     } else {
-      return Err(DatabaseError::InvalidCSV("No header".to_string()));
+      return Err(CollabError::DatabaseInvalidCsv("No header".to_string()));
     }
 
     let rows: Vec<Vec<String>> = reader
@@ -84,7 +84,7 @@ impl CSVTemplate {
   pub async fn try_into_database_template(
     self,
     file_url_builder: Option<Box<dyn FileUrlBuilder>>,
-  ) -> Result<DatabaseTemplate, DatabaseError> {
+  ) -> Result<DatabaseTemplate, CollabError> {
     let CSVTemplate {
       fields,
       rows,

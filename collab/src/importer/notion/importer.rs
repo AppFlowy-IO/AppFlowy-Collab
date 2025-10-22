@@ -1,8 +1,8 @@
+use crate::error::CollabError;
 use crate::folder::hierarchy_builder::{
   NestedChildViewBuilder, NestedViews, ParentChildViews, ViewExtraBuilder,
 };
 use crate::folder::{SpaceInfo, SpacePermission, ViewLayout};
-use crate::importer::error::ImporterError;
 use crate::importer::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 use crate::importer::notion::file::NotionFile;
 use crate::importer::notion::page::{
@@ -41,10 +41,10 @@ impl NotionImporter {
     file_path: P,
     workspace_id: S,
     host: String,
-  ) -> Result<Self, ImporterError> {
+  ) -> Result<Self, CollabError> {
     let path = file_path.into();
     if !path.exists() {
-      return Err(ImporterError::InvalidPath(format!(
+      return Err(CollabError::ImporterInvalidPath(format!(
         "Path: does not exist: {:?}",
         path
       )));
@@ -66,14 +66,14 @@ impl NotionImporter {
   }
 
   /// Return a ImportedInfo struct that contains all the views and their children recursively.
-  pub async fn import(mut self) -> Result<ImportedInfo, ImporterError> {
+  pub async fn import(mut self) -> Result<ImportedInfo, CollabError> {
     let views = self.collect_pages().await?;
     if views.is_empty() {
-      return Err(ImporterError::CannotImport);
+      return Err(CollabError::ImporterCannotImport);
     }
 
     let workspace_uuid = uuid::Uuid::parse_str(&self.workspace_id).map_err(|e| {
-      ImporterError::Internal(anyhow!(
+      CollabError::Internal(anyhow!(
         "Invalid workspace ID format '{}': {}",
         self.workspace_id,
         e
@@ -89,7 +89,7 @@ impl NotionImporter {
     )
   }
 
-  async fn collect_pages(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
+  async fn collect_pages(&mut self) -> Result<Vec<NotionPage>, CollabError> {
     let mut has_spaces = false;
     let mut has_pages = false;
 
@@ -137,10 +137,10 @@ impl NotionImporter {
         });
       }
 
-      Ok::<_, ImporterError>(notion_pages)
+      Ok::<_, CollabError>(notion_pages)
     })
     .await
-    .map_err(|err| ImporterError::Internal(err.into()))??;
+    .map_err(|err| CollabError::Internal(err.into()))??;
 
     Ok(pages)
   }
@@ -165,7 +165,7 @@ impl ImportedInfo {
     host: String,
     name: String,
     views: Vec<NotionPage>,
-  ) -> Result<Self, ImporterError> {
+  ) -> Result<Self, CollabError> {
     let view_uuid = uuid::Uuid::new_v4();
     let (space_view, space_collab) = create_space_view(
       uid,
@@ -223,7 +223,7 @@ impl ImportedInfo {
         collab_type: CollabType::Document,
         encoded_collab: self
           .space_collab
-          .encode_collab_v1(|_collab| Ok::<_, ImporterError>(()))
+          .encode_collab_v1(|_collab| Ok::<_, CollabError>(()))
           .unwrap(),
       };
 
