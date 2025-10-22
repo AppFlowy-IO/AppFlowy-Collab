@@ -1,24 +1,19 @@
+use crate::error::CollabError;
 use crate::util::ArrayExt;
 
 use yrs::types::TypeRef;
 use yrs::{Any, Array, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, SharedRef, TransactionMut};
-
-#[derive(Debug, thiserror::Error)]
-pub enum FillError {
-  #[error("cannot fill {0} with: {0}")]
-  InvalidData(TypeRef, String),
-}
 
 /// Trait that allows to fill shared refs with data.
 pub trait FillRef<R>
 where
   R: SharedRef,
 {
-  fn fill(self, txn: &mut TransactionMut, shared_ref: &R) -> Result<(), FillError>;
+  fn fill(self, txn: &mut TransactionMut, shared_ref: &R) -> Result<(), CollabError>;
 }
 
 impl FillRef<MapRef> for Any {
-  fn fill(self, txn: &mut TransactionMut, shared_ref: &MapRef) -> Result<(), FillError> {
+  fn fill(self, txn: &mut TransactionMut, shared_ref: &MapRef) -> Result<(), CollabError> {
     match self {
       Any::Map(map) => {
         for (key, value) in map.iter() {
@@ -40,13 +35,13 @@ impl FillRef<MapRef> for Any {
         }
         Ok(())
       },
-      _ => Err(FillError::InvalidData(TypeRef::Map, self.to_string())),
+      _ => Err(CollabError::FillInvalidData(TypeRef::Map, self.to_string())),
     }
   }
 }
 
 impl FillRef<ArrayRef> for Any {
-  fn fill(self, txn: &mut TransactionMut, shared_ref: &ArrayRef) -> Result<(), FillError> {
+  fn fill(self, txn: &mut TransactionMut, shared_ref: &ArrayRef) -> Result<(), CollabError> {
     match self {
       Any::Array(array) => {
         shared_ref.clear(txn);
@@ -56,7 +51,10 @@ impl FillRef<ArrayRef> for Any {
         }
         Ok(())
       },
-      _ => Err(FillError::InvalidData(TypeRef::Array, self.to_string())),
+      _ => Err(CollabError::FillInvalidData(
+        TypeRef::Array,
+        self.to_string(),
+      )),
     }
   }
 }

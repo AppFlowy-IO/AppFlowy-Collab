@@ -1,0 +1,1223 @@
+use crate::core::collab::{CollabOptions, DataSource};
+pub use crate::core::origin::CollabOrigin;
+use crate::entity::CollabType;
+use crate::entity::EncodedCollab;
+use crate::entity::define::{FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID};
+use crate::preclude::*;
+use crate::util::any_to_json_value;
+use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
+use std::borrow::{Borrow, BorrowMut};
+use std::collections::{HashMap, HashSet};
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
+use tracing::error;
+use uuid::Uuid;
+
+use super::folder_observe::ViewChangeSender;
+use super::hierarchy_builder::{FlattedViews, ParentChildViews};
+use super::revision::RevisionMapping;
+use super::section::{Section, SectionItem, SectionMap};
+use super::{
+  FolderData, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
+  ViewChangeReceiver, ViewId, ViewUpdate, ViewsMap, Workspace,
+};
+use crate::entity::uuid_validation::WorkspaceId;
+use crate::error::CollabError;
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[serde(transparent)]
+pub struct UserId(pub(crate) String);
+
+impl From<i64> for UserId {
+  fn from(value: i64) -> Self {
+    Self(value.to_string())
+  }
+}
+
+impl From<&i64> for UserId {
+  fn from(value: &i64) -> Self {
+    Self(value.to_string())
+  }
+}
+
+impl UserId {
+  pub fn as_i64(&self) -> i64 {
+    self.0.parse::<i64>().unwrap()
+  }
+}
+
+impl AsRef<str> for UserId {
+  fn as_ref(&self) -> &str {
+    &self.0
+  }
+}
+
+const VIEWS: &str = "views";
+const PARENT_CHILD_VIEW_RELATION: &str = "relation";
+const CURRENT_VIEW: &str = "current_view";
+const CURRENT_VIEW_FOR_USER: &str = "current_view_for_user";
+const REVISION_MAP: &str = "revision_map";
+
+pub(crate) const FAVORITES_V1: &str = "favorites";
+const SECTION: &str = "section";
+
+#[derive(Clone)]
+pub struct FolderNotify {
+  pub view_change_tx: ViewChangeSender,
+  pub section_change_tx: SectionChangeSender,
+}
+
+/// Represents the folder hierarchy in a workspace.
+///
+/// The `Folder` structure organizes different aspects of a workspace into individual components
+/// such as workspaces, views, trash, favorites, meta, and relation.
+///
+/// The folder hierarchy can be visualized as follows:
+/// Folder: [workspaces: [], views: {}, trash: [], favorites: { uid: [] }, meta: {}, relation: {}]
+///
+///
+/// # Fields
+///
+/// * `inner`: A mutex-protected shared pointer for managing access to the folder data.
+/// * `root`: Wrapper around the root map reference.
+/// * `workspaces`: An array of `WorkspaceArray` objects, representing different workspaces in the folder.
+///   Currently, we only use one workspace to manage all the views in the folder.
+/// * `views`: A shared pointer to a map (`ViewsMap`) from view id to view data, keeping track of each view's data.
+/// * `trash`: An array of `TrashArray` objects, representing the trash items in the folder.
+/// * `section`: An map of `SectionMap` objects, representing the favorite items in the folder.
+/// * `meta`: Wrapper around the metadata map reference.
+/// * `subscription`: A `DeepEventsSubscription` object, managing the subscription for folder changes, like inserting a new view.
+/// * `notifier`: An optional `FolderNotify` object for notifying about changes in the folder.
+pub struct Folder {
+  pub collab: Collab,
+  pub body: FolderBody,
+}
+
+impl Folder {
+  pub fn open(mut collab: Collab, notifier: Option<FolderNotify>) -> Result<Self, CollabError> {
+    let body = FolderBody::open(&mut collab, notifier)?;
+    let folder = Folder { collab, body };
+    if folder.get_workspace_id().is_none() {
+      // When the folder is opened, the workspace id must be present.
+      Err(CollabError::FolderMissingRequiredData(
+        "missing workspace id".into(),
+      ))
+    } else {
+      Ok(folder)
+    }
+  }
+
+  pub fn create(mut collab: Collab, notifier: Option<FolderNotify>, data: FolderData) -> Self {
+    let body = FolderBody::open_with(&mut collab, notifier, Some(data));
+    Folder { collab, body }
+  }
+
+  pub fn from_collab_doc_state(
+    origin: CollabOrigin,
+    collab_doc_state: DataSource,
+    workspace_id: &str,
+    client_id: ClientID,
+  ) -> Result<Self, CollabError> {
+    let workspace_uuid = Uuid::parse_str(workspace_id)
+      .map_err(|_| CollabError::Internal(anyhow!("Invalid workspace id format")))?;
+    let options = CollabOptions::new(workspace_uuid, client_id).with_data_source(collab_doc_state);
+    let collab = Collab::new_with_options(origin, options)?;
+    Self::open(collab, None)
+  }
+
+  pub fn close(&self) {
+    self.collab.remove_all_plugins();
+  }
+
+  pub fn validate(&self) -> Result<(), CollabError> {
+    CollabType::Folder
+      .validate_require_data(&self.collab)
+      .map_err(|err| CollabError::FolderMissingRequiredData(err.to_string()))?;
+    Ok(())
+  }
+
+  /// Returns the doc state and the state vector.
+  pub fn encode_collab(&self) -> Result<EncodedCollab, CollabError> {
+    self.collab.encode_collab_v1(|collab| {
+      CollabType::Folder
+        .validate_require_data(collab)
+        .map_err(|err| CollabError::FolderMissingRequiredData(err.to_string()))
+    })
+  }
+
+  /// Fetches the folder data based on the current workspace and view.
+  ///
+  /// This function initiates a transaction on the root node and uses it to fetch the current workspace
+  /// and view. It also fetches all workspaces and their respective views.
+  ///
+  /// It goes through all the workspaces and fetches the views recursively for each workspace.
+  ///
+  /// # Returns
+  ///
+  /// * `Some(FolderData)`: If the operation is successful, it returns `Some` variant wrapping `FolderData`
+  ///   object, which consists of current workspace ID, current view, a list of workspaces, and their respective views.
+  ///
+  /// * `None`: If the operation is unsuccessful (though it should typically not be the case as `Some`
+  ///   is returned explicitly), it returns `None`.
+  pub fn get_folder_data(&self, workspace_id: &str, uid: i64) -> Option<FolderData> {
+    let txn = self.collab.transact();
+    self.body.get_folder_data(&txn, workspace_id, uid)
+  }
+
+  /// Fetches the current workspace.
+  ///
+  /// This function fetches the ID of the current workspace from the meta object,
+  /// and uses this ID to fetch the actual workspace object.
+  ///
+  pub fn get_workspace_info(&self, workspace_id: &WorkspaceId, uid: i64) -> Option<Workspace> {
+    let txn = self.collab.transact();
+    self.body.get_workspace_info(&txn, workspace_id, uid)
+  }
+
+  pub fn get_workspace_id(&self) -> Option<ViewId> {
+    let txn = self.collab.transact();
+    self.body.get_workspace_id(&txn)?.parse().ok()
+  }
+
+  pub fn get_all_views(&self, uid: i64) -> Vec<Arc<View>> {
+    let txn = self.collab.transact();
+    self.body.views.get_all_views(&txn, uid)
+  }
+
+  pub fn get_views(&self, view_ids: &[ViewId], uid: i64) -> Vec<Arc<View>> {
+    let txn = self.collab.transact();
+    self.body.views.get_views(&txn, view_ids, uid)
+  }
+
+  pub fn get_views_belong_to(&self, parent_id: &ViewId, uid: i64) -> Vec<Arc<View>> {
+    let txn = self.collab.transact();
+    self.body.views.get_views_belong_to(&txn, parent_id, uid)
+  }
+
+  pub fn move_view(&mut self, view_id: &ViewId, from: u32, to: u32, uid: i64) -> Option<Arc<View>> {
+    let mut txn = self.collab.transact_mut();
+    self.body.move_view(&mut txn, view_id, from, to, uid)
+  }
+
+  /// Moves a nested view to a new location in the hierarchy.
+  ///
+  /// This function takes the `view_id` of the view to be moved,
+  /// `new_parent_id` of the view under which the `view_id` should be moved,
+  /// and an optional `new_prev_id` to position the `view_id` right after
+  /// this specific view.
+  ///
+  /// If `new_prev_id` is provided, the moved view will be placed right after
+  /// the view corresponding to `new_prev_id` under the `new_parent_id`.
+  /// If `new_prev_id` is `None`, the moved view will become the first child of the new parent.
+  ///
+  /// # Arguments
+  ///
+  /// * `view_id` - A string slice that holds the id of the view to be moved.
+  /// * `new_parent_id` - A string slice that holds the id of the new parent view.
+  /// * `prev_view_id` - An `Option<String>` that holds the id of the view after which the `view_id` should be positioned.
+  ///
+  pub fn move_nested_view(
+    &mut self,
+    view_id: &ViewId,
+    new_parent_id: &ViewId,
+    prev_view_id: Option<ViewId>,
+    uid: i64,
+  ) -> Option<Arc<View>> {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .move_nested_view(&mut txn, view_id, new_parent_id, prev_view_id, uid)
+  }
+
+  pub fn set_current_view(&mut self, view_id: ViewId, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    self.body.set_current_view(&mut txn, view_id, uid);
+  }
+
+  pub fn get_current_view(&self, uid: i64) -> Option<ViewId> {
+    let txn = self.collab.transact();
+    self.body.get_current_view(&txn, uid)
+  }
+
+  pub fn update_view<F>(&mut self, view_id: &ViewId, f: F, uid: i64) -> Option<Arc<View>>
+  where
+    F: FnOnce(ViewUpdate) -> Option<View>,
+  {
+    let mut txn = self.collab.transact_mut();
+    self.body.views.update_view(&mut txn, view_id, f, uid)
+  }
+
+  pub fn delete_views(&mut self, views: Vec<ViewId>) {
+    let mut txn = self.collab.transact_mut();
+    self.body.views.delete_views(&mut txn, views);
+  }
+
+  // Section operations
+  // Favorites
+  pub fn add_favorite_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_favorite(true).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn delete_favorite_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_favorite(false).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn get_my_favorite_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Favorite, uid)
+      .map(|op| op.get_all_section_item(&txn))
+      .unwrap_or_default()
+  }
+
+  pub fn get_all_favorites_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Favorite, uid)
+      .map(|op| op.get_sections(&txn))
+      .unwrap_or_default()
+      .into_iter()
+      .flat_map(|(_user_id, items)| items)
+      .collect()
+  }
+
+  pub fn remove_all_my_favorite_sections(&mut self, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, uid) {
+      op.clear(&mut txn);
+    }
+  }
+
+  pub fn move_favorite_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, uid) {
+      op.move_section_item_with_txn(&mut txn, id, prev_id);
+    }
+  }
+
+  // Trash
+  pub fn add_trash_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_trash(true).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn delete_trash_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_trash(false).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn get_my_trash_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Trash, uid)
+      .map(|op| op.get_all_section_item(&txn))
+      .unwrap_or_default()
+  }
+
+  pub fn get_all_trash_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Trash, uid)
+      .map(|op| op.get_sections(&txn))
+      .unwrap_or_default()
+      .into_iter()
+      .flat_map(|(_user_id, items)| items)
+      .collect()
+  }
+
+  pub fn remove_all_my_trash_sections(&mut self, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, uid) {
+      op.clear(&mut txn);
+    }
+  }
+
+  pub fn move_trash_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, uid) {
+      op.move_section_item_with_txn(&mut txn, id, prev_id);
+    }
+  }
+
+  // Private
+  pub fn add_private_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_private(true).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn delete_private_view_ids(&mut self, ids: Vec<String>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for id in ids {
+      if let Ok(view_uuid) = uuid::Uuid::parse_str(&id) {
+        self.body.views.update_view(
+          &mut txn,
+          &view_uuid,
+          |update| update.set_private(false).done(),
+          uid,
+        );
+      }
+    }
+  }
+
+  pub fn get_my_private_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Private, uid)
+      .map(|op| op.get_all_section_item(&txn))
+      .unwrap_or_default()
+  }
+
+  pub fn get_all_private_sections(&self, uid: i64) -> Vec<SectionItem> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .section
+      .section_op(&txn, Section::Private, uid)
+      .map(|op| op.get_sections(&txn))
+      .unwrap_or_default()
+      .into_iter()
+      .flat_map(|(_user_id, items)| items)
+      .collect()
+  }
+
+  pub fn remove_all_my_private_sections(&mut self, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Private, uid) {
+      op.clear(&mut txn);
+    }
+  }
+
+  pub fn move_private_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    if let Some(op) = self.body.section.section_op(&txn, Section::Private, uid) {
+      op.move_section_item_with_txn(&mut txn, id, prev_id);
+    }
+  }
+
+  pub fn get_my_trash_info(&self, uid: i64) -> Vec<TrashInfo> {
+    let txn = self.collab.transact();
+    self
+      .get_my_trash_sections(uid)
+      .into_iter()
+      .flat_map(|section| {
+        self
+          .body
+          .views
+          .get_view_name_with_txn(&txn, &section.id)
+          .map(|name| TrashInfo {
+            id: section.id,
+            name,
+            created_at: section.timestamp,
+          })
+      })
+      .collect()
+  }
+
+  /// Inserts a new view into the specified workspace under a given parent view.
+  ///
+  /// # Parameters:
+  /// - `parent_view_id`: The ID of the parent view under which the new view will be added.
+  /// - `index`: Optional. If provided, the new view will be inserted at the specified position
+  ///    among the parent view's children. If `None`, the new view will be added at the end of
+  ///    the children list.
+  ///
+  /// # Behavior:
+  /// - When `index` is `Some`, the new view is inserted at that position in the list of the
+  ///   parent view's children.
+  /// - When `index` is `None`, the new view is appended to the end of the parent view's children.
+  ///
+  /// Represents a view that serves as an identifier for a specific [`Collab`] object.
+  /// A view can represent different types of [`Collab`] objects, such as a document or a database.
+  /// When a view is inserted, its id is the[`Collab`] object id.
+  ///
+  pub fn insert_view(&mut self, view: View, index: Option<u32>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    self.body.views.insert(&mut txn, view, index, uid);
+  }
+
+  /// Insert a list of views at the end of its parent view
+  pub fn insert_views(&mut self, views: Vec<View>, uid: i64) {
+    let mut txn = self.collab.transact_mut();
+    for view in views {
+      self.body.views.insert(&mut txn, view, None, uid);
+    }
+  }
+
+  /// Insert parent-children views into the folder.
+  /// when only insert one view, user [Self::insert_view] instead.
+  pub fn insert_nested_views(&mut self, views: Vec<ParentChildViews>, uid: i64) {
+    let views = FlattedViews::flatten_views(views);
+    let mut txn = self.collab.transact_mut();
+    for view in views {
+      self.body.views.insert(&mut txn, view, None, uid);
+    }
+  }
+
+  pub fn replace_view(&mut self, from: &ViewId, to: &ViewId, uid: i64) -> bool {
+    let mut txn = self.collab.transact_mut();
+    self.body.replace_view(&mut txn, from, to, uid)
+  }
+
+  pub fn get_view(&self, view_id: &ViewId, uid: i64) -> Option<Arc<View>> {
+    let txn = self.collab.transact();
+    self.body.views.get_view(&txn, view_id, uid)
+  }
+
+  pub fn is_view_in_section(&self, section: Section, view_id: &ViewId, uid: i64) -> bool {
+    let txn = self.collab.transact();
+    if let Some(op) = self.body.section.section_op(&txn, section, uid) {
+      op.contains_with_txn(&txn, view_id)
+    } else {
+      false
+    }
+  }
+
+  pub fn to_json(&self) -> String {
+    self.to_json_value().to_string()
+  }
+
+  pub fn to_json_value(&self) -> JsonValue {
+    let txn = self.collab.transact();
+    let any = self.body.root.to_json(&txn);
+    any_to_json_value(any).unwrap()
+  }
+
+  /// Recursively retrieves all views associated with the provided `view_id` using a transaction.
+  ///
+  /// The function begins by attempting to retrieve the parent view associated with the `view_id`.
+  /// If the parent view is not found, an empty vector is returned.
+  /// If the parent view is found, the function proceeds to retrieve all of its child views recursively.
+  ///
+  /// The function finally returns a vector containing the parent view and all of its child views.
+  /// The views are clones of the original objects.
+  ///
+  /// # Parameters
+  ///
+  /// * `txn`: A read transaction object which is used to execute the view retrieval.
+  /// * `view_id`: The ID of the parent view.
+  ///
+  /// # Returns
+  ///
+  /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
+  pub fn get_view_recursively(&self, view_id: &ViewId, uid: i64) -> Vec<View> {
+    let txn = self.collab.transact();
+    let mut views = vec![];
+    self.body.get_view_recursively_with_txn(
+      &txn,
+      view_id,
+      &mut HashSet::default(),
+      &mut views,
+      uid,
+    );
+    views
+  }
+}
+
+impl Deref for Folder {
+  type Target = Collab;
+
+  fn deref(&self) -> &Self::Target {
+    &self.collab
+  }
+}
+
+impl DerefMut for Folder {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.collab
+  }
+}
+
+impl Borrow<Collab> for Folder {
+  #[inline]
+  fn borrow(&self) -> &Collab {
+    &self.collab
+  }
+}
+
+impl BorrowMut<Collab> for Folder {
+  fn borrow_mut(&mut self) -> &mut Collab {
+    &mut self.collab
+  }
+}
+
+pub fn check_folder_is_valid(collab: &Collab) -> Result<String, CollabError> {
+  let txn = collab.transact();
+  let meta: MapRef = collab
+    .data
+    .get_with_path(&txn, vec![FOLDER, FOLDER_META])
+    .ok_or_else(|| CollabError::FolderMissingRequiredData("No meta data".to_string()))?;
+  match meta.get_with_txn::<_, String>(&txn, FOLDER_WORKSPACE_ID) {
+    None => Err(CollabError::FolderMissingRequiredData(
+      "No workspace id".to_string(),
+    )),
+    Some(workspace_id) => {
+      if workspace_id.is_empty() {
+        Err(CollabError::FolderMissingRequiredData(
+          "No workspace id".to_string(),
+        ))
+      } else {
+        Ok(workspace_id)
+      }
+    },
+  }
+}
+
+pub struct FolderBody {
+  pub root: MapRef,
+  pub views: Arc<ViewsMap>,
+  pub section: Arc<SectionMap>,
+  pub meta: MapRef,
+  #[allow(dead_code)]
+  notifier: Option<FolderNotify>,
+}
+
+impl FolderBody {
+  pub fn open(collab: &mut Collab, notifier: Option<FolderNotify>) -> Result<Self, CollabError> {
+    CollabType::Folder.validate_require_data(collab)?;
+    Ok(Self::open_with(collab, notifier, None))
+  }
+
+  pub fn open_with(
+    collab: &mut Collab,
+    notifier: Option<FolderNotify>,
+    folder_data: Option<FolderData>,
+  ) -> Self {
+    let mut txn = collab.context.transact_mut();
+    // create the folder
+    let root = collab.data.get_or_init_map(&mut txn, FOLDER);
+
+    // create the folder data
+    let views: MapRef = root.get_or_init(&mut txn, VIEWS);
+    let section: MapRef = root.get_or_init(&mut txn, SECTION);
+    let meta: MapRef = root.get_or_init(&mut txn, FOLDER_META);
+    let parent_child_relations = Arc::new(ParentChildRelations::new(
+      root.get_or_init(&mut txn, PARENT_CHILD_VIEW_RELATION),
+    ));
+    let revision_map = Arc::new(RevisionMapping::new(
+      root.get_or_init(&mut txn, REVISION_MAP),
+    ));
+
+    let section = Arc::new(SectionMap::create(
+      &mut txn,
+      section,
+      notifier
+        .as_ref()
+        .map(|notifier| notifier.section_change_tx.clone()),
+    ));
+    let views = Arc::new(ViewsMap::new(
+      views,
+      notifier
+        .as_ref()
+        .map(|notifier| notifier.view_change_tx.clone()),
+      parent_child_relations,
+      section.clone(),
+      revision_map,
+    ));
+
+    if let Some(folder_data) = folder_data {
+      let workspace_id = folder_data.workspace.id;
+      views.insert(
+        &mut txn,
+        folder_data.workspace.into(),
+        None,
+        folder_data.uid,
+      );
+
+      for view in folder_data.views {
+        views.insert(&mut txn, view, None, folder_data.uid);
+      }
+
+      meta.insert(&mut txn, FOLDER_WORKSPACE_ID, workspace_id.to_string());
+      // For compatibility with older collab library which doesn't use CURRENT_VIEW_FOR_USER.
+      if let Some(current_view) = folder_data.current_view {
+        meta.insert(&mut txn, CURRENT_VIEW, current_view.to_string());
+        let current_view_for_user = meta.get_or_init_map(&mut txn, CURRENT_VIEW_FOR_USER);
+        current_view_for_user.insert(
+          &mut txn,
+          folder_data.uid.to_string(),
+          current_view.to_string(),
+        );
+      }
+
+      if let Some(fav_section) = section.section_op(&txn, Section::Favorite, folder_data.uid) {
+        for (uid, sections) in folder_data.favorites {
+          fav_section.add_sections_for_user_with_txn(&mut txn, &uid, sections);
+        }
+      }
+
+      if let Some(trash_section) = section.section_op(&txn, Section::Trash, folder_data.uid) {
+        for (uid, sections) in folder_data.trash {
+          trash_section.add_sections_for_user_with_txn(&mut txn, &uid, sections);
+        }
+      }
+    }
+    Self {
+      root,
+      views,
+      section,
+      meta,
+      notifier,
+    }
+  }
+
+  pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+    self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)
+  }
+
+  /// Recursively retrieves all views associated with the provided `view_id` using a transaction,
+  /// adding them to the `accumulated_views` vector.
+  ///
+  /// The function begins by attempting to retrieve the view associated with the `view_id`.
+  /// If the parent view is not found, the function returns.
+  /// If the parent view is found, the function proceeds to retrieve all of its child views recursively.
+  /// The function uses a hash set to keep track of the visited view ids to avoid infinite recursion due
+  /// to circular dependency.
+  ///
+  /// At the end of the recursion, `accumulated_views` will contain the parent view and all of its child views.
+  /// The views are clones of the original objects.
+  ///
+  /// # Parameters
+  ///
+  /// * `txn`: A read transaction object which is used to execute the view retrieval.
+  /// * `view_id`: The ID of the parent view.
+  /// * `visited`: Hash set containing all the traversed view ids.
+  /// * `accumulated_views`: Vector containing all the views that are accumulated during the traversal.
+  pub fn get_view_recursively_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &ViewId,
+    visited: &mut HashSet<String>,
+    accumulated_views: &mut Vec<View>,
+    uid: i64,
+  ) {
+    if !visited.insert(view_id.to_string()) {
+      return;
+    }
+    match self.views.get_view_with_txn(txn, view_id, uid) {
+      None => (),
+      Some(parent_view) => {
+        accumulated_views.push(parent_view.as_ref().clone());
+        parent_view.children.items.iter().for_each(|child| {
+          self.get_view_recursively_with_txn(txn, &child.id, visited, accumulated_views, uid)
+        })
+      },
+    }
+  }
+
+  pub fn get_workspace_info<T: ReadTxn>(
+    &self,
+    txn: &T,
+    workspace_id: &WorkspaceId,
+    uid: i64,
+  ) -> Option<Workspace> {
+    let folder_workspace_id: String = self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)?;
+    // Convert workspace_id UUID to string for comparison
+    let uuid_workspace_id = workspace_id.to_string();
+    if folder_workspace_id != uuid_workspace_id {
+      error!("Workspace id not match when get current workspace");
+      return None;
+    }
+
+    let view = self.views.get_view_with_txn(txn, workspace_id, uid)?;
+    Some(Workspace::from(view.as_ref()))
+  }
+
+  pub fn get_folder_data<T: ReadTxn>(
+    &self,
+    txn: &T,
+    workspace_id: &str,
+    uid: i64,
+  ) -> Option<FolderData> {
+    let folder_workspace_id = self.get_workspace_id_with_txn(txn)?;
+    // Parse workspace_id as UUID, return None if invalid
+    let workspace_uuid = match uuid::Uuid::parse_str(workspace_id) {
+      Ok(id) => id,
+      Err(_) => {
+        error!("Invalid workspace id format: {}", workspace_id);
+        return None;
+      },
+    };
+    let uuid_workspace_id = workspace_uuid.to_string();
+    if folder_workspace_id != uuid_workspace_id {
+      error!(
+        "Workspace id not match when get folder data, expected: {}, actual: {}",
+        workspace_id, folder_workspace_id
+      );
+      return None;
+    }
+    let workspace = Workspace::from(
+      self
+        .views
+        .get_view_with_txn(txn, &workspace_uuid, uid)?
+        .as_ref(),
+    );
+    let current_view = self.get_current_view(txn, uid);
+    let mut views = vec![];
+    let orphan_views = self
+      .views
+      .get_orphan_views_with_txn(txn, uid)
+      .iter()
+      .map(|view| view.as_ref().clone())
+      .collect::<Vec<View>>();
+    for view in self.views.get_views_belong_to(txn, &workspace_uuid, uid) {
+      let mut all_views_in_workspace = vec![];
+      self.get_view_recursively_with_txn(
+        txn,
+        &view.id,
+        &mut HashSet::default(),
+        &mut all_views_in_workspace,
+        uid,
+      );
+      views.extend(all_views_in_workspace);
+    }
+    views.extend(orphan_views);
+
+    let favorites = self
+      .section
+      .section_op(txn, Section::Favorite, uid)
+      .map(|op| op.get_sections(txn))
+      .unwrap_or_default();
+    let recent = self
+      .section
+      .section_op(txn, Section::Recent, uid)
+      .map(|op| op.get_sections(txn))
+      .unwrap_or_default();
+
+    let trash = self
+      .section
+      .section_op(txn, Section::Trash, uid)
+      .map(|op| op.get_sections(txn))
+      .unwrap_or_default();
+
+    let private = self
+      .section
+      .section_op(txn, Section::Private, uid)
+      .map(|op| op.get_sections(txn))
+      .unwrap_or_default();
+
+    Some(FolderData {
+      uid,
+      workspace,
+      current_view,
+      views,
+      favorites,
+      recent,
+      trash,
+      private,
+    })
+  }
+
+  pub fn get_workspace_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+    self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)
+  }
+
+  pub async fn observe_view_changes(&self, uid: i64) {
+    self.views.observe_view_change(uid, HashMap::new()).await;
+  }
+
+  pub async fn subscribe_view_changes(&self) -> Option<ViewChangeReceiver> {
+    self
+      .notifier
+      .as_ref()
+      .map(|notifier| notifier.view_change_tx.subscribe())
+  }
+
+  pub fn move_view(
+    &self,
+    txn: &mut TransactionMut,
+    view_id: &ViewId,
+    from: u32,
+    to: u32,
+    uid: i64,
+  ) -> Option<Arc<View>> {
+    let view = self.views.get_view_with_txn(txn, view_id, uid)?;
+    if let Some(parent_uuid) = &view.parent_view_id {
+      self.views.move_child(txn, parent_uuid, from, to);
+    }
+    Some(view)
+  }
+
+  pub fn move_nested_view(
+    &self,
+    txn: &mut TransactionMut,
+    view_id: &ViewId,
+    new_parent_id: &ViewId,
+    prev_view_id: Option<ViewId>,
+    uid: i64,
+  ) -> Option<Arc<View>> {
+    tracing::debug!("Move nested view: {}", view_id);
+    let view = self.views.get_view_with_txn(txn, view_id, uid)?;
+    let current_workspace_id = self.get_workspace_id_with_txn(txn)?;
+    let parent_id = &view.parent_view_id;
+
+    let new_parent_view = self.views.get_view_with_txn(txn, new_parent_id, uid);
+
+    // If the new parent is not a view, it must be a workspace.
+    // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
+    let current_workspace_uuid = uuid::Uuid::parse_str(&current_workspace_id).ok();
+    if Some(*new_parent_id) != current_workspace_uuid && new_parent_view.is_none() {
+      tracing::warn!("Unsupported move out current workspace: {}", view_id);
+      return None;
+    }
+
+    // dissociate the child from its parent
+    if let Some(parent_uuid) = parent_id {
+      self
+        .views
+        .dissociate_parent_child_with_txn(txn, parent_uuid, view_id);
+    }
+    // associate the child with its new parent and place it after the prev_view_id. If the prev_view_id is None,
+    // place it as the first child.
+    self
+      .views
+      .associate_parent_child_with_txn(txn, new_parent_id, view_id, prev_view_id);
+    // Update the view's parent ID.
+    self
+      .views
+      .update_view_with_txn(UserId::from(uid), txn, view_id, |update| {
+        update.set_bid(new_parent_id.to_string()).done()
+      });
+    Some(view)
+  }
+
+  pub fn get_child_of_first_public_view<T: ReadTxn>(&self, txn: &T, uid: i64) -> Option<ViewId> {
+    self
+      .get_workspace_id(txn)
+      .and_then(|workspace_id| {
+        uuid::Uuid::parse_str(&workspace_id)
+          .ok()
+          .and_then(|uuid| self.views.get_view(txn, &uuid, uid))
+      })
+      .and_then(|root_view| {
+        let first_public_space_view_id_with_child = root_view.children.iter().find(|space_id| {
+          match self.views.get_view(txn, &space_id.id, uid) {
+            Some(space_view) => {
+              let is_public_space = space_view
+                .space_info()
+                .map(|info| info.space_permission == SpacePermission::PublicToAll)
+                .unwrap_or(false);
+              let has_children = !space_view.children.is_empty();
+              is_public_space && has_children
+            },
+            None => false,
+          }
+        });
+        first_public_space_view_id_with_child.map(|v| v.id)
+      })
+      .and_then(|first_public_space_view_id_with_child| {
+        self
+          .views
+          .get_view(txn, &first_public_space_view_id_with_child, uid)
+      })
+      .and_then(|first_public_space_view_with_child| {
+        first_public_space_view_with_child
+          .children
+          .iter()
+          .next()
+          .map(|first_child| first_child.id)
+      })
+  }
+
+  pub fn get_current_view<T: ReadTxn>(&self, txn: &T, uid: i64) -> Option<ViewId> {
+    // Fallback to CURRENT_VIEW if CURRENT_VIEW_FOR_USER is not present. This could happen for
+    // workspace folder created by older version of the app before CURRENT_VIEW_FOR_USER is introduced.
+    // If user cannot be found in CURRENT_VIEW_FOR_USER, use the first child of the first public space
+    // which has children.
+    let current_view_for_user_map = match self.meta.get(txn, CURRENT_VIEW_FOR_USER) {
+      Some(YrsValue::YMap(map)) => Some(map),
+      _ => None,
+    };
+    match current_view_for_user_map {
+      Some(current_view_for_user) => {
+        let view_for_user: Option<String> =
+          current_view_for_user.get_with_txn(txn, uid.to_string().as_ref());
+        view_for_user
+          .and_then(|s| Uuid::parse_str(&s).ok())
+          .or(self.get_child_of_first_public_view(txn, uid))
+      },
+      None => {
+        let current_view: Option<String> = self.meta.get_with_txn(txn, CURRENT_VIEW);
+        current_view.and_then(|s| Uuid::parse_str(&s).ok())
+      },
+    }
+  }
+
+  pub fn set_current_view(&self, txn: &mut TransactionMut, view: ViewId, uid: i64) {
+    let current_view_for_user = self.meta.get_or_init_map(txn, CURRENT_VIEW_FOR_USER);
+    current_view_for_user.try_update(txn, uid.to_string(), view.to_string());
+  }
+
+  pub fn replace_view(
+    &self,
+    txn: &mut TransactionMut,
+    old_view_id: &ViewId,
+    new_view_id: &ViewId,
+    uid: i64,
+  ) -> bool {
+    self.views.replace_view(txn, old_view_id, new_view_id, uid)
+  }
+}
+
+pub fn default_folder_data(uid: i64, workspace_id: &str) -> FolderData {
+  let workspace = Workspace {
+    id: Uuid::parse_str(workspace_id)
+      .unwrap_or_else(|_| crate::entity::uuid_validation::generate_workspace_id()),
+    name: "".to_string(),
+    child_views: Default::default(),
+    created_at: 0,
+    created_by: None,
+    last_edited_time: 0,
+    last_edited_by: None,
+  };
+  FolderData {
+    uid,
+    workspace,
+    current_view: None,
+    views: vec![],
+    favorites: HashMap::new(),
+    recent: HashMap::new(),
+    trash: HashMap::new(),
+    private: HashMap::new(),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::collections::HashMap;
+
+  use crate::core::collab::default_client_id;
+  use crate::core::{collab::CollabOptions, origin::CollabOrigin};
+  use crate::folder::{
+    Folder, FolderData, RepeatedViewIdentifier, SectionItem, SpaceInfo, UserId, View,
+    ViewIdentifier, ViewLayout, Workspace,
+  };
+  use crate::preclude::Collab;
+  use uuid::Uuid;
+
+  #[test]
+  pub fn test_set_and_get_current_view() {
+    let current_time = chrono::Utc::now().timestamp();
+    let workspace_id = Uuid::parse_str("00000000-0000-0000-0000-000000001234").unwrap();
+    let uid = 1;
+    let workspace_uuid = workspace_id;
+    let options = CollabOptions::new(workspace_uuid, default_client_id());
+    let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+    let view_1 = View::new(
+      Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap(),
+      workspace_id,
+      "View 1".to_string(),
+      ViewLayout::Document,
+      Some(uid),
+    );
+    let view_1_id = view_1.id;
+    let view_2 = View::new(
+      Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap(),
+      workspace_id,
+      "View 2".to_string(),
+      ViewLayout::Document,
+      Some(uid),
+    );
+    let view_2_id = view_2.id;
+    let space_view = View {
+      id: Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap(),
+      parent_view_id: Some(workspace_id),
+      name: "Space 1".to_string(),
+      children: RepeatedViewIdentifier::new(vec![
+        ViewIdentifier::new(view_1_id),
+        ViewIdentifier::new(view_2_id),
+      ]),
+      created_at: current_time,
+      is_favorite: false,
+      layout: ViewLayout::Document,
+      icon: None,
+      created_by: None,
+      last_edited_time: current_time,
+      last_edited_by: None,
+      is_locked: None,
+      extra: Some(serde_json::to_string(&SpaceInfo::default()).unwrap()),
+    };
+    let space_view_id = space_view.id;
+    let workspace = Workspace {
+      id: workspace_id,
+      name: "Workspace".to_string(),
+      child_views: RepeatedViewIdentifier::new(vec![ViewIdentifier::new(space_view_id)]),
+      created_at: current_time,
+      created_by: Some(uid),
+      last_edited_time: current_time,
+      last_edited_by: Some(uid),
+    };
+    let folder_data = FolderData {
+      uid,
+      workspace,
+      current_view: Some(view_2.id),
+      views: vec![space_view, view_1, view_2],
+      favorites: Default::default(),
+      recent: Default::default(),
+      trash: Default::default(),
+      private: Default::default(),
+    };
+    let mut folder = Folder::create(collab, None, folder_data);
+
+    folder.set_current_view(view_2_id, uid);
+    assert_eq!(folder.get_current_view(uid), Some(view_2_id));
+    // First visit from user 2, should return the first child of the first public space with children.
+    assert_eq!(folder.get_current_view(2), Some(view_1_id));
+    folder.set_current_view(view_1_id, 2);
+    assert_eq!(folder.get_current_view(1), Some(view_2_id));
+    assert_eq!(folder.get_current_view(2), Some(view_1_id));
+  }
+
+  #[test]
+  pub fn test_move_section() {
+    let current_time = chrono::Utc::now().timestamp();
+    let workspace_id = Uuid::parse_str("00000000-0000-0000-0000-000000001234").unwrap();
+    let uid = 1;
+    let workspace_uuid = workspace_id;
+    let options = CollabOptions::new(workspace_uuid, default_client_id());
+    let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+    let space_view_id = Uuid::parse_str("00000000-0000-0000-0000-000000000010").unwrap();
+    let views: Vec<View> = (0..3)
+      .map(|i| {
+        View::new(
+          Uuid::parse_str(&format!("00000000-0000-0000-0000-00000000001{}", i)).unwrap(),
+          space_view_id,
+          format!("View {:?}", i),
+          ViewLayout::Document,
+          Some(uid),
+        )
+      })
+      .collect();
+    let space_view = View {
+      id: space_view_id,
+      parent_view_id: None,
+      name: "Space".to_string(),
+      children: RepeatedViewIdentifier::new(
+        views
+          .iter()
+          .map(|view| ViewIdentifier::new(view.id))
+          .collect(),
+      ),
+      created_at: current_time,
+      is_favorite: false,
+      layout: ViewLayout::Document,
+      icon: None,
+      created_by: None,
+      last_edited_time: current_time,
+      last_edited_by: None,
+      is_locked: None,
+      extra: Some(serde_json::to_string(&SpaceInfo::default()).unwrap()),
+    };
+    let workspace = Workspace {
+      id: workspace_id,
+      name: "Workspace".to_string(),
+      child_views: RepeatedViewIdentifier::new(vec![ViewIdentifier::new(space_view_id)]),
+      created_at: current_time,
+      created_by: Some(uid),
+      last_edited_time: current_time,
+      last_edited_by: Some(uid),
+    };
+    let all_views: Vec<View> = views
+      .iter()
+      .chain(std::iter::once(&space_view))
+      .cloned()
+      .collect();
+    let folder_data = FolderData {
+      uid,
+      workspace,
+      current_view: Default::default(),
+      views: all_views,
+      favorites: HashMap::from([(
+        UserId::from(uid),
+        views.iter().map(|view| SectionItem::new(view.id)).collect(),
+      )]),
+      recent: Default::default(),
+      trash: Default::default(),
+      private: Default::default(),
+    };
+    let mut folder = Folder::create(collab, None, folder_data);
+    let favorite_sections = folder.get_all_favorites_sections(uid);
+    // Initially, all 3 views should be in favorites
+    assert_eq!(favorite_sections.len(), 3);
+    assert_eq!(favorite_sections[0].id, views[0].id);
+    assert_eq!(favorite_sections[1].id, views[1].id);
+    assert_eq!(favorite_sections[2].id, views[2].id);
+    // Move views[0] after views[1]
+    folder.move_favorite_view_id(
+      &views[0].id.to_string(),
+      Some(&views[1].id.to_string()),
+      uid,
+    );
+    let favorite_sections = folder.get_all_favorites_sections(uid);
+    // After moving views[0] after views[1], order should be: views[1], views[0], views[2]
+    assert_eq!(favorite_sections.len(), 3);
+    assert_eq!(favorite_sections[0].id, views[1].id);
+    assert_eq!(favorite_sections[1].id, views[0].id);
+    assert_eq!(favorite_sections[2].id, views[2].id);
+    // Move views[2] to the beginning (None means first position)
+    folder.move_favorite_view_id(&views[2].id.to_string(), None, uid);
+    let favorite_sections = folder.get_all_favorites_sections(uid);
+    // After moving views[2] to the beginning, order should be: views[2], views[1], views[0]
+    assert_eq!(favorite_sections.len(), 3);
+    assert_eq!(favorite_sections[0].id, views[2].id);
+    assert_eq!(favorite_sections[1].id, views[1].id);
+    assert_eq!(favorite_sections[2].id, views[0].id);
+  }
+}

@@ -1,25 +1,8 @@
 [workspace]
-members = [
-  "collab",
-  "collab-database",
-  "collab-user",
-  "collab-entity",
-  "collab-document",
-  "collab-folder",
-  "collab-plugins",
-  "collab-importer",
-]
+members = ["collab"]
 resolver = "2"
 
 [workspace.dependencies]
-collab = { path = "collab" }
-collab-database = { path = "collab-database" }
-collab-plugins = { path = "collab-plugins" }
-collab-user = { path = "collab-user" }
-collab-entity = { path = "collab-entity" }
-collab-document = { path = "collab-document" }
-collab-folder = { path = "collab-folder" }
-collab-importer = { path = "collab-importer" }
 yrs = { version = "0.24", features = ["sync"] }
 anyhow = "1.0.94"
 thiserror = "1.0.39"
