@@ -83,7 +83,7 @@ script = [
   """
   #!/bin/bash
   BASE_DIR=$(pwd)
-  crates=("collab" "collab-document" "collab-folder" "collab-user" "collab-plugins")
+  crates=("collab")
 
   # Iterate over each crate and build it
   for crate in "${crates[@]}"; do
@@ -104,7 +104,7 @@ script = [
   """
   #!/bin/bash
   BASE_DIR=$(pwd)
-  crates=("collab-plugins")
+  crates=("collab")
 
   # Iterate over each crate and build it
   for crate in "${crates[@]}"; do

@@ -16,9 +16,15 @@ macro_rules! if_wasm {
 
 mod any_mut;
 pub mod core;
+pub mod database;
+pub mod document;
 pub mod entity;
 pub mod error;
+pub mod folder;
+pub mod importer;
 pub mod lock;
+pub mod plugins;
+pub mod user;
 pub mod util;
 
 pub mod preclude {

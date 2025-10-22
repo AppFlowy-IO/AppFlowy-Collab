@@ -16,7 +16,7 @@ serde = { workspace = true, features = ["rc"] }
 serde_json.workspace = true
 bytes = { workspace = true, features = ["serde"] }
 tracing.workspace = true
-tokio = { workspace = true, features = ["sync", "rt"] }
+tokio = { workspace = true, features = ["sync", "rt", "macros", "fs", "io-util"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 async-trait.workspace = true
 arc-swap.workspace = true
@@ -27,20 +27,59 @@ unicode-segmentation = "1.10.1"
 lazy_static = "1.4.0"
 fastrand = "2.1.0"
 parking_lot = "0.12"
+prost = "0.13.3"
+futures = "0.3"
+futures-lite.workspace = true
+tokio-retry = "0.3"
+similar = "2.2.1"
+rand = { version = "0.8", optional = true }
+smallvec = { version = "1.10", features = ["write", "union", "const_generics", "const_new"] }
+nanoid = "0.4.0"
+markdown = "1.0.0-alpha.21"
+dashmap = "5"
+strum = "0.25"
+strum_macros = "0.25"
+rayon = "1.10.0"
+csv = "1.3.0"
+tokio-util = "0.7"
+rusty-money = { version = "0.4.1", features = ["iso"] }
+fancy-regex = "0.13.0"
+rust_decimal = "1.36.0"
+chrono-tz = "0.10.0"
+percent-encoding = "2.3.1"
+sha2 = "0.10.8"
+base64 = "0.22.1"
+iana-time-zone = "0.1.61"
+walkdir = "2.5.0"
+fxhash = "0.2.1"
+hex = "0.4.3"
+async_zip = { version = "0.0.17", features = ["full"] }
+async-recursion = "1.1"
+sanitize-filename = "0.5.0"
+indexmap = { version = "2.3", features = ["serde"] }
+zip = "0.6.6"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3" }
 js-sys = "0.3"
+getrandom = { version = "0.2", features = ["js"] }
+indexed_db_futures = { version = "0.4" }
+async-stream = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+tracing-wasm = "0.2"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "sync", "rt"] }
 tempfile = "3.8.0"
 collab = { path = "", features = ["default"] }
-nanoid = "0.4.0"
 chrono.workspace = true
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 assert_matches2 = "0.1.2"
+fs_extra = "1.2.0"
+rand = "0.8.4"
+tokio-test = "0.4"
 
 [features]
 default = []
@@ -48,3 +87,12 @@ verbose_log = []
 trace_transact = []
 lock_timeout = []
 rwlock_reason = []
+postgres_plugin = ["rand"]
+import_csv = []
+
+[build-dependencies]
+prost-build = "0.12"
+protoc-bin-vendored = "3.0.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rocksdb = { version = "0.22.0", default-features = false, features = ["zstd"] }

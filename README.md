@@ -1,14 +1,9 @@
 
 # AppFlowy-Collab
 
-`AppFlowy-Collab` is a project that aims to support the collaborative features of AppFlowy. It consists of several crates that are currently under active development:
-
-* `collab`
-* `collab-database`
-* `collab-document`
-* `collab-folder`
-* `collab-plugins`
-* `collab-sync`
+`AppFlowy-Collab` is a project that aims to support the collaborative features of AppFlowy. The workspace now centers on
+the `collab` crate, which houses database, document, folder, importer, plugin, and user functionality under a single
+module tree.
 
 ![architecture.png](resources/crate_arch.png)
 
@@ -18,23 +13,11 @@ ones are refined.
 
 ## collab
 The `collab` crate is built on top of the [yrs](https://docs.rs/yrs/latest/yrs/) crate, providing a higher level of
-abstraction for the collaborative features of AppFlowy. It offers a simple API for creating and managing collaborative
-documents.
+abstraction for the collaborative features of AppFlowy. It exposes cohesive modules:
 
-## collab-database
-The `collab-database` crate provides a simple API for creating and managing collaborative databases. It is built on top
-of the `collab` crate.
+- Entity definitions and protobuf types under `collab::entity`.
+- Database, document, folder, importer, plugin, and user services under `collab::database`, `collab::document`,
+  `collab::folder`, `collab::importer`, `collab::plugins`, and `collab::user`.
 
-## collab-document
-The `collab-document` crate provides a simple API for creating and managing collaborative documents. It is built on top
-of the `collab` crate.
-
-## collab-folder
-The `collab-folder` crate provides a simple API for creating and managing collaborative folders. It is built on top of
-the `collab` crate.
-
-## collab-plugins
-The `collab-plugins` crate contains a list of plugins that can be used with the `collab` crate. 
-
-## collab-sync
-The `collab-sync` crate supports syncing the collaborative documents to a remote server.
+With everything consolidated, consumers only need to depend on the `collab` crate to access the full collaborative
+feature set.
