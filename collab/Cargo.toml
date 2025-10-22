@@ -72,7 +72,7 @@ tracing-wasm = "0.2"
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "sync", "rt"] }
 tempfile = "3.8.0"
-collab = { path = "", features = ["default"] }
+collab = { path = "", default-features = false }
 chrono.workspace = true
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -83,11 +83,11 @@ tokio-test = "0.4"
 
 [features]
 default = []
+plugins = ["dep:rocksdb"]
 verbose_log = []
 trace_transact = []
 lock_timeout = []
 rwlock_reason = []
-postgres_plugin = ["rand"]
 import_csv = []
 
 [build-dependencies]
@@ -95,4 +95,4 @@ prost-build = "0.12"
 protoc-bin-vendored = "3.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rocksdb = { version = "0.22.0", default-features = false, features = ["zstd"] }
+rocksdb = { version = "0.22.0", default-features = false, features = ["zstd"], optional = true }

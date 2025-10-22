@@ -44,8 +44,8 @@ highest-level consumers so that each merge simplifies the remaining ones.
 
 ### 2. Integrate `collab-plugins` (optional extensions)
 
-- [x] Relocate `collab-plugins/src` into `collab::plugins`, preserving feature
-      gates such as `postgres_plugin` and conditional `rocksdb`/WASM support.
+- [x] Relocate `collab-plugins/src` into `collab::plugins`, preserving
+      conditional `rocksdb`/WASM support.
 - [x] Merge any plugin-specific feature flags and dependencies (e.g.,
       `tokio-retry`, optional `rand`, `rocksdb`) into `collab/Cargo.toml`.
 - [x] Update `build.rs` or initialization hooks if plugins require runtime

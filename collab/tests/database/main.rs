@@ -1,3 +1,5 @@
+#![cfg(feature = "plugins")]
+
 pub mod database_test;
 pub mod helper;
 pub mod remapper;

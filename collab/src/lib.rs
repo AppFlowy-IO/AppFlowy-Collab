@@ -23,6 +23,7 @@ pub mod error;
 pub mod folder;
 pub mod importer;
 pub mod lock;
+#[cfg(feature = "plugins")]
 pub mod plugins;
 pub mod user;
 pub mod util;

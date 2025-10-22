@@ -18,6 +18,8 @@ abstraction for the collaborative features of AppFlowy. It exposes cohesive modu
 - Entity definitions and protobuf types under `collab::entity`.
 - Database, document, folder, importer, plugin, and user services under `collab::database`, `collab::document`,
   `collab::folder`, `collab::importer`, `collab::plugins`, and `collab::user`.
+- The plugin subsystem (`collab::plugins`) is guarded by the optional `plugins` Cargo feature; enable it when you
+  need local/remote persistence helpers.
 
 With everything consolidated, consumers only need to depend on the `collab` crate to access the full collaborative
 feature set.
