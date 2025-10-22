@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 pub mod block_parser;
 pub mod blocks;
 pub mod document;

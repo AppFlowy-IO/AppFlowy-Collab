@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 pub use crate::entity::define::ViewId;
 pub use entities::*;
 pub use folder::*;

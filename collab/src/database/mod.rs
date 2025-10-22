@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 pub mod blocks;
 pub mod database;
 pub mod database_remapper;
