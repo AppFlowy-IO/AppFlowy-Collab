@@ -1,5 +1,6 @@
 #![cfg(feature = "plugins")]
 
+use crate::core::collab::{CollabVersion, VersionedData};
 use crate::error::CollabError;
 use crate::plugins::local_storage::kv::keys::*;
 use crate::plugins::local_storage::kv::snapshot::SnapshotAction;
@@ -99,7 +100,7 @@ where
     get_doc_id(uid, self, workspace_id, object_id).is_some()
   }
 
-  fn get_doc_state(&self, doc_id: DocID) -> Result<Option<VersionedData>, PersistenceError> {
+  fn get_doc_state(&self, doc_id: DocID) -> Result<Option<VersionedData>, CollabError> {
     let doc_state_start = make_doc_start_key(doc_id);
     let doc_state_end = make_doc_end_key(doc_id);
     let mut cursor = self.range(doc_state_start.clone()..doc_state_end)?;
@@ -112,10 +113,7 @@ where
             match key[doc_state_start.len()..doc_state_start.len() + 16].try_into() {
               Ok(v) => v,
               Err(_) => {
-                return Err(PersistenceError::InvalidData(format!(
-                  "invalid collab version in doc state key: {:?}",
-                  key
-                )));
+                return Err(CollabError::InvalidVersion);
               },
             };
           Some(CollabVersion::from_bytes(collab_version))
@@ -141,7 +139,6 @@ where
     object_id: &str,
     txn: &mut TransactionMut,
   ) -> Result<Option<CollabVersion>, CollabError> {
-    let mut update_count = 0;
     let mut collab_version = None;
 
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {

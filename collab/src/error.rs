@@ -183,6 +183,9 @@ pub enum CollabError {
   #[error("Database: Import data failed: {0}")]
   DatabaseImportData(String),
 
+  #[error("Collab version could not be determined")]
+  InvalidVersion,
+
   #[error(transparent)]
   Uuid(#[from] uuid::Error),
 

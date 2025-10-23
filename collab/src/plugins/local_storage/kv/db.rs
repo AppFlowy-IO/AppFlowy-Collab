@@ -5,6 +5,7 @@ use std::io::Write;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
+use crate::core::collab::CollabVersion;
 use crate::error::CollabError;
 use crate::plugins::local_storage::kv::keys::*;
 use crate::plugins::local_storage::kv::oid::{DocIDGen, OID};

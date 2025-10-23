@@ -3,6 +3,8 @@ use crate::plugins::local_storage::CollabPersistenceConfig;
 use crate::plugins::local_storage::kv::KVTransactionDB;
 use crate::plugins::local_storage::kv::doc::CollabKVAction;
 
+use crate::core::collab::CollabVersion;
+
 use std::ops::Deref;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32};

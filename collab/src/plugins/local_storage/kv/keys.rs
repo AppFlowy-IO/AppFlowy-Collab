@@ -3,7 +3,7 @@
 use std::io::Write;
 use std::ops::Deref;
 
-use collab::core::collab::CollabVersion;
+use crate::core::collab::CollabVersion;
 use smallvec::{SmallVec, smallvec};
 // https://github.com/spacejam/sled
 // sled performs prefix encoding on long keys with similar prefixes that are grouped together in a
