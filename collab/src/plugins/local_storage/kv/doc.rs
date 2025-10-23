@@ -1,3 +1,5 @@
+#![cfg(feature = "plugins")]
+
 use crate::error::CollabError;
 use crate::plugins::local_storage::kv::keys::*;
 use crate::plugins::local_storage::kv::snapshot::SnapshotAction;

@@ -1,3 +1,5 @@
+#![cfg(feature = "plugins")]
+
 use crate::disk::script::{CollabPersistenceTest, disk_plugin_with_db};
 use assert_json_diff::assert_json_eq;
 use uuid::Uuid;

@@ -1,3 +1,5 @@
+#![cfg(feature = "plugins")]
+
 pub use db::*;
 pub use range::*;
 
