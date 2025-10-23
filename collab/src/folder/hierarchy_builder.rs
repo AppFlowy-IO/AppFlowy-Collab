@@ -5,7 +5,7 @@ use super::{
   ViewLayout, timestamp,
 };
 
-use collab::core::collab::CollabVersion;
+use crate::core::collab::CollabVersion;
 use serde_json::json;
 use std::fmt::{Display, Formatter};
 use std::future::Future;

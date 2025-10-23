@@ -1,7 +1,7 @@
-use collab::core::collab::DataSource;
-use collab::core::collab::{CollabOptions, VersionedData};
-use collab::core::origin::CollabOrigin;
-use collab::preclude::*;
+use crate::core::collab::DataSource;
+use crate::core::collab::{CollabOptions, VersionedData};
+use crate::core::origin::CollabOrigin;
+use crate::preclude::*;
 use std::collections::HashMap;
 use uuid::Uuid;
 

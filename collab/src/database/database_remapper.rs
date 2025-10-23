@@ -1,5 +1,5 @@
-use collab::core::collab::{CollabOptions, CollabVersion, DataSource, VersionedData};
-use collab::core::origin::CollabOrigin;
+use crate::core::collab::{CollabOptions, CollabVersion, DataSource, VersionedData};
+use crate::core::origin::CollabOrigin;
 
 use crate::preclude::*;
 use std::collections::HashMap;
