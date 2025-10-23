@@ -1,3 +1,5 @@
+#![cfg(feature = "plugins")]
+
 use std::path::PathBuf;
 
 use collab::plugins::CollabKVDB;

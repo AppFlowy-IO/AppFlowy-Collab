@@ -1,3 +1,5 @@
+#![cfg(feature = "plugins")]
+
 use crate::disk::script::CollabPersistenceTest;
 use collab::plugins::local_storage::CollabPersistenceConfig;
 

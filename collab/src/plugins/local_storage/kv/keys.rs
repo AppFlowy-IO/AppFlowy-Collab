@@ -1,3 +1,5 @@
+#![cfg(feature = "plugins")]
+
 use std::io::Write;
 use std::ops::Deref;
 

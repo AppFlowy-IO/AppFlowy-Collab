@@ -1,3 +1,5 @@
+#![cfg(feature = "plugins")]
+
 use std::fmt::Debug;
 use std::io::Write;
 use std::ops::RangeBounds;
