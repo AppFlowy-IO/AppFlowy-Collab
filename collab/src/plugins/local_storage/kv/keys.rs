@@ -3,8 +3,8 @@
 use std::io::Write;
 use std::ops::Deref;
 
+use crate::core::collab::CollabVersion;
 use smallvec::{SmallVec, smallvec};
-
 // https://github.com/spacejam/sled
 // sled performs prefix encoding on long keys with similar prefixes that are grouped together in a
 // range, as well as suffix truncation to further reduce the indexing costs of long keys. Nodes
@@ -101,17 +101,24 @@ pub fn oid_from_key(key: &[u8]) -> &[u8] {
   &key[10..(key.len() - 1)]
 }
 
-// [1,1,  0,0,0,0,0,0,0,0,  0]
-pub fn make_doc_state_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
+// [1,1,  0,0,0,0,0,0,0,0,  0] if version is None
+// [1,1,  0,0,0,0,0,0,0,0,  0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] if version is Some
+pub fn make_doc_state_key(
+  doc_id: DocID,
+  version: Option<&CollabVersion>,
+) -> Key<DOC_STATE_KEY_LEN> {
   let mut v: SmallVec<[u8; DOC_STATE_KEY_LEN]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
   v.write_all(&doc_id.to_be_bytes()).unwrap();
   v.push(DOC_STATE);
+  if let Some(ver) = version {
+    v.write_all(ver.as_bytes()).unwrap();
+  }
   Key(v)
 }
 
 // document related elements are stored within bounds [0,1,..did,0]..[0,1,..did,255]
 pub fn make_doc_start_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
-  make_doc_state_key(doc_id)
+  make_doc_state_key(doc_id, None)
 }
 // [1,1,  0,0,0,0,0,0,0,0,  255]
 pub fn make_doc_end_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {

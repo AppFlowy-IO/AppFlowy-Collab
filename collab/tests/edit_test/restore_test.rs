@@ -3,7 +3,7 @@
 use uuid::Uuid;
 
 use assert_json_diff::assert_json_eq;
-use collab::core::collab::{CollabOptions, DataSource, default_client_id};
+use collab::core::collab::{CollabOptions, CollabVersion, DataSource, default_client_id};
 use collab::core::origin::CollabOrigin;
 
 use collab::preclude::{Collab, CollabPlugin, MapExt};
@@ -488,7 +488,13 @@ impl ReceiveUpdatesPlugin {
 }
 
 impl CollabPlugin for ReceiveUpdatesPlugin {
-  fn receive_update(&self, _object_id: &str, _txn: &TransactionMut, update: &[u8]) {
+  fn receive_update(
+    &self,
+    _object_id: &str,
+    _txn: &TransactionMut,
+    update: &[u8],
+    _collab_version: Option<&CollabVersion>,
+  ) {
     self.updates.lock().unwrap().push(update.to_vec());
   }
 

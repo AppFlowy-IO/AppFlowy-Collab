@@ -1,5 +1,6 @@
 #![cfg(feature = "plugins")]
 
+use crate::core::collab::{CollabVersion, VersionedData};
 use crate::error::CollabError;
 use crate::plugins::local_storage::kv::keys::*;
 use crate::plugins::local_storage::kv::snapshot::SnapshotAction;
@@ -22,6 +23,7 @@ where
     uid: i64,
     workspace_id: &str,
     object_id: &str,
+    collab_version: Option<&CollabVersion>,
     txn: &T,
   ) -> Result<(), CollabError> {
     if self.is_exist(uid, workspace_id, object_id) {
@@ -31,7 +33,7 @@ where
     let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
     let doc_state = txn.encode_diff_v1(&StateVector::default());
     let sv = txn.state_vector().encode_v1();
-    let doc_state_key = make_doc_state_key(doc_id);
+    let doc_state_key = make_doc_state_key(doc_id, collab_version);
     let sv_key = make_state_vector_key(doc_id);
 
     self.insert(doc_state_key, doc_state)?;
@@ -45,6 +47,7 @@ where
     uid: i64,
     workspace_id: &str,
     object_id: &str,
+    collab_version: Option<&CollabVersion>,
     state_vector: Vec<u8>,
     doc_state: Vec<u8>,
   ) -> Result<(), CollabError> {
@@ -53,7 +56,7 @@ where
     let end = make_doc_end_key(doc_id);
     self.remove_range(start.as_ref(), end.as_ref())?;
 
-    let doc_state_key = make_doc_state_key(doc_id);
+    let doc_state_key = make_doc_state_key(doc_id, collab_version);
     let sv_key = make_state_vector_key(doc_id);
 
     self.insert(doc_state_key, doc_state)?;
@@ -74,6 +77,7 @@ where
     uid: i64,
     workspace_id: &str,
     object_id: &str,
+    collab_version: Option<&CollabVersion>,
     state_vector: Vec<u8>,
     doc_state: Vec<u8>,
   ) -> Result<(), CollabError> {
@@ -84,7 +88,7 @@ where
     let end = make_doc_end_key(doc_id);
     self.remove_range(start.as_ref(), end.as_ref())?;
 
-    let doc_state_key = make_doc_state_key(doc_id);
+    let doc_state_key = make_doc_state_key(doc_id, collab_version);
     let sv_key = make_state_vector_key(doc_id);
     // Insert new doc state and state vector
     self.insert(doc_state_key, doc_state)?;
@@ -94,6 +98,32 @@ where
 
   fn is_exist(&self, uid: i64, workspace_id: &str, object_id: &str) -> bool {
     get_doc_id(uid, self, workspace_id, object_id).is_some()
+  }
+
+  fn get_doc_state(&self, doc_id: DocID) -> Result<Option<VersionedData>, CollabError> {
+    let doc_state_start = make_doc_start_key(doc_id);
+    let doc_state_end = make_doc_end_key(doc_id);
+    let mut cursor = self.range(doc_state_start.clone()..doc_state_end)?;
+    if let Some(entry) = cursor.next() {
+      let key = entry.key();
+      let value = entry.value();
+      if key.starts_with(doc_state_start.as_ref()) {
+        let version = if key.len() > doc_state_start.len() {
+          let collab_version: [u8; 16] =
+            match key[doc_state_start.len()..doc_state_start.len() + 16].try_into() {
+              Ok(v) => v,
+              Err(_) => {
+                return Err(CollabError::InvalidVersion);
+              },
+            };
+          Some(CollabVersion::from_bytes(collab_version))
+        } else {
+          None
+        };
+        return Ok(Some(VersionedData::new(value, version)));
+      }
+    }
+    Ok(None)
   }
 
   /// Load the document from the database and apply the updates to the transaction.
@@ -108,15 +138,13 @@ where
     workspace_id: &str,
     object_id: &str,
     txn: &mut TransactionMut,
-  ) -> Result<u32, CollabError> {
-    let mut update_count = 0;
+  ) -> Result<Option<CollabVersion>, CollabError> {
+    let mut collab_version = None;
 
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
-      let doc_state_key = make_doc_state_key(doc_id);
-      if let Some(doc_state) = self.get(doc_state_key.as_ref())? {
+      if let Some(versioned) = self.get_doc_state(doc_id)? {
         // Load the doc state
-
-        match Update::decode_v1(doc_state.as_ref()) {
+        match Update::decode_v1(&versioned.data) {
           Ok(update) => {
             txn.try_apply_update(update)?;
           },
@@ -125,6 +153,8 @@ where
             return Err(CollabError::DecodeUpdate(err));
           },
         }
+
+        collab_version = versioned.version;
 
         // If the enable_snapshot is true, we will try to load the snapshot.
         let update_start = make_doc_update_key(doc_id, 0).to_vec();
@@ -146,7 +176,6 @@ where
             self.remove_range(encoded_update.key().as_ref(), update_end.as_ref())?;
             break;
           }
-          update_count += 1;
         }
       } else {
         tracing::error!(
@@ -156,7 +185,7 @@ where
         );
       }
 
-      Ok(update_count)
+      Ok(collab_version)
     } else {
       tracing::trace!("[Client] => {:?} not exist", object_id);
       Err(CollabError::PersistenceRecordNotFound(format!(
@@ -172,7 +201,7 @@ where
     workspace_id: &str,
     object_id: &str,
     doc: &Doc,
-  ) -> Result<u32, CollabError> {
+  ) -> Result<Option<CollabVersion>, CollabError> {
     let mut txn = doc.transact_mut();
     self.load_doc_with_txn(uid, workspace_id, object_id, &mut txn)
   }
@@ -183,6 +212,7 @@ where
     uid: i64,
     workspace_id: &str,
     object_id: &str,
+    version: Option<&CollabVersion>,
     update: &[u8],
   ) -> Result<Vec<u8>, CollabError> {
     match get_doc_id(uid, self, workspace_id, object_id) {
@@ -197,7 +227,7 @@ where
           object_id
         )))
       },
-      Some(doc_id) => insert_doc_update(self, doc_id, object_id, update.to_vec()),
+      Some(doc_id) => insert_doc_update(self, doc_id, object_id, version, update.to_vec()),
     }
   }
 
@@ -235,6 +265,7 @@ where
     uid: i64,
     workspace_id: &str,
     object_id: &str,
+    version: Option<&CollabVersion>,
     doc_state: &[u8],
     sv: &[u8],
   ) -> Result<(), CollabError> {
@@ -243,7 +274,7 @@ where
     let end = make_doc_end_key(doc_id);
     self.remove_range(start.as_ref(), end.as_ref())?;
 
-    let doc_state_key = make_doc_state_key(doc_id);
+    let doc_state_key = make_doc_state_key(doc_id, version);
     let sv_key = make_state_vector_key(doc_id);
 
     // Insert new doc state and state vector
@@ -290,10 +321,9 @@ where
       self.remove_range(start.as_ref(), end.as_ref())?;
 
       // Delete the document state and the state vector
-      let doc_state_key = make_doc_state_key(did);
-      let sv_key = make_state_vector_key(did);
-      let _ = self.remove(doc_state_key.as_ref());
-      let _ = self.remove(sv_key.as_ref());
+      let doc_state_key = make_doc_start_key(did);
+      let sv_key = make_doc_end_key(did);
+      let _ = self.remove_range(doc_state_key.as_ref(), sv_key.as_ref());
 
       // Delete the snapshot
       self.delete_all_snapshots(uid, object_id)?;

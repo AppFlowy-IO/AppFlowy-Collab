@@ -22,7 +22,7 @@ async fn single_thread_test() {
       let txn = doc.transact();
       db.with_write_txn(|db_w_txn| {
         db_w_txn
-          .create_new_doc(1, &workspace_id, &oid, &txn)
+          .create_new_doc(1, &workspace_id, &oid, None, &txn)
           .unwrap();
         Ok(())
       })
@@ -34,7 +34,8 @@ async fn single_thread_test() {
       text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
       let update = txn.encode_update_v1();
       db.with_write_txn(|w| {
-        w.push_update(1, &workspace_id, &oid, &update).unwrap();
+        w.push_update(1, &workspace_id, &oid, None, &update)
+          .unwrap();
         Ok(())
       })
       .unwrap();
@@ -72,7 +73,7 @@ async fn rocks_multiple_thread_test() {
       {
         let txn = doc.transact();
         cloned_db
-          .with_write_txn(|store| store.create_new_doc(1, &cloned_workspace_id, &oid, &txn))
+          .with_write_txn(|store| store.create_new_doc(1, &cloned_workspace_id, &oid, None, &txn))
           .unwrap();
       }
       {
@@ -81,7 +82,7 @@ async fn rocks_multiple_thread_test() {
         text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
         let update = txn.encode_update_v1();
         cloned_db
-          .with_write_txn(|store| store.push_update(1, &cloned_workspace_id, &oid, &update))
+          .with_write_txn(|store| store.push_update(1, &cloned_workspace_id, &oid, None, &update))
           .unwrap();
       }
     });
@@ -129,8 +130,10 @@ async fn multiple_workspace_test() {
       // Create a new document in the workspace with the current user ID
       {
         let txn = doc.transact();
-        db.with_write_txn(|store| store.create_new_doc(user_id, &workspace_id, &object_id, &txn))
-          .unwrap();
+        db.with_write_txn(|store| {
+          store.create_new_doc(user_id, &workspace_id, &object_id, None, &txn)
+        })
+        .unwrap();
       }
 
       // Insert content into the document
@@ -140,8 +143,10 @@ async fn multiple_workspace_test() {
         let content = format!("Content for {} in {}", object_id, workspace_name);
         text.insert(&mut txn, 0, &content);
         let update = txn.encode_update_v1();
-        db.with_write_txn(|store| store.push_update(user_id, &workspace_id, &object_id, &update))
-          .unwrap();
+        db.with_write_txn(|store| {
+          store.push_update(user_id, &workspace_id, &object_id, None, &update)
+        })
+        .unwrap();
       }
     }
 

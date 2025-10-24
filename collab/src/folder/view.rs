@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::core::collab::CollabVersion;
 use crate::preclude::{Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut};
 use anyhow::bail;
 use dashmap::DashMap;
@@ -31,6 +33,7 @@ const VIEW_LAST_EDITED_TIME: &str = "last_edited_time";
 const VIEW_LAST_EDITED_BY: &str = "last_edited_by";
 const VIEW_IS_LOCKED: &str = "is_locked";
 const VIEW_EXTRA: &str = "extra";
+const COLLAB_VERSION: &str = "version";
 // const VIEW_LAST_VIEWED_TIME: &str = "last_viewed_time";
 
 pub fn timestamp() -> i64 {
@@ -566,8 +569,12 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   let is_locked = map_ref.get_with_txn(txn, VIEW_IS_LOCKED);
   let extra = map_ref.get_with_txn(txn, VIEW_EXTRA);
 
+  let version: Option<String> = map_ref.get_with_txn(txn, COLLAB_VERSION);
+  let version = version.and_then(|v| Uuid::from_str(&v).ok());
+
   Some(View {
     id,
+    version,
     parent_view_id,
     name,
     children,
@@ -900,6 +907,8 @@ pub struct View {
   /// The id for given parent view
   #[serde(with = "crate::preclude::serde_option_uuid")]
   pub parent_view_id: Option<ViewId>,
+  /// The version of the view, used when corresponding page has been reverted to past state.
+  pub version: Option<CollabVersion>,
   /// The name that display on the left sidebar
   pub name: String,
   /// A list of ids, each of them is the id of other view
@@ -938,6 +947,7 @@ impl View {
     Self {
       id: view_id,
       parent_view_id: Some(parent_view_id),
+      version: None,
       name,
       children: Default::default(),
       created_at: timestamp(),

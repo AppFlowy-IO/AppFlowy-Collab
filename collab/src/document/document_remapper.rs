@@ -1,5 +1,5 @@
-use crate::core::collab::CollabOptions;
 use crate::core::collab::DataSource;
+use crate::core::collab::{CollabOptions, VersionedData};
 use crate::core::origin::CollabOrigin;
 use crate::preclude::*;
 use std::collections::HashMap;
@@ -60,7 +60,7 @@ impl DocumentCollabRemapper {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
     let doc_uuid = Uuid::parse_str(doc_id).unwrap_or_else(|_| Uuid::new_v4());
     let options = CollabOptions::new(doc_uuid, client_id)
-      .with_data_source(DataSource::DocStateV1(doc_state.to_owned()));
+      .with_data_source(DataSource::DocStateV1(VersionedData::new(doc_state, None)));
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)
       .map_err(|e| CollabError::Internal(anyhow::Error::new(e)))?;
     let document = Document::open(collab)?;

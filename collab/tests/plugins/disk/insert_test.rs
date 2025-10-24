@@ -77,6 +77,7 @@ async fn flush_test() {
       test.uid,
       &test.workspace_id,
       &object_id_str,
+      encode_collab.collab_version.as_ref(),
       encode_collab.state_vector.to_vec(),
       encode_collab.doc_state.to_vec(),
     )

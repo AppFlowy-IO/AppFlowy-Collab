@@ -92,6 +92,7 @@ pub fn make_test_view(view_id: &str, parent_view_id: Uuid, belongings: Vec<ViewI
   View {
     id: collab::entity::uuid_validation::view_id_from_any_string(view_id),
     parent_view_id: Some(parent_view_id),
+    version: None,
     name: "".to_string(),
     children: RepeatedViewIdentifier::new(belongings),
     created_at: 0,

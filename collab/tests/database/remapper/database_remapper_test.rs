@@ -52,7 +52,7 @@ async fn test_remap_database_with_database_id() {
   let user_id = "123456";
 
   let remapped_state = remapper
-    .remap_database_collab_state(database_id, user_id, &db_state)
+    .remap_database_collab_state(database_id, user_id, &db_state, None)
     .await
     .map_err(|e| {
       eprintln!("Failed to remap database collab state: {:?}", e);
@@ -66,7 +66,7 @@ async fn test_remap_database_with_database_id() {
   );
 
   let remapped_data = remapper
-    .collab_bytes_to_database_data(database_id, user_id, &remapped_state)
+    .collab_bytes_to_database_data(database_id, user_id, &remapped_state, None)
     .await
     .unwrap();
 

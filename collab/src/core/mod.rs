@@ -5,7 +5,6 @@ mod collab_search;
 pub mod collab_state;
 pub mod fill;
 pub mod origin;
-mod revisions;
 pub mod transaction;
 pub mod user_data;
 pub mod value;

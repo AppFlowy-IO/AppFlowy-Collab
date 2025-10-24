@@ -5,6 +5,7 @@ use std::io::Write;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
+use crate::core::collab::CollabVersion;
 use crate::error::CollabError;
 use crate::plugins::local_storage::kv::keys::*;
 use crate::plugins::local_storage::kv::oid::{DocIDGen, OID};
@@ -114,6 +115,7 @@ pub fn insert_doc_update<'a, K, S>(
   db: &S,
   doc_id: DocID,
   object_id: &K,
+  _version: Option<&CollabVersion>,
   value: Vec<u8>,
 ) -> Result<Vec<u8>, CollabError>
 where
