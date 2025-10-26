@@ -6,6 +6,7 @@ use std::panic::AssertUnwindSafe;
 
 use arc_swap::ArcSwapOption;
 use blake3::Hasher;
+use bytes::Bytes;
 use serde_json::json;
 use std::sync::Arc;
 use std::vec::IntoIter;
@@ -697,14 +698,14 @@ fn observe_doc(
 #[derive(Clone, Debug)]
 pub struct VersionedData {
   pub version: Option<CollabVersion>,
-  pub data: Vec<u8>,
+  pub data: Bytes,
 }
 
 impl Deref for VersionedData {
-  type Target = Vec<u8>;
+  type Target = [u8];
 
   fn deref(&self) -> &Self::Target {
-    &self.data
+    self.data.as_ref()
   }
 }
 
@@ -712,7 +713,7 @@ impl VersionedData {
   pub fn new<B: Into<Vec<u8>>>(data: B, version: Option<CollabVersion>) -> Self {
     Self {
       version,
-      data: data.into(),
+      data: Bytes::from(data.into()),
     }
   }
 }
@@ -741,7 +742,7 @@ impl From<EncodedCollab> for DataSource {
   fn from(encoded: EncodedCollab) -> Self {
     let versioned = VersionedData {
       version: encoded.collab_version,
-      data: encoded.doc_state.into(),
+      data: encoded.doc_state,
     };
     match encoded.version {
       EncoderVersion::V1 => DataSource::DocStateV1(versioned),
