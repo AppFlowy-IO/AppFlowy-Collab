@@ -69,13 +69,21 @@ pub fn sync_unzip(
       }
 
       // Create and write the file
+      if output_path.exists() {
+        trace!(
+          "File {:?} already exists; overwriting extracted content",
+          output_path
+        );
+      }
+
       match OpenOptions::new()
         .write(true)
-        .create_new(true)
+        .create(true)
+        .truncate(true)
         .open(&output_path)
         .map_err(|e| {
           CollabError::Internal(anyhow!(
-            "Failed to create or open file with path: {:?}, error: {:?}",
+            "Failed to create or overwrite file with path: {:?}, error: {:?}",
             output_path,
             e
           ))
@@ -207,13 +215,21 @@ fn unzip_single_file(
       }
 
       // Create and write the file
+      if path.exists() {
+        trace!(
+          "File {:?} already exists when extracting multipart entry; overwriting",
+          path
+        );
+      }
+
       let mut outfile = OpenOptions::new()
         .write(true)
-        .create_new(true)
+        .create(true)
+        .truncate(true)
         .open(&path)
         .map_err(|e| {
           CollabError::Internal(anyhow!(
-            "Failed to create part file: {:?}, path:{:?}",
+            "Failed to create or overwrite part file: {:?}, path:{:?}",
             e,
             path
           ))
