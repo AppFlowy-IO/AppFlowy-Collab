@@ -58,6 +58,28 @@ fn sync_unzip_falls_back_when_root_directory_missing() -> Result<()> {
   Ok(())
 }
 
+#[test]
+fn sync_unzip_overwrites_duplicate_files() -> Result<()> {
+  let temp = tempdir()?;
+  let zip_path = temp.path().join("duplicate_files.zip");
+  create_zip_with_duplicate_file(&zip_path)?;
+
+  let output_dir = temp.path().join("output");
+  std::fs::create_dir_all(&output_dir)?;
+
+  let unzip_file = sync_unzip(
+    zip_path.clone(),
+    output_dir.clone(),
+    Some(FALLBACK_DIR.to_string()),
+  )?;
+
+  let duplicated_file = unzip_file.unzip_dir.join("duplicate.csv");
+  let content = std::fs::read_to_string(duplicated_file)?;
+  assert_eq!(content, "second");
+
+  Ok(())
+}
+
 #[tokio::test]
 async fn async_unzip_preserves_root_directory_with_nested_zip() -> Result<()> {
   let temp = tempdir()?;
@@ -121,6 +143,33 @@ async fn async_unzip_falls_back_when_root_directory_missing() -> Result<()> {
   Ok(())
 }
 
+#[tokio::test]
+async fn async_unzip_overwrites_duplicate_files() -> Result<()> {
+  let temp = tempdir()?;
+  let zip_path = temp.path().join("async_duplicate_files.zip");
+  create_zip_with_duplicate_file(&zip_path)?;
+
+  let file = tokio::fs::File::open(&zip_path).await?;
+  let reader = tokio::io::BufReader::new(file).compat();
+  let zip_reader = async_zip::base::read::stream::ZipFileReader::new(reader);
+
+  let output_dir = temp.path().join("async_output_duplicate");
+  tokio::fs::create_dir_all(&output_dir).await?;
+
+  let unzip_file = async_unzip(
+    zip_reader,
+    output_dir.clone(),
+    Some(FALLBACK_DIR.to_string()),
+  )
+  .await?;
+
+  let duplicated_file = unzip_file.unzip_dir_path.join("duplicate.csv");
+  let content = tokio::fs::read_to_string(duplicated_file).await?;
+  assert_eq!(content, "second");
+
+  Ok(())
+}
+
 fn create_zip_with_root_dir(zip_path: &Path) -> Result<()> {
   let file = std::fs::File::create(zip_path)?;
   let mut writer = ZipWriter::new(file);
@@ -147,6 +196,23 @@ fn create_zip_without_root_dir(zip_path: &Path) -> Result<()> {
 
   writer.start_file("Attachment.zip", options)?;
   writer.write_all(&create_nested_zip_bytes("nested.txt"))?;
+
+  writer.finish()?;
+  Ok(())
+}
+
+fn create_zip_with_duplicate_file(zip_path: &Path) -> Result<()> {
+  let file = std::fs::File::create(zip_path)?;
+  let mut writer = ZipWriter::new(file);
+  let options = FileOptions::default().compression_method(CompressionMethod::Stored);
+
+  writer.add_directory(format!("{ROOT_DIR}/"), options)?;
+
+  writer.start_file(format!("{ROOT_DIR}/duplicate.csv"), options)?;
+  writer.write_all(b"first")?;
+
+  writer.start_file(format!("{ROOT_DIR}/duplicate.csv"), options)?;
+  writer.write_all(b"second")?;
 
   writer.finish()?;
   Ok(())

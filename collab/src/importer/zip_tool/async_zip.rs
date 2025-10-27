@@ -24,7 +24,7 @@ use crate::importer::zip_tool::util::{
   has_multi_part_extension, has_multi_part_suffix, is_multi_part_zip_signature, remove_part_suffix,
   sanitize_file_path,
 };
-use tracing::{error, warn};
+use tracing::{error, trace, warn};
 
 pub struct UnzipFile {
   pub file_name: String,
@@ -239,9 +239,17 @@ pub async fn unzip_single_file(
           create_dir_all(parent).await?;
         }
       }
+      if path.exists() {
+        trace!(
+          "File {:?} already exists when extracting multipart entry (async); overwriting",
+          path
+        );
+      }
+
       let writer = OpenOptions::new()
         .write(true)
-        .create_new(true)
+        .create(true)
+        .truncate(true)
         .open(&path)
         .await?;
       io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
