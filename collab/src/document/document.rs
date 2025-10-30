@@ -12,11 +12,13 @@ use serde_json::Value;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 use std::vec;
 use uuid::Uuid;
 
-use super::block_parser::DocumentParser;
-use super::block_parser::OutputFormat;
+use super::block_parser::{
+  DefaultPlainTextResolver, DocumentParser, OutputFormat, PlainTextResolver,
+};
 use super::blocks::BlockType;
 use super::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, BlockOperation,
@@ -40,6 +42,31 @@ const CHILDREN_MAP: &str = "children_map";
 /// [Block]'s yText map. And it's also in [META].
 /// The key is the text block's external_id, and the value is the text block's yText.
 const TEXT_MAP: &str = "text_map";
+
+#[derive(Clone)]
+pub struct PlainTextExportOptions {
+  resolver: Arc<dyn PlainTextResolver + Send + Sync>,
+}
+
+impl PlainTextExportOptions {
+  pub fn new(resolver: Arc<dyn PlainTextResolver + Send + Sync>) -> Self {
+    Self { resolver }
+  }
+
+  pub fn resolver(&self) -> Arc<dyn PlainTextResolver + Send + Sync> {
+    Arc::clone(&self.resolver)
+  }
+
+  pub fn from_default_resolver(resolver: DefaultPlainTextResolver) -> Self {
+    Self::new(Arc::new(resolver))
+  }
+}
+
+impl Default for PlainTextExportOptions {
+  fn default() -> Self {
+    Self::from_default_resolver(DefaultPlainTextResolver::default())
+  }
+}
 
 pub struct Document {
   collab: Collab,
@@ -432,8 +459,12 @@ impl Document {
   /// This function will only return the plain text of the document, it will not include the formatting.
   /// For example, for the linked text, it will return the plain text of the linked text, the link will be removed.
   pub fn to_plain_text(&self) -> Vec<String> {
+    self.to_plain_text_with_options(PlainTextExportOptions::default())
+  }
+
+  pub fn to_plain_text_with_options(&self, options: PlainTextExportOptions) -> Vec<String> {
     let txn = self.collab.transact();
-    self.body.to_plain_text(txn)
+    self.body.to_plain_text_with_options(txn, options)
   }
 
   /// Get the markdown text of the document.
@@ -623,8 +654,17 @@ impl DocumentBody {
 
   /// Get the plain text of the document.
   pub fn to_plain_text<T: ReadTxn>(&self, txn: T) -> Vec<String> {
+    self.to_plain_text_with_options(txn, PlainTextExportOptions::default())
+  }
+
+  pub fn to_plain_text_with_options<T: ReadTxn>(
+    &self,
+    txn: T,
+    options: PlainTextExportOptions,
+  ) -> Vec<String> {
     // use DocumentParser to parse the document
-    let document_parser = DocumentParser::with_default_parsers();
+    let resolver = options.resolver();
+    let document_parser = DocumentParser::with_default_parsers().with_plain_text_resolver(resolver);
     let document_data = self.get_document_data(&txn);
     if let Ok(document_data) = document_data {
       let plain_text = document_parser

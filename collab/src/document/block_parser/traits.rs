@@ -6,6 +6,7 @@ use crate::document::{
 };
 use crate::error::CollabError;
 use crate::preclude::Attrs;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -87,6 +88,10 @@ impl<'a> ParseContext<'a> {
       OutputFormat::PlainText => "  ".repeat(self.depth),
       OutputFormat::Markdown => "  ".repeat(self.depth),
     }
+  }
+
+  pub fn plain_text_resolver(&self) -> Option<&Arc<dyn super::PlainTextResolver + Send + Sync>> {
+    self.parser.get_plain_text_resolver()
   }
 }
 

@@ -34,6 +34,17 @@ impl BlockParser for LinkPreviewParser {
         }
       },
       OutputFormat::PlainText => {
+        if let Some(resolver) = context.plain_text_resolver() {
+          if let Some(content) = resolver.resolve_block_text(block, context) {
+            let indent = context.get_indent();
+            let resolved = if content.is_empty() {
+              String::new()
+            } else {
+              format!("{}{}", indent, content)
+            };
+            return Ok(ParseResult::new(resolved));
+          }
+        }
         let indent = context.get_indent();
         if url.is_empty() {
           "".to_string()

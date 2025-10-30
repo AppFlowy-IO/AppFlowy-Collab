@@ -74,6 +74,13 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
       if let TextDelta::Inserted(text, attributes) = delta {
         // Forward the text delta to the delegate
         if let Some(context) = context {
+          if let Some(resolver) = context.plain_text_resolver() {
+            if let Some(text) = resolver.handle_text_delta(&text, attributes.as_ref(), context) {
+              result.push_str(&text);
+              continue;
+            }
+          }
+
           if let Some(delegate) = context.parser.get_delegate() {
             if let Some(text) = delegate.handle_text_delta(&text, attributes.as_ref(), context) {
               result.push_str(&text);
@@ -102,6 +109,12 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
     for delta in deltas {
       if let TextDelta::Inserted(text, attributes) = delta {
         if let Some(context) = context {
+          if let Some(resolver) = context.plain_text_resolver() {
+            if let Some(text) = resolver.handle_text_delta(&text, attributes.as_ref(), context) {
+              result.push_str(&text);
+              continue;
+            }
+          }
           if let Some(delegate) = context.parser.get_delegate() {
             if let Some(text) = delegate.handle_text_delta(&text, attributes.as_ref(), context) {
               result.push_str(&text);

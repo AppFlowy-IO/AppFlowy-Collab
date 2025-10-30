@@ -28,7 +28,17 @@ impl BlockParser for ImageParser {
           format!("![Image]({})", url)
         }
       },
-      crate::document::OutputFormat::PlainText => url.to_string(),
+      crate::document::OutputFormat::PlainText => {
+        if let Some(resolver) = context.plain_text_resolver() {
+          if let Some(content) = resolver.resolve_block_text(block, context) {
+            content
+          } else {
+            url.to_string()
+          }
+        } else {
+          url.to_string()
+        }
+      },
     };
 
     let children_content = self.parse_children(block, context);
