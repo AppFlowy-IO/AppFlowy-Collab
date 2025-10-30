@@ -2,8 +2,9 @@ use super::{
   BlockParserRegistry, BulletedListParser, CalloutParser, CodeBlockParser, DividerParser,
   DocumentParserDelegate, FileBlockParser, HeadingParser, ImageParser, LinkPreviewParser,
   MathEquationParser, NumberedListParser, OutputFormat, PageParser, ParagraphParser, ParseContext,
-  QuoteListParser, SimpleColumnParser, SimpleColumnsParser, SimpleTableCellParser,
-  SimpleTableParser, SimpleTableRowParser, SubpageParser, TodoListParser, ToggleListParser,
+  PlainTextResolver, QuoteListParser, SimpleColumnParser, SimpleColumnsParser,
+  SimpleTableCellParser, SimpleTableParser, SimpleTableRowParser, SubpageParser, TodoListParser,
+  ToggleListParser,
 };
 use crate::document::blocks::{Block, DocumentData};
 use crate::error::CollabError;
@@ -15,6 +16,7 @@ pub struct DocumentParser {
 
   /// Provide the delegate to handle special cases like mentions during parsing
   delegate: Option<Arc<dyn DocumentParserDelegate + Send + Sync>>,
+  plain_text_resolver: Option<Arc<dyn PlainTextResolver + Send + Sync>>,
 }
 
 impl DocumentParser {
@@ -22,6 +24,7 @@ impl DocumentParser {
     Self {
       registry: BlockParserRegistry::new(),
       delegate: None,
+      plain_text_resolver: None,
     }
   }
 
@@ -36,6 +39,22 @@ impl DocumentParser {
 
   pub fn get_delegate(&self) -> Option<&Arc<dyn DocumentParserDelegate + Send + Sync>> {
     self.delegate.as_ref()
+  }
+
+  pub fn with_plain_text_resolver(
+    mut self,
+    resolver: Arc<dyn PlainTextResolver + Send + Sync>,
+  ) -> Self {
+    self.plain_text_resolver = Some(resolver.clone());
+    self
+  }
+
+  pub fn set_plain_text_resolver(&mut self, resolver: Arc<dyn PlainTextResolver + Send + Sync>) {
+    self.plain_text_resolver = Some(resolver);
+  }
+
+  pub fn get_plain_text_resolver(&self) -> Option<&Arc<dyn PlainTextResolver + Send + Sync>> {
+    self.plain_text_resolver.as_ref()
   }
 
   pub fn with_default_parsers() -> Self {
