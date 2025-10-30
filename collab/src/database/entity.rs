@@ -44,6 +44,7 @@ impl EncodedDatabase {
   pub fn into_collabs(self) -> Vec<EncodedCollabInfo> {
     let mut collabs = vec![self.encoded_database_collab];
     collabs.extend(self.encoded_row_collabs);
+    collabs.extend(self.encoded_row_document_collabs);
     collabs
   }
 }
