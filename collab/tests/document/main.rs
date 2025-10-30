@@ -2,11 +2,8 @@
 
 mod block_parser;
 mod blocks;
-mod document;
-mod util;
-
 mod conversions;
-
+mod document;
 mod importer;
-
 mod remapper;
+mod util;
