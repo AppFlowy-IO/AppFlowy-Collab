@@ -37,12 +37,14 @@ use yrs::{Any, Out};
 pub struct EncodedDatabase {
   pub encoded_database_collab: EncodedCollabInfo,
   pub encoded_row_collabs: Vec<EncodedCollabInfo>,
+  pub encoded_row_document_collabs: Vec<EncodedCollabInfo>,
 }
 
 impl EncodedDatabase {
   pub fn into_collabs(self) -> Vec<EncodedCollabInfo> {
     let mut collabs = vec![self.encoded_database_collab];
     collabs.extend(self.encoded_row_collabs);
+    collabs.extend(self.encoded_row_document_collabs);
     collabs
   }
 }
