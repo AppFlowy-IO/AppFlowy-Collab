@@ -5,7 +5,6 @@
 ///
 /// All mention blocks use the special character '$' as the inserted text, with
 /// attributes containing the mention metadata.
-
 use super::text_entities::TextDelta;
 use crate::preclude::{Any, Attrs};
 use std::collections::HashMap;
@@ -43,7 +42,7 @@ pub mod mention_types {
 ///
 /// # Example
 /// ```
-/// use collab::document::blocks::mention_helper::*;
+/// use collab::document::blocks::*;
 ///
 /// let delta = build_mention_person_delta(
 ///     "user123",
@@ -89,7 +88,7 @@ pub fn build_mention_person_delta(
 ///
 /// # Example
 /// ```
-/// use collab::document::blocks::mention_helper::*;
+/// use collab::document::blocks::*;
 ///
 /// // Regular page mention
 /// let page_delta = build_mention_page_delta(
@@ -129,7 +128,10 @@ pub fn build_mention_page_delta(
   row_id: Option<&str>,
 ) -> TextDelta {
   let mut mention_content = HashMap::new();
-  mention_content.insert(mention_keys::TYPE.to_string(), mention_type.as_str().to_string());
+  mention_content.insert(
+    mention_keys::TYPE.to_string(),
+    mention_type.as_str().to_string(),
+  );
   mention_content.insert(mention_keys::PAGE_ID.to_string(), page_id.to_string());
 
   if let Some(block_id) = block_id {
@@ -149,12 +151,10 @@ pub fn build_mention_page_delta(
 ///
 /// # Example
 /// ```
-/// use collab::document::blocks::mention_helper::*;
-/// use chrono::Utc;
+/// use collab::document::blocks::*;
 ///
-/// let now = Utc::now();
 /// let delta = build_mention_date_delta(
-///     &now.to_rfc3339(),
+///     "2025-01-30T10:00:00Z",
 ///     Some("reminder123"),
 ///     Some("atTimeOfEvent"),
 ///     true, // include_time
@@ -167,7 +167,10 @@ pub fn build_mention_date_delta(
   include_time: bool,
 ) -> TextDelta {
   let mut mention_content = HashMap::new();
-  mention_content.insert(mention_keys::TYPE.to_string(), mention_types::DATE.to_string());
+  mention_content.insert(
+    mention_keys::TYPE.to_string(),
+    mention_types::DATE.to_string(),
+  );
   mention_content.insert(mention_keys::DATE.to_string(), date.to_string());
   mention_content.insert(
     mention_keys::INCLUDE_TIME.to_string(),
@@ -197,7 +200,7 @@ pub fn build_mention_date_delta(
 ///
 /// # Example
 /// ```
-/// use collab::document::blocks::mention_helper::*;
+/// use collab::document::blocks::*;
 ///
 /// let delta = build_mention_external_link_delta("https://example.com");
 /// ```
@@ -252,7 +255,9 @@ pub fn extract_page_id(delta: &TextDelta) -> Option<String> {
   match delta {
     TextDelta::Inserted(text, Some(attrs)) if text == MENTION_CHAR => {
       if let Some(Any::Map(mention_map)) = attrs.get(mention_keys::MENTION) {
-        mention_map.get(mention_keys::PAGE_ID).map(|v| v.to_string())
+        mention_map
+          .get(mention_keys::PAGE_ID)
+          .map(|v| v.to_string())
       } else {
         None
       }
@@ -342,12 +347,16 @@ pub fn extract_mention_data(delta: &TextDelta) -> Option<MentionData> {
             person_id: mention_map.get(mention_keys::PERSON_ID)?.to_string(),
             person_name: mention_map.get(mention_keys::PERSON_NAME)?.to_string(),
             page_id: mention_map.get(mention_keys::PAGE_ID)?.to_string(),
-            block_id: mention_map.get(mention_keys::BLOCK_ID).map(|v| v.to_string()),
+            block_id: mention_map
+              .get(mention_keys::BLOCK_ID)
+              .map(|v| v.to_string()),
             row_id: mention_map.get(mention_keys::ROW_ID).map(|v| v.to_string()),
           }),
           mention_types::PAGE => Some(MentionData::Page {
             page_id: mention_map.get(mention_keys::PAGE_ID)?.to_string(),
-            block_id: mention_map.get(mention_keys::BLOCK_ID).map(|v| v.to_string()),
+            block_id: mention_map
+              .get(mention_keys::BLOCK_ID)
+              .map(|v| v.to_string()),
             row_id: mention_map.get(mention_keys::ROW_ID).map(|v| v.to_string()),
           }),
           mention_types::CHILD_PAGE => Some(MentionData::ChildPage {
