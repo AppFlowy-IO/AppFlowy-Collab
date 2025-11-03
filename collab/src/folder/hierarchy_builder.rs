@@ -345,11 +345,22 @@ pub struct FlattedViews;
 
 impl FlattedViews {
   pub fn flatten_views(views: Vec<ParentChildViews>) -> Vec<View> {
-    let mut result = vec![];
-    for view in views {
-      result.push(view.view);
-      result.append(&mut Self::flatten_views(view.children));
+    let mut result = Vec::new();
+    let mut stack: Vec<ParentChildViews> = Vec::new();
+
+    for view in views.into_iter().rev() {
+      stack.push(view);
     }
+
+    while let Some(mut current) = stack.pop() {
+      let mut children = Vec::new();
+      std::mem::swap(&mut children, &mut current.children);
+      for child in children.into_iter().rev() {
+        stack.push(child);
+      }
+      result.push(current.view);
+    }
+
     result
   }
 }
@@ -378,6 +389,37 @@ mod tests {
 
     let views = FlattedViews::flatten_views(workspace_views.into_inner());
     assert_eq!(views.len(), 3);
+  }
+
+  #[tokio::test]
+  async fn flatten_views_handles_deep_hierarchy() {
+    const DEPTH: usize = 2048;
+    let workspace_id: ViewId =
+      uuid::Uuid::parse_str("00000000-0000-0000-0000-0000000000aa").unwrap();
+    let mut builder = NestedViewBuilder::new(workspace_id, 1);
+
+    builder
+      .with_view_builder(|view_builder| async move {
+        let mut current = view_builder.with_name("root");
+        for depth in 0..DEPTH {
+          current = current
+            .with_child_view_builder(|child| async move {
+              child.with_name(&format!("node_{depth}")).build()
+            })
+            .await;
+        }
+        current.build()
+      })
+      .await;
+
+    let workspace_views = builder.build();
+    let flattened = FlattedViews::flatten_views(workspace_views.into_inner());
+    assert_eq!(flattened.len(), DEPTH + 1);
+    assert_eq!(flattened.first().unwrap().name, "root");
+    assert_eq!(
+      flattened.last().unwrap().name,
+      format!("node_{}", DEPTH - 1)
+    );
   }
 
   #[tokio::test]

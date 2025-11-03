@@ -748,17 +748,17 @@ impl FolderBody {
     accumulated_views: &mut Vec<View>,
     uid: i64,
   ) {
-    if !visited.insert(view_id.to_string()) {
-      return;
-    }
-    match self.views.get_view_with_txn(txn, view_id, uid) {
-      None => (),
-      Some(parent_view) => {
+    let mut stack = vec![*view_id];
+    while let Some(current_id) = stack.pop() {
+      if !visited.insert(current_id.to_string()) {
+        continue;
+      }
+      if let Some(parent_view) = self.views.get_view_with_txn(txn, &current_id, uid) {
         accumulated_views.push(parent_view.as_ref().clone());
-        parent_view.children.items.iter().for_each(|child| {
-          self.get_view_recursively_with_txn(txn, &child.id, visited, accumulated_views, uid)
-        })
-      },
+        for child in parent_view.children.items.iter().rev() {
+          stack.push(child.id);
+        }
+      }
     }
   }
 
