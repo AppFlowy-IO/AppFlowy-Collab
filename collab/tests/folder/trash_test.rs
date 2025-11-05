@@ -24,7 +24,7 @@ fn create_trash_test() {
 
   folder.add_trash_view_ids(vec![view_1_id, view_2_id, view_3_id], uid.as_i64());
 
-  let trash = folder.get_my_trash_sections(uid.as_i64());
+  let trash = folder.get_my_trash_sections(Some(uid.as_i64()));
   assert_eq!(trash.len(), 3);
   assert_eq!(
     trash[0].id.to_string(),
@@ -56,7 +56,7 @@ fn delete_trash_view_ids_test() {
 
   folder.add_trash_view_ids(vec![view_1_id.clone(), view_2_id], uid.as_i64());
 
-  let trash = folder.get_my_trash_sections(uid.as_i64());
+  let trash = folder.get_my_trash_sections(Some(uid.as_i64()));
   assert_eq!(
     trash[0].id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string()
@@ -67,7 +67,7 @@ fn delete_trash_view_ids_test() {
   );
 
   folder.delete_trash_view_ids(vec![view_1_id], uid.as_i64());
-  let trash = folder.get_my_trash_sections(uid.as_i64());
+  let trash = folder.get_my_trash_sections(Some(uid.as_i64()));
   assert_eq!(
     trash[0].id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()

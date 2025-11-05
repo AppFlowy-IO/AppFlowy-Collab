@@ -21,14 +21,14 @@ fn create_favorite_test() {
 
   // Get view_1 from folder
   let view_1 = folder
-    .get_view(&parse_view_id(&view_1_id), uid.as_i64())
+    .get_view(&parse_view_id(&view_1_id), Some(uid.as_i64()))
     .unwrap();
   assert!(!view_1.is_favorite);
   folder.add_favorite_view_ids(vec![view_1_id.clone()], uid.as_i64());
 
   // Check if view_1 is favorite
   let view_1 = folder
-    .get_view(&parse_view_id(&view_1_id), uid.as_i64())
+    .get_view(&parse_view_id(&view_1_id), Some(uid.as_i64()))
     .unwrap();
   assert!(view_1.is_favorite);
 
@@ -40,7 +40,7 @@ fn create_favorite_test() {
     folder
       .body
       .views
-      .get_views_belong_to(&folder.collab.transact(), &workspace_id, uid.as_i64());
+      .get_views_belong_to(&folder.collab.transact(), &workspace_id, Some(uid.as_i64()));
   assert_eq!(views.len(), 2);
   assert_eq!(
     views[0].id.to_string(),
@@ -54,7 +54,7 @@ fn create_favorite_test() {
   );
   assert!(!views[1].is_favorite);
 
-  let favorites = folder.get_my_favorite_sections(uid.as_i64());
+  let favorites = folder.get_my_favorite_sections(Some(uid.as_i64()));
   assert_eq!(favorites.len(), 1);
 }
 
@@ -76,7 +76,7 @@ fn add_favorite_view_and_then_remove_test() {
     folder
       .body
       .views
-      .get_views_belong_to(&folder.transact(), &workspace_id, uid.as_i64());
+      .get_views_belong_to(&folder.transact(), &workspace_id, Some(uid.as_i64()));
   assert_eq!(views.len(), 1);
   assert_eq!(
     views[0].id.to_string(),
@@ -89,7 +89,7 @@ fn add_favorite_view_and_then_remove_test() {
     folder
       .body
       .views
-      .get_views_belong_to(&folder.transact(), &workspace_id, uid.as_i64());
+      .get_views_belong_to(&folder.transact(), &workspace_id, Some(uid.as_i64()));
   assert!(!views[0].is_favorite);
 }
 
@@ -112,7 +112,7 @@ fn create_multiple_user_favorite_test() {
   folder_1.insert_view(view_2, None, uid_1.as_i64());
 
   folder_1.add_favorite_view_ids(vec![view_1_id.clone(), view_2_id.clone()], uid_1.as_i64());
-  let favorites = folder_1.get_my_favorite_sections(uid_1.as_i64());
+  let favorites = folder_1.get_my_favorite_sections(Some(uid_1.as_i64()));
   assert_eq!(favorites.len(), 2);
   assert_eq!(
     favorites[0].id.to_string(),
@@ -124,13 +124,13 @@ fn create_multiple_user_favorite_test() {
   );
   let workspace_uuid_str = workspace_id.to_string();
   let folder_data = folder_1
-    .get_folder_data(&workspace_uuid_str, uid_1.as_i64())
+    .get_folder_data(&workspace_uuid_str, Some(uid_1.as_i64()))
     .unwrap();
 
   let uid_2 = UserId::from(2);
   let folder_test2 =
     create_folder_with_data(uid_2.clone(), view_id_from_any_string("w1"), folder_data);
-  let favorites = folder_test2.get_my_favorite_sections(uid_2.as_i64());
+  let favorites = folder_test2.get_my_favorite_sections(Some(uid_2.as_i64()));
 
   // User 2 can't see user 1's favorites
   assert!(favorites.is_empty());
@@ -157,7 +157,7 @@ fn favorite_data_serde_test() {
   folder.add_favorite_view_ids(vec![view_1_id, view_2_id], uid_1.as_i64());
   let workspace_uuid_str = workspace_id.to_string();
   let folder_data = folder
-    .get_folder_data(&workspace_uuid_str, uid_1.as_i64())
+    .get_folder_data(&workspace_uuid_str, Some(uid_1.as_i64()))
     .unwrap();
   let value = serde_json::to_value(&folder_data).unwrap();
   let w1_uuid = workspace_uuid_str.clone();
@@ -215,7 +215,7 @@ fn delete_favorite_test() {
   // Add favorites
   folder.add_favorite_view_ids(vec![view_1_id.clone(), view_2_id], uid.as_i64());
 
-  let favorites = folder.get_my_favorite_sections(uid.as_i64());
+  let favorites = folder.get_my_favorite_sections(Some(uid.as_i64()));
   assert_eq!(favorites.len(), 2);
   assert_eq!(
     favorites[0].id.to_string(),
@@ -227,7 +227,7 @@ fn delete_favorite_test() {
   );
 
   folder.delete_favorite_view_ids(vec![view_1_id], uid.as_i64());
-  let favorites = folder.get_my_favorite_sections(uid.as_i64());
+  let favorites = folder.get_my_favorite_sections(Some(uid.as_i64()));
   assert_eq!(favorites.len(), 1);
   assert_eq!(
     favorites[0].id.to_string(),
@@ -235,6 +235,6 @@ fn delete_favorite_test() {
   );
 
   folder.remove_all_my_favorite_sections(uid.as_i64());
-  let favorites = folder.get_my_favorite_sections(uid.as_i64());
+  let favorites = folder.get_my_favorite_sections(Some(uid.as_i64()));
   assert_eq!(favorites.len(), 0);
 }

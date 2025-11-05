@@ -88,7 +88,7 @@ async fn test_space_view_edge_case_handler() {
     "folder should use custom workspace id"
   );
 
-  let all_views = folder.get_all_views(uid);
+  let all_views = folder.get_all_views(Some(uid));
   let space_view_found = all_views.iter().any(|view| {
     if let Some(extra) = &view.extra {
       if let Ok(space_info) = serde_json::from_str::<serde_json::Value>(extra) {

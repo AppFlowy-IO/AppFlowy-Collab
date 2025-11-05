@@ -758,12 +758,12 @@ async fn import_level_test() {
   assert_eq!(view_hierarchy.flatten_views().len(), 14);
   folder.insert_nested_views(view_hierarchy.into_inner(), uid);
 
-  let first_level_views = folder.get_views_belong_to(&info.workspace_id, uid);
+  let first_level_views = folder.get_views_belong_to(&info.workspace_id, Some(uid));
   assert_eq!(first_level_views.len(), 1);
   assert_eq!(first_level_views[0].children.len(), 3);
   println!("first_level_views: {:?}", first_level_views);
 
-  let second_level_views = folder.get_views_belong_to(&first_level_views[0].id, uid);
+  let second_level_views = folder.get_views_belong_to(&first_level_views[0].id, Some(uid));
   verify_first_level_views(&second_level_views, &mut folder, uid);
 
   // Print out the views for debugging or manual inspection
@@ -824,7 +824,7 @@ async fn import_empty_space() {
 // Helper function to verify second and third level views based on the first level view name
 fn verify_first_level_views(first_level_views: &[Arc<View>], folder: &mut Folder, uid: i64) {
   for view in first_level_views {
-    let second_level_views = folder.get_views_belong_to(&view.id, uid);
+    let second_level_views = folder.get_views_belong_to(&view.id, Some(uid));
     match view.name.as_str() {
       "Root2" => {
         assert_eq!(second_level_views.len(), 1);
@@ -847,7 +847,7 @@ fn verify_first_level_views(first_level_views: &[Arc<View>], folder: &mut Folder
 // Helper function to verify third level views based on the second level view name under "Root"
 fn verify_root_second_level_views(second_level_views: &[Arc<View>], folder: &mut Folder, uid: i64) {
   for view in second_level_views {
-    let third_level_views = folder.get_views_belong_to(&view.id, uid);
+    let third_level_views = folder.get_views_belong_to(&view.id, Some(uid));
     match view.name.as_str() {
       "root-2" => {
         assert_eq!(third_level_views.len(), 1);

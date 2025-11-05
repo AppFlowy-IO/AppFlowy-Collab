@@ -45,11 +45,11 @@ impl SectionMap {
     &self,
     txn: &T,
     section: Section,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<SectionOperation> {
     let container = self.get_section(txn, section.as_ref())?;
     Some(SectionOperation {
-      uid: UserId::from(uid),
+      uid: uid.map(UserId::from),
       container,
       section,
       change_tx: self.change_tx.clone(),
@@ -119,7 +119,7 @@ pub enum TrashSectionChange {
 pub type SectionsByUid = HashMap<UserId, Vec<SectionItem>>;
 
 pub struct SectionOperation {
-  uid: UserId,
+  uid: Option<UserId>,
   container: MapRef,
   section: Section,
   change_tx: Option<SectionChangeSender>,
@@ -130,8 +130,8 @@ impl SectionOperation {
     &self.container
   }
 
-  fn uid(&self) -> &UserId {
-    &self.uid
+  fn uid(&self) -> Option<&UserId> {
+    self.uid.as_ref()
   }
 
   pub fn get_sections<T: ReadTxn>(&self, txn: &T) -> SectionsByUid {
@@ -154,9 +154,12 @@ impl SectionOperation {
   }
 
   pub fn contains_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &ViewId) -> bool {
+    let Some(uid) = self.uid() else {
+      return false;
+    };
     match self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref())
     {
       None => false,
       Some(array) => {
@@ -173,9 +176,12 @@ impl SectionOperation {
   }
 
   pub fn get_all_section_item<T: ReadTxn>(&self, txn: &T) -> Vec<SectionItem> {
+    let Some(uid) = self.uid() else {
+      return vec![];
+    };
     match self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref())
     {
       None => vec![],
       Some(array) => {
@@ -201,6 +207,9 @@ impl SectionOperation {
     id: T,
     prev_id: Option<T>,
   ) {
+    let Some(uid) = self.uid() else {
+      return;
+    };
     let section_items = self.get_all_section_item(txn);
     let id = id.as_ref();
     let old_pos = section_items
@@ -217,7 +226,7 @@ impl SectionOperation {
       .unwrap_or(0);
     let section_array = self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref());
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref());
     // If the new position index is greater than the length of the section, yrs will panic
     if new_pos > section_items.len() as u32 {
       return;
@@ -233,9 +242,12 @@ impl SectionOperation {
     txn: &mut TransactionMut,
     ids: Vec<T>,
   ) {
+    let Some(uid) = self.uid() else {
+      return;
+    };
     if let Some(fav_array) = self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref())
     {
       for id in &ids {
         if let Some(pos) = self
@@ -267,8 +279,11 @@ impl SectionOperation {
   }
 
   pub fn add_sections_item(&self, txn: &mut TransactionMut, items: Vec<SectionItem>) {
+    let Some(uid) = self.uid() else {
+      return;
+    };
     let item_ids = items.iter().map(|item| item.id).collect::<Vec<_>>();
-    self.add_sections_for_user_with_txn(txn, self.uid(), items);
+    self.add_sections_for_user_with_txn(txn, uid, items);
     if let Some(change_tx) = self.change_tx.as_ref() {
       match self.section {
         Section::Favorite => {},
@@ -298,9 +313,12 @@ impl SectionOperation {
   }
 
   pub fn clear(&self, txn: &mut TransactionMut) {
+    let Some(uid) = self.uid() else {
+      return;
+    };
     if let Some(array) = self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref())
     {
       let len = array.iter(txn).count();
       array.remove_range(txn, 0, len as u32);

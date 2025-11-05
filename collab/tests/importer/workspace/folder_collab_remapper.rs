@@ -16,7 +16,7 @@ fn verify_view(
   uid: i64,
 ) {
   let new_id = id_mapper.get_new_id(old_id).unwrap();
-  let view = folder.get_view(&new_id, uid).unwrap();
+  let view = folder.get_view(&new_id, Some(uid)).unwrap();
 
   assert_eq!(view.name, expected_name);
   assert_eq!(
@@ -60,7 +60,7 @@ async fn test_folder_collab_remapper() {
       .unwrap()
   );
 
-  let workspace_info = folder.get_workspace_info(&workspace_id, uid).unwrap();
+  let workspace_info = folder.get_workspace_info(&workspace_id, Some(uid)).unwrap();
   assert_eq!(workspace_info.name, "My Custom Workspace");
   assert_eq!(workspace_info.id, workspace_id);
 
@@ -76,7 +76,7 @@ async fn test_folder_collab_remapper() {
     .count();
   assert_eq!(workspace_info.child_views.len(), top_level_views_count);
 
-  let all_views = folder.get_all_views(uid);
+  let all_views = folder.get_all_views(Some(uid));
   // +1: workspace is also a view
   assert_eq!(all_views.len(), relation_map.views.len() + 1);
 
@@ -223,6 +223,6 @@ async fn test_folder_hierarchy_structure() {
     uid,
   );
 
-  let child_views = folder.get_views_belong_to(&getting_started_new_id, uid);
+  let child_views = folder.get_views_belong_to(&getting_started_new_id, Some(uid));
   assert_eq!(child_views.len(), 3);
 }

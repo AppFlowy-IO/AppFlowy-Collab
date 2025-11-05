@@ -157,20 +157,22 @@ impl Folder {
   ///
   /// * `Some(FolderData)`: If the operation is successful, it returns `Some` variant wrapping `FolderData`
   ///   object, which consists of current workspace ID, current view, a list of workspaces, and their respective views.
+  ///   When uid is provided, includes user-specific sections. When uid is None, returns empty user-specific sections.
   ///
   /// * `None`: If the operation is unsuccessful (though it should typically not be the case as `Some`
   ///   is returned explicitly), it returns `None`.
-  pub fn get_folder_data(&self, workspace_id: &str, uid: i64) -> Option<FolderData> {
+  pub fn get_folder_data(&self, workspace_id: &str, uid: Option<i64>) -> Option<FolderData> {
     let txn = self.collab.transact();
     self.body.get_folder_data(&txn, workspace_id, uid)
   }
 
-  /// Fetches the current workspace.
+  /// Fetches the current workspace. The uid parameter is accepted for API consistency
+  /// but not used as workspace data is shared across all users.
   ///
   /// This function fetches the ID of the current workspace from the meta object,
   /// and uses this ID to fetch the actual workspace object.
   ///
-  pub fn get_workspace_info(&self, workspace_id: &WorkspaceId, uid: i64) -> Option<Workspace> {
+  pub fn get_workspace_info(&self, workspace_id: &WorkspaceId, uid: Option<i64>) -> Option<Workspace> {
     let txn = self.collab.transact();
     self.body.get_workspace_info(&txn, workspace_id, uid)
   }
@@ -180,24 +182,31 @@ impl Folder {
     self.body.get_workspace_id(&txn)?.parse().ok()
   }
 
-  pub fn get_all_views(&self, uid: i64) -> Vec<Arc<View>> {
+  /// Get all views. When uid is provided, includes user-specific data like is_favorite.
+  /// When uid is None, returns base view data without user-specific enrichment.
+  pub fn get_all_views(&self, uid: Option<i64>) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_all_views(&txn, uid)
   }
 
-  pub fn get_views(&self, view_ids: &[ViewId], uid: i64) -> Vec<Arc<View>> {
+  /// Get multiple views by ids. When uid is provided, includes user-specific data like is_favorite.
+  /// When uid is None, returns base view data without user-specific enrichment.
+  pub fn get_views(&self, view_ids: &[ViewId], uid: Option<i64>) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_views(&txn, view_ids, uid)
   }
 
-  pub fn get_views_belong_to(&self, parent_id: &ViewId, uid: i64) -> Vec<Arc<View>> {
+  /// Get all views belonging to a parent. When uid is provided, includes user-specific data.
+  /// When uid is None, returns base view data without user-specific enrichment.
+  pub fn get_views_belong_to(&self, parent_id: &ViewId, uid: Option<i64>) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_views_belong_to(&txn, parent_id, uid)
   }
 
   pub fn move_view(&mut self, view_id: &ViewId, from: u32, to: u32, uid: i64) -> Option<Arc<View>> {
     let mut txn = self.collab.transact_mut();
-    self.body.move_view(&mut txn, view_id, from, to, uid)
+    self.body
+      .move_view(&mut txn, view_id, from, to, Some(uid))
   }
 
   /// Moves a nested view to a new location in the hierarchy.
@@ -227,17 +236,17 @@ impl Folder {
     let mut txn = self.collab.transact_mut();
     self
       .body
-      .move_nested_view(&mut txn, view_id, new_parent_id, prev_view_id, uid)
+      .move_nested_view(&mut txn, view_id, new_parent_id, prev_view_id, Some(uid))
   }
 
   pub fn set_current_view(&mut self, view_id: ViewId, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    self.body.set_current_view(&mut txn, view_id, uid);
+    self.body.set_current_view(&mut txn, view_id, Some(uid));
   }
 
   pub fn get_current_view(&self, uid: i64) -> Option<ViewId> {
     let txn = self.collab.transact();
-    self.body.get_current_view(&txn, uid)
+    self.body.get_current_view(&txn, Some(uid))
   }
 
   pub fn update_view<F>(&mut self, view_id: &ViewId, f: F, uid: i64) -> Option<Arc<View>>
@@ -283,17 +292,23 @@ impl Folder {
     }
   }
 
-  pub fn get_my_favorite_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Get favorite sections for a specific user. Returns empty vec when uid is None.
+  pub fn get_my_favorite_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
+    let Some(uid) = uid else {
+      return vec![];
+    };
     let txn = self.collab.transact();
     self
       .body
       .section
-      .section_op(&txn, Section::Favorite, uid)
+      .section_op(&txn, Section::Favorite, Some(uid))
       .map(|op| op.get_all_section_item(&txn))
       .unwrap_or_default()
   }
 
-  pub fn get_all_favorites_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Get all favorite sections across all users. When uid is provided, scoped to that user.
+  /// When uid is None, returns sections for all users (admin mode).
+  pub fn get_all_favorites_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let txn = self.collab.transact();
     self
       .body
@@ -308,14 +323,14 @@ impl Folder {
 
   pub fn remove_all_my_favorite_sections(&mut self, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, uid) {
+    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, Some(uid)) {
       op.clear(&mut txn);
     }
   }
 
   pub fn move_favorite_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, uid) {
+    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, Some(uid)) {
       op.move_section_item_with_txn(&mut txn, id, prev_id);
     }
   }
@@ -349,17 +364,23 @@ impl Folder {
     }
   }
 
-  pub fn get_my_trash_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Get trash sections for a specific user. Returns empty vec when uid is None.
+  pub fn get_my_trash_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
+    let Some(uid) = uid else {
+      return vec![];
+    };
     let txn = self.collab.transact();
     self
       .body
       .section
-      .section_op(&txn, Section::Trash, uid)
+      .section_op(&txn, Section::Trash, Some(uid))
       .map(|op| op.get_all_section_item(&txn))
       .unwrap_or_default()
   }
 
-  pub fn get_all_trash_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Get all trash sections across all users. When uid is provided, scoped to that user.
+  /// When uid is None, returns sections for all users (admin mode).
+  pub fn get_all_trash_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let txn = self.collab.transact();
     self
       .body
@@ -374,14 +395,14 @@ impl Folder {
 
   pub fn remove_all_my_trash_sections(&mut self, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, uid) {
+    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, Some(uid)) {
       op.clear(&mut txn);
     }
   }
 
   pub fn move_trash_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, uid) {
+    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, Some(uid)) {
       op.move_section_item_with_txn(&mut txn, id, prev_id);
     }
   }
@@ -415,17 +436,23 @@ impl Folder {
     }
   }
 
-  pub fn get_my_private_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Get private sections for a specific user. Returns empty vec when uid is None.
+  pub fn get_my_private_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
+    let Some(uid) = uid else {
+      return vec![];
+    };
     let txn = self.collab.transact();
     self
       .body
       .section
-      .section_op(&txn, Section::Private, uid)
+      .section_op(&txn, Section::Private, Some(uid))
       .map(|op| op.get_all_section_item(&txn))
       .unwrap_or_default()
   }
 
-  pub fn get_all_private_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Get all private sections across all users. When uid is provided, scoped to that user.
+  /// When uid is None, returns sections for all users (admin mode).
+  pub fn get_all_private_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let txn = self.collab.transact();
     self
       .body
@@ -440,22 +467,26 @@ impl Folder {
 
   pub fn remove_all_my_private_sections(&mut self, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Private, uid) {
+    if let Some(op) = self.body.section.section_op(&txn, Section::Private, Some(uid)) {
       op.clear(&mut txn);
     }
   }
 
   pub fn move_private_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Private, uid) {
+    if let Some(op) = self.body.section.section_op(&txn, Section::Private, Some(uid)) {
       op.move_section_item_with_txn(&mut txn, id, prev_id);
     }
   }
 
-  pub fn get_my_trash_info(&self, uid: i64) -> Vec<TrashInfo> {
+  /// Get trash info for a specific user. Returns empty vec when uid is None.
+  pub fn get_my_trash_info(&self, uid: Option<i64>) -> Vec<TrashInfo> {
+    let Some(uid_val) = uid else {
+      return vec![];
+    };
     let txn = self.collab.transact();
     self
-      .get_my_trash_sections(uid)
+      .get_my_trash_sections(Some(uid_val))
       .into_iter()
       .flat_map(|section| {
         self
@@ -513,18 +544,24 @@ impl Folder {
 
   pub fn replace_view(&mut self, from: &ViewId, to: &ViewId, uid: i64) -> bool {
     let mut txn = self.collab.transact_mut();
-    self.body.replace_view(&mut txn, from, to, uid)
+    self.body.replace_view(&mut txn, from, to, Some(uid))
   }
 
-  pub fn get_view(&self, view_id: &ViewId, uid: i64) -> Option<Arc<View>> {
+  /// Get a view by id. When uid is provided, includes user-specific data like is_favorite.
+  /// When uid is None, returns base view data without user-specific enrichment.
+  pub fn get_view(&self, view_id: &ViewId, uid: Option<i64>) -> Option<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_view(&txn, view_id, uid)
   }
 
-  pub fn is_view_in_section(&self, section: Section, view_id: &ViewId, uid: i64) -> bool {
+  pub fn is_view_in_section(&self, section: Section, view_id: &ViewId, uid: Option<i64>) -> bool {
     let txn = self.collab.transact();
-    if let Some(op) = self.body.section.section_op(&txn, section, uid) {
-      op.contains_with_txn(&txn, view_id)
+    if let Some(uid) = uid {
+      if let Some(op) = self.body.section.section_op(&txn, section, Some(uid)) {
+        op.contains_with_txn(&txn, view_id)
+      } else {
+        false
+      }
     } else {
       false
     }
@@ -557,7 +594,7 @@ impl Folder {
   /// # Returns
   ///
   /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
-  pub fn get_view_recursively(&self, view_id: &ViewId, uid: i64) -> Vec<View> {
+  pub fn get_view_recursively(&self, view_id: &ViewId, uid: Option<i64>) -> Vec<View> {
     let txn = self.collab.transact();
     let mut views = vec![];
     self.body.get_view_recursively_with_txn(
@@ -697,13 +734,13 @@ impl FolderBody {
         );
       }
 
-      if let Some(fav_section) = section.section_op(&txn, Section::Favorite, folder_data.uid) {
+      if let Some(fav_section) = section.section_op(&txn, Section::Favorite, Some(folder_data.uid)) {
         for (uid, sections) in folder_data.favorites {
           fav_section.add_sections_for_user_with_txn(&mut txn, &uid, sections);
         }
       }
 
-      if let Some(trash_section) = section.section_op(&txn, Section::Trash, folder_data.uid) {
+      if let Some(trash_section) = section.section_op(&txn, Section::Trash, Some(folder_data.uid)) {
         for (uid, sections) in folder_data.trash {
           trash_section.add_sections_for_user_with_txn(&mut txn, &uid, sections);
         }
@@ -746,7 +783,7 @@ impl FolderBody {
     view_id: &ViewId,
     visited: &mut HashSet<String>,
     accumulated_views: &mut Vec<View>,
-    uid: i64,
+    uid: Option<i64>,
   ) {
     let mut stack = vec![*view_id];
     while let Some(current_id) = stack.pop() {
@@ -766,7 +803,7 @@ impl FolderBody {
     &self,
     txn: &T,
     workspace_id: &WorkspaceId,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<Workspace> {
     let folder_workspace_id: String = self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)?;
     // Convert workspace_id UUID to string for comparison
@@ -784,8 +821,9 @@ impl FolderBody {
     &self,
     txn: &T,
     workspace_id: &str,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<FolderData> {
+    let uid = uid?;
     let folder_workspace_id = self.get_workspace_id_with_txn(txn)?;
     // Parse workspace_id as UUID, return None if invalid
     let workspace_uuid = match uuid::Uuid::parse_str(workspace_id) {
@@ -806,25 +844,25 @@ impl FolderBody {
     let workspace = Workspace::from(
       self
         .views
-        .get_view_with_txn(txn, &workspace_uuid, uid)?
+        .get_view_with_txn(txn, &workspace_uuid, Some(uid))?
         .as_ref(),
     );
-    let current_view = self.get_current_view(txn, uid);
+    let current_view = self.get_current_view(txn, Some(uid));
     let mut views = vec![];
     let orphan_views = self
       .views
-      .get_orphan_views_with_txn(txn, uid)
+      .get_orphan_views_with_txn(txn, Some(uid))
       .iter()
       .map(|view| view.as_ref().clone())
       .collect::<Vec<View>>();
-    for view in self.views.get_views_belong_to(txn, &workspace_uuid, uid) {
+    for view in self.views.get_views_belong_to(txn, &workspace_uuid, Some(uid)) {
       let mut all_views_in_workspace = vec![];
       self.get_view_recursively_with_txn(
         txn,
         &view.id,
         &mut HashSet::default(),
         &mut all_views_in_workspace,
-        uid,
+        Some(uid),
       );
       views.extend(all_views_in_workspace);
     }
@@ -832,24 +870,24 @@ impl FolderBody {
 
     let favorites = self
       .section
-      .section_op(txn, Section::Favorite, uid)
+      .section_op(txn, Section::Favorite, Some(uid))
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
     let recent = self
       .section
-      .section_op(txn, Section::Recent, uid)
+      .section_op(txn, Section::Recent, Some(uid))
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
 
     let trash = self
       .section
-      .section_op(txn, Section::Trash, uid)
+      .section_op(txn, Section::Trash, Some(uid))
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
 
     let private = self
       .section
-      .section_op(txn, Section::Private, uid)
+      .section_op(txn, Section::Private, Some(uid))
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
 
@@ -869,7 +907,7 @@ impl FolderBody {
     self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)
   }
 
-  pub async fn observe_view_changes(&self, uid: i64) {
+  pub async fn observe_view_changes(&self, uid: Option<i64>) {
     self.views.observe_view_change(uid, HashMap::new()).await;
   }
 
@@ -886,7 +924,7 @@ impl FolderBody {
     view_id: &ViewId,
     from: u32,
     to: u32,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<Arc<View>> {
     let view = self.views.get_view_with_txn(txn, view_id, uid)?;
     if let Some(parent_uuid) = &view.parent_view_id {
@@ -901,14 +939,15 @@ impl FolderBody {
     view_id: &ViewId,
     new_parent_id: &ViewId,
     prev_view_id: Option<ViewId>,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<Arc<View>> {
+    let uid = uid?;
     tracing::debug!("Move nested view: {}", view_id);
-    let view = self.views.get_view_with_txn(txn, view_id, uid)?;
+    let view = self.views.get_view_with_txn(txn, view_id, Some(uid))?;
     let current_workspace_id = self.get_workspace_id_with_txn(txn)?;
     let parent_id = &view.parent_view_id;
 
-    let new_parent_view = self.views.get_view_with_txn(txn, new_parent_id, uid);
+    let new_parent_view = self.views.get_view_with_txn(txn, new_parent_id, Some(uid));
 
     // If the new parent is not a view, it must be a workspace.
     // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
@@ -938,17 +977,21 @@ impl FolderBody {
     Some(view)
   }
 
-  pub fn get_child_of_first_public_view<T: ReadTxn>(&self, txn: &T, uid: i64) -> Option<ViewId> {
+  pub fn get_child_of_first_public_view<T: ReadTxn>(
+    &self,
+    txn: &T,
+    uid: Option<i64>,
+  ) -> Option<ViewId> {
     self
       .get_workspace_id(txn)
-      .and_then(|workspace_id| {
-        uuid::Uuid::parse_str(&workspace_id)
-          .ok()
-          .and_then(|uuid| self.views.get_view(txn, &uuid, uid))
-      })
+      .and_then(|workspace_id| uuid::Uuid::parse_str(&workspace_id).ok())
+      .and_then(|uuid| self.views.get_view_with_txn(txn, &uuid, uid))
       .and_then(|root_view| {
         let first_public_space_view_id_with_child = root_view.children.iter().find(|space_id| {
-          match self.views.get_view(txn, &space_id.id, uid) {
+          match self
+            .views
+            .get_view_with_txn(txn, &space_id.id, uid)
+          {
             Some(space_view) => {
               let is_public_space = space_view
                 .space_info()
@@ -965,7 +1008,7 @@ impl FolderBody {
       .and_then(|first_public_space_view_id_with_child| {
         self
           .views
-          .get_view(txn, &first_public_space_view_id_with_child, uid)
+          .get_view_with_txn(txn, &first_public_space_view_id_with_child, uid)
       })
       .and_then(|first_public_space_view_with_child| {
         first_public_space_view_with_child
@@ -976,7 +1019,7 @@ impl FolderBody {
       })
   }
 
-  pub fn get_current_view<T: ReadTxn>(&self, txn: &T, uid: i64) -> Option<ViewId> {
+  pub fn get_current_view<T: ReadTxn>(&self, txn: &T, uid: Option<i64>) -> Option<ViewId> {
     // Fallback to CURRENT_VIEW if CURRENT_VIEW_FOR_USER is not present. This could happen for
     // workspace folder created by older version of the app before CURRENT_VIEW_FOR_USER is introduced.
     // If user cannot be found in CURRENT_VIEW_FOR_USER, use the first child of the first public space
@@ -985,24 +1028,32 @@ impl FolderBody {
       Some(YrsValue::YMap(map)) => Some(map),
       _ => None,
     };
-    match current_view_for_user_map {
-      Some(current_view_for_user) => {
+    match (uid, current_view_for_user_map) {
+      (Some(uid), Some(current_view_for_user)) => {
         let view_for_user: Option<String> =
           current_view_for_user.get_with_txn(txn, uid.to_string().as_ref());
         view_for_user
           .and_then(|s| Uuid::parse_str(&s).ok())
-          .or(self.get_child_of_first_public_view(txn, uid))
+          .or_else(|| self.get_child_of_first_public_view(txn, Some(uid)))
       },
-      None => {
+      (Some(uid), None) => {
+        let current_view: Option<String> = self.meta.get_with_txn(txn, CURRENT_VIEW);
+        current_view
+          .and_then(|s| Uuid::parse_str(&s).ok())
+          .or_else(|| self.get_child_of_first_public_view(txn, Some(uid)))
+      },
+      (None, _) => {
         let current_view: Option<String> = self.meta.get_with_txn(txn, CURRENT_VIEW);
         current_view.and_then(|s| Uuid::parse_str(&s).ok())
       },
     }
   }
 
-  pub fn set_current_view(&self, txn: &mut TransactionMut, view: ViewId, uid: i64) {
-    let current_view_for_user = self.meta.get_or_init_map(txn, CURRENT_VIEW_FOR_USER);
-    current_view_for_user.try_update(txn, uid.to_string(), view.to_string());
+  pub fn set_current_view(&self, txn: &mut TransactionMut, view: ViewId, uid: Option<i64>) {
+    if let Some(uid) = uid {
+      let current_view_for_user = self.meta.get_or_init_map(txn, CURRENT_VIEW_FOR_USER);
+      current_view_for_user.try_update(txn, uid.to_string(), view.to_string());
+    }
   }
 
   pub fn replace_view(
@@ -1010,9 +1061,11 @@ impl FolderBody {
     txn: &mut TransactionMut,
     old_view_id: &ViewId,
     new_view_id: &ViewId,
-    uid: i64,
+    uid: Option<i64>,
   ) -> bool {
-    self.views.replace_view(txn, old_view_id, new_view_id, uid)
+    uid
+      .map(|uid| self.views.replace_view(txn, old_view_id, new_view_id, uid))
+      .unwrap_or(false)
   }
 }
 
@@ -1195,7 +1248,7 @@ mod tests {
       private: Default::default(),
     };
     let mut folder = Folder::create(collab, None, folder_data);
-    let favorite_sections = folder.get_all_favorites_sections(uid);
+    let favorite_sections = folder.get_all_favorites_sections(Some(uid));
     // Initially, all 3 views should be in favorites
     assert_eq!(favorite_sections.len(), 3);
     assert_eq!(favorite_sections[0].id, views[0].id);
@@ -1207,7 +1260,7 @@ mod tests {
       Some(&views[1].id.to_string()),
       uid,
     );
-    let favorite_sections = folder.get_all_favorites_sections(uid);
+    let favorite_sections = folder.get_all_favorites_sections(Some(uid));
     // After moving views[0] after views[1], order should be: views[1], views[0], views[2]
     assert_eq!(favorite_sections.len(), 3);
     assert_eq!(favorite_sections[0].id, views[1].id);
@@ -1215,7 +1268,7 @@ mod tests {
     assert_eq!(favorite_sections[2].id, views[2].id);
     // Move views[2] to the beginning (None means first position)
     folder.move_favorite_view_id(&views[2].id.to_string(), None, uid);
-    let favorite_sections = folder.get_all_favorites_sections(uid);
+    let favorite_sections = folder.get_all_favorites_sections(Some(uid));
     // After moving views[2] to the beginning, order should be: views[2], views[1], views[0]
     assert_eq!(favorite_sections.len(), 3);
     assert_eq!(favorite_sections[0].id, views[2].id);

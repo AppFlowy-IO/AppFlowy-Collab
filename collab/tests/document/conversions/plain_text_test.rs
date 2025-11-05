@@ -139,7 +139,7 @@ fn plain_text_mentions_custom_resolver() {
   let options = PlainTextExportOptions::from_default_resolver(resolver);
 
   let plain = document
-    .to_plain_text_with_options(options)
+    .to_plain_text_with_options(&options)
     .into_iter()
     .filter(|line| !line.trim().is_empty())
     .collect::<Vec<_>>();
