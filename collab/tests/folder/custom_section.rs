@@ -33,7 +33,11 @@ fn custom_section_test() {
   let op = folder
     .body
     .section
-    .section_op(&txn, Section::Custom("private".to_string()), Some(uid.as_i64()))
+    .section_op(
+      &txn,
+      Section::Custom("private".to_string()),
+      Some(uid.as_i64()),
+    )
     .unwrap();
   op.add_sections_item(
     &mut txn,

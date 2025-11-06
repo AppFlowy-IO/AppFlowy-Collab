@@ -211,7 +211,12 @@ impl ViewsMap {
   }
 
   /// Get multiple views by ids. When uid is provided, includes user-specific enrichment.
-  pub fn get_views<T: ReadTxn>(&self, txn: &T, view_ids: &[ViewId], uid: Option<i64>) -> Vec<Arc<View>> {
+  pub fn get_views<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_ids: &[ViewId],
+    uid: Option<i64>,
+  ) -> Vec<Arc<View>> {
     view_ids
       .iter()
       .flat_map(|view_id| self.get_view_with_txn(txn, view_id, uid))
@@ -261,7 +266,12 @@ impl ViewsMap {
 
   /// Get a view by id. When uid is provided, includes user-specific enrichment like is_favorite.
   #[instrument(level = "trace", skip_all)]
-  pub fn get_view<T: ReadTxn>(&self, txn: &T, view_id: &ViewId, uid: Option<i64>) -> Option<Arc<View>> {
+  pub fn get_view<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &ViewId,
+    uid: Option<i64>,
+  ) -> Option<Arc<View>> {
     self.get_view_with_txn(txn, view_id, uid)
   }
 

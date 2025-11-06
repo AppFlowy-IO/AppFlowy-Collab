@@ -51,10 +51,11 @@ fn create_child_views_test() {
     .get_views_belong_to(&txn, &v_1.id, Some(uid.as_i64()));
   assert_eq!(v_1_child_views.len(), 3);
 
-  let v_1_2_child_views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &v_1_2.id, Some(uid.as_i64()));
+  let v_1_2_child_views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &v_1_2.id, Some(uid.as_i64()));
   assert_eq!(v_1_2_child_views.len(), 2);
 
   let workspace_uuid_str = workspace_id.to_string();
@@ -280,10 +281,11 @@ fn delete_view_test() {
     .insert(&mut txn, view_3, None, uid.as_i64());
 
   folder.body.views.remove_child(&mut txn, &workspace_id, 1);
-  let w_1_child_views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &workspace_id, Some(uid.as_i64()));
+  let w_1_child_views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &workspace_id, Some(uid.as_i64()));
   assert_eq!(
     w_1_child_views[0].id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_1".as_bytes()).to_string()
@@ -321,17 +323,19 @@ fn delete_child_view_test() {
     .views
     .insert(&mut txn, view_2, None, uid.as_i64());
 
-  let views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &parse_view_id(&view_1_id), Some(uid.as_i64()));
+  let views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &parse_view_id(&view_1_id), Some(uid.as_i64()));
   assert_eq!(views.len(), 1);
 
   folder.body.views.delete_views(&mut txn, vec![view_1_1_id]);
-  let views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &parse_view_id(&view_1_id), Some(uid.as_i64()));
+  let views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &parse_view_id(&view_1_id), Some(uid.as_i64()));
   assert!(views.is_empty());
 }
 

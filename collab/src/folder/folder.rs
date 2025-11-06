@@ -172,7 +172,11 @@ impl Folder {
   /// This function fetches the ID of the current workspace from the meta object,
   /// and uses this ID to fetch the actual workspace object.
   ///
-  pub fn get_workspace_info(&self, workspace_id: &WorkspaceId, uid: Option<i64>) -> Option<Workspace> {
+  pub fn get_workspace_info(
+    &self,
+    workspace_id: &WorkspaceId,
+    uid: Option<i64>,
+  ) -> Option<Workspace> {
     let txn = self.collab.transact();
     self.body.get_workspace_info(&txn, workspace_id, uid)
   }
@@ -205,8 +209,7 @@ impl Folder {
 
   pub fn move_view(&mut self, view_id: &ViewId, from: u32, to: u32, uid: i64) -> Option<Arc<View>> {
     let mut txn = self.collab.transact_mut();
-    self.body
-      .move_view(&mut txn, view_id, from, to, Some(uid))
+    self.body.move_view(&mut txn, view_id, from, to, Some(uid))
   }
 
   /// Moves a nested view to a new location in the hierarchy.
@@ -323,14 +326,22 @@ impl Folder {
 
   pub fn remove_all_my_favorite_sections(&mut self, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, Some(uid)) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Favorite, Some(uid))
+    {
       op.clear(&mut txn);
     }
   }
 
   pub fn move_favorite_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, Some(uid)) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Favorite, Some(uid))
+    {
       op.move_section_item_with_txn(&mut txn, id, prev_id);
     }
   }
@@ -395,14 +406,22 @@ impl Folder {
 
   pub fn remove_all_my_trash_sections(&mut self, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, Some(uid)) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Trash, Some(uid))
+    {
       op.clear(&mut txn);
     }
   }
 
   pub fn move_trash_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, Some(uid)) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Trash, Some(uid))
+    {
       op.move_section_item_with_txn(&mut txn, id, prev_id);
     }
   }
@@ -467,14 +486,22 @@ impl Folder {
 
   pub fn remove_all_my_private_sections(&mut self, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Private, Some(uid)) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Private, Some(uid))
+    {
       op.clear(&mut txn);
     }
   }
 
   pub fn move_private_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Private, Some(uid)) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Private, Some(uid))
+    {
       op.move_section_item_with_txn(&mut txn, id, prev_id);
     }
   }
@@ -734,7 +761,8 @@ impl FolderBody {
         );
       }
 
-      if let Some(fav_section) = section.section_op(&txn, Section::Favorite, Some(folder_data.uid)) {
+      if let Some(fav_section) = section.section_op(&txn, Section::Favorite, Some(folder_data.uid))
+      {
         for (uid, sections) in folder_data.favorites {
           fav_section.add_sections_for_user_with_txn(&mut txn, &uid, sections);
         }
@@ -855,7 +883,10 @@ impl FolderBody {
       .iter()
       .map(|view| view.as_ref().clone())
       .collect::<Vec<View>>();
-    for view in self.views.get_views_belong_to(txn, &workspace_uuid, Some(uid)) {
+    for view in self
+      .views
+      .get_views_belong_to(txn, &workspace_uuid, Some(uid))
+    {
       let mut all_views_in_workspace = vec![];
       self.get_view_recursively_with_txn(
         txn,
@@ -988,10 +1019,7 @@ impl FolderBody {
       .and_then(|uuid| self.views.get_view_with_txn(txn, &uuid, uid))
       .and_then(|root_view| {
         let first_public_space_view_id_with_child = root_view.children.iter().find(|space_id| {
-          match self
-            .views
-            .get_view_with_txn(txn, &space_id.id, uid)
-          {
+          match self.views.get_view_with_txn(txn, &space_id.id, uid) {
             Some(space_view) => {
               let is_public_space = space_view
                 .space_info()

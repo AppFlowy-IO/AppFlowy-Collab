@@ -36,11 +36,11 @@ fn create_favorite_test() {
   let view_2 = make_test_view("2", workspace_id, vec![]);
   folder.insert_view(view_2, None, uid.as_i64());
 
-  let views =
-    folder
-      .body
-      .views
-      .get_views_belong_to(&folder.collab.transact(), &workspace_id, Some(uid.as_i64()));
+  let views = folder.body.views.get_views_belong_to(
+    &folder.collab.transact(),
+    &workspace_id,
+    Some(uid.as_i64()),
+  );
   assert_eq!(views.len(), 2);
   assert_eq!(
     views[0].id.to_string(),
