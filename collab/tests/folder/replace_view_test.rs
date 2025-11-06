@@ -29,7 +29,7 @@ fn replace_view_get_view() {
   folder.insert_view(v2, None, uid);
 
   let v2_id = crate::util::test_uuid("v2").to_string();
-  let old = folder.get_view(&parse_view_id(&v2_id), uid).unwrap();
+  let old = folder.get_view(&parse_view_id(&v2_id), Some(uid)).unwrap();
   assert_eq!(
     old.id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
@@ -42,7 +42,7 @@ fn replace_view_get_view() {
   );
 
   // getting old view id should return new one
-  let new = folder.get_view(&parse_view_id(&v2_id), uid).unwrap();
+  let new = folder.get_view(&parse_view_id(&v2_id), Some(uid)).unwrap();
   assert_eq!(
     new.id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string()
@@ -108,7 +108,7 @@ fn replace_view_get_view_concurrent_update() {
     .unwrap();
 
   let v2_id = crate::util::test_uuid("v2").to_string();
-  let v1 = f1.get_view(&parse_view_id(&v2_id), uid2).unwrap();
+  let v1 = f1.get_view(&parse_view_id(&v2_id), Some(uid2)).unwrap();
   assert_eq!(
     v1.id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string()
@@ -125,7 +125,7 @@ fn replace_view_get_view_concurrent_update() {
     ]
   );
 
-  let v2 = f2.get_view(&parse_view_id(&v2_id), uid1).unwrap();
+  let v2 = f2.get_view(&parse_view_id(&v2_id), Some(uid1)).unwrap();
   assert_eq!(v1, v2);
 }
 
@@ -185,8 +185,8 @@ fn replace_view_all_views_concurrent_update() {
   // check if both sides have the same views
   assert_eq!(f1.to_json_value(), f2.to_json_value());
 
-  let mut v1 = f1.get_all_views(uid1);
-  let mut v2 = f2.get_all_views(uid2);
+  let mut v1 = f1.get_all_views(Some(uid1));
+  let mut v2 = f2.get_all_views(Some(uid2));
 
   v1.sort_by_key(|v| v.id.to_string());
   v2.sort_by_key(|v| v.id.to_string());

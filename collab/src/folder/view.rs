@@ -69,7 +69,11 @@ impl ViewsMap {
     }
   }
 
-  pub async fn observe_view_change(&self, uid: i64, views: HashMap<ViewId, Arc<View>>) {
+  /// Observe view changes for a specific user. Requires uid to properly track user-specific changes.
+  pub async fn observe_view_change(&self, uid: Option<i64>, views: HashMap<ViewId, Arc<View>>) {
+    let Some(uid) = uid else {
+      return; // Cannot observe changes without uid
+    };
     for (k, v) in views {
       self.deletion_cache.insert(k, v);
     }
@@ -154,11 +158,12 @@ impl ViewsMap {
     }
   }
 
+  /// Get views belonging to a parent. When uid is provided, includes user-specific enrichment.
   pub fn get_views_belong_to<T: ReadTxn>(
     &self,
     txn: &T,
     parent_view_id: &ViewId,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Vec<Arc<View>> {
     match self.get_view_with_txn(txn, parent_view_id, uid) {
       Some(root_view) => root_view
@@ -202,14 +207,21 @@ impl ViewsMap {
     }
   }
 
-  pub fn get_views<T: ReadTxn>(&self, txn: &T, view_ids: &[ViewId], uid: i64) -> Vec<Arc<View>> {
+  /// Get multiple views by ids. When uid is provided, includes user-specific enrichment.
+  pub fn get_views<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_ids: &[ViewId],
+    uid: Option<i64>,
+  ) -> Vec<Arc<View>> {
     view_ids
       .iter()
       .flat_map(|view_id| self.get_view_with_txn(txn, view_id, uid))
       .collect::<Vec<_>>()
   }
 
-  pub fn get_all_views<T: ReadTxn>(&self, txn: &T, uid: i64) -> Vec<Arc<View>> {
+  /// Get all views. When uid is provided, includes user-specific enrichment like is_favorite.
+  pub fn get_all_views<T: ReadTxn>(&self, txn: &T, uid: Option<i64>) -> Vec<Arc<View>> {
     // since views can be mapped through revisions, we need a map of final_view_id and its predecessors
 
     // first split the keys into ones that have existing mappings (roots) and ones that have not more mapping (leafs)
@@ -249,14 +261,21 @@ impl ViewsMap {
       .collect()
   }
 
+  /// Get a view by id. When uid is provided, includes user-specific enrichment like is_favorite.
   #[instrument(level = "trace", skip_all)]
-  pub fn get_view<T: ReadTxn>(&self, txn: &T, view_id: &ViewId, uid: i64) -> Option<Arc<View>> {
+  pub fn get_view<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &ViewId,
+    uid: Option<i64>,
+  ) -> Option<Arc<View>> {
     self.get_view_with_txn(txn, view_id, uid)
   }
 
-  /// Return the orphan views.d
+  /// Return the orphan views.
   /// The orphan views are the views that its parent_view_id equal to its view_id.
-  pub fn get_orphan_views_with_txn<T: ReadTxn>(&self, txn: &T, uid: i64) -> Vec<Arc<View>> {
+  /// When uid is provided, includes user-specific enrichment.
+  pub fn get_orphan_views_with_txn<T: ReadTxn>(&self, txn: &T, uid: Option<i64>) -> Vec<Arc<View>> {
     self
       .container
       .keys(txn)
@@ -276,7 +295,7 @@ impl ViewsMap {
     &self,
     txn: &T,
     view_id: &ViewId,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<Arc<View>> {
     let (view_id, mappings) = self.revision_map.mappings(txn, *view_id);
     let map_ref = self.container.get_with_txn(txn, &view_id.to_string())?;
@@ -294,11 +313,12 @@ impl ViewsMap {
   /// Gets a view with stronger consistency guarantees, bypassing cache when needed
   /// Use this during transactions that might have uncommitted changes
   /// Note: Since we removed the cache, this is now identical to get_view_with_txn
+  /// When uid is provided, includes user-specific enrichment like is_favorite.
   pub fn get_view_with_strong_consistency<T: ReadTxn>(
     &self,
     txn: &T,
     view_id: &ViewId,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<Arc<View>> {
     self.get_view_with_txn(txn, view_id, uid)
   }
@@ -490,7 +510,7 @@ impl ViewsMap {
     new_view_id: &ViewId,
     uid: i64,
   ) -> bool {
-    if let Some(old_view) = self.get_view(txn, old_view_id, uid) {
+    if let Some(old_view) = self.get_view(txn, old_view_id, Some(uid)) {
       let mut new_view = (*old_view).clone();
       new_view.id = *new_view_id;
       new_view.last_edited_by = Some(uid);
@@ -514,7 +534,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   txn: &T,
   view_relations: &Arc<ParentChildRelations>,
   section_map: &SectionMap,
-  uid: i64,
+  uid: Option<i64>,
   mappings: impl IntoIterator<Item = ViewId>,
 ) -> Option<View> {
   let parent_view_id: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
@@ -553,9 +573,12 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   }
 
   let icon = get_icon_from_view_map(map_ref, txn);
-  let is_favorite = section_map
-    .section_op(txn, Section::Favorite, uid)
-    .map(|op| op.contains_with_txn(txn, &id))
+  let is_favorite = uid
+    .and_then(|uid| {
+      section_map
+        .section_op(txn, Section::Favorite, Some(uid))
+        .map(|op| op.contains_with_txn(txn, &id))
+    })
     .unwrap_or(false);
 
   let created_by = map_ref.get_with_txn(txn, VIEW_CREATED_BY);
@@ -814,7 +837,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     if let Some(private_section) =
       self
         .section_map
-        .section_op(self.txn, Section::Private, self.uid.as_i64())
+        .section_op(self.txn, Section::Private, Some(self.uid.as_i64()))
     {
       if is_private {
         private_section.add_sections_item(self.txn, vec![SectionItem::new(*self.view_id)]);
@@ -830,7 +853,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     if let Some(fav_section) =
       self
         .section_map
-        .section_op(self.txn, Section::Favorite, self.uid.as_i64())
+        .section_op(self.txn, Section::Favorite, Some(self.uid.as_i64()))
     {
       if is_favorite {
         fav_section.add_sections_item(self.txn, vec![SectionItem::new(*self.view_id)]);
@@ -854,7 +877,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     if let Some(trash_section) =
       self
         .section_map
-        .section_op(self.txn, Section::Trash, self.uid.as_i64())
+        .section_op(self.txn, Section::Trash, Some(self.uid.as_i64()))
     {
       if is_trash {
         trash_section.add_sections_item(self.txn, vec![SectionItem::new(*self.view_id)]);
@@ -884,7 +907,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
       self.txn,
       &self.children_map,
       self.section_map,
-      self.uid.as_i64(),
+      Some(self.uid.as_i64()),
       [],
     )
   }

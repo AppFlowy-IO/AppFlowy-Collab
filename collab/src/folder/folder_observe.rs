@@ -52,7 +52,7 @@ pub(crate) fn subscribe_view_change(
                           txn,
                           &view_relations,
                           &section_map,
-                          uid,
+                          Some(uid),
                           mappings,
                         ) {
                           deletion_cache.insert(view.id, Arc::new(view.clone()));
@@ -78,7 +78,7 @@ pub(crate) fn subscribe_view_change(
                         txn,
                         &view_relations,
                         &section_map,
-                        uid,
+                        Some(uid),
                         mappings,
                       ) {
                         // Update deletion cache with the updated view

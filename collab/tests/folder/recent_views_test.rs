@@ -21,11 +21,11 @@ fn create_recent_views_test() {
   // Get view_1 from folder
   let view_1 = folder.get_view(id_1, uid.as_i64()).unwrap();
   // Check if view_1 has been added into recent section.
-  assert!(!folder.is_view_in_section(Section::Recent, &view_1.id, uid.as_i64()));
+  assert!(!folder.is_view_in_section(Section::Recent, &view_1.id, Some(uid.as_i64())));
   folder.add_recent_view_ids(vec![id_1.to_string()], uid.as_i64());
 
   let view_1 = folder.get_view(id_1, uid.as_i64()).unwrap();
-  assert!(folder.is_view_in_section(Section::Recent, &view_1.id, uid.as_i64()));
+  assert!(folder.is_view_in_section(Section::Recent, &view_1.id, Some(uid.as_i64())));
 
   let id_2: &str = "view_2";
 
@@ -69,7 +69,7 @@ fn add_view_into_recent_and_then_remove_it_test() {
   assert_eq!(views.len(), 1);
   assert_eq!(views[0].id, id_1);
   // in recent section
-  assert!(folder.is_view_in_section(Section::Recent, &views[0].id, uid.as_i64()));
+  assert!(folder.is_view_in_section(Section::Recent, &views[0].id, Some(uid.as_i64())));
 
   folder.delete_recent_view_ids(vec![id_1.to_string()], uid.as_i64());
   let views =

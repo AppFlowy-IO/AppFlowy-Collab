@@ -41,12 +41,12 @@ async fn test_workspace_remapper_folder_structure() {
   let folder = remapper.build_folder_collab(uid, workspace_name).unwrap();
 
   let workspace_id = folder.get_workspace_id().unwrap();
-  let workspace_info = folder.get_workspace_info(&workspace_id, uid).unwrap();
+  let workspace_info = folder.get_workspace_info(&workspace_id, Some(uid)).unwrap();
 
   assert_eq!(workspace_info.name, workspace_name);
   assert_eq!(workspace_info.id, workspace_id);
 
-  let all_views = folder.get_all_views(uid);
+  let all_views = folder.get_all_views(Some(uid));
   assert_eq!(all_views.len(), 8);
 }
 

@@ -157,20 +157,26 @@ impl Folder {
   ///
   /// * `Some(FolderData)`: If the operation is successful, it returns `Some` variant wrapping `FolderData`
   ///   object, which consists of current workspace ID, current view, a list of workspaces, and their respective views.
+  ///   When uid is provided, includes user-specific sections. When uid is None, returns empty user-specific sections.
   ///
   /// * `None`: If the operation is unsuccessful (though it should typically not be the case as `Some`
   ///   is returned explicitly), it returns `None`.
-  pub fn get_folder_data(&self, workspace_id: &str, uid: i64) -> Option<FolderData> {
+  pub fn get_folder_data(&self, workspace_id: &str, uid: Option<i64>) -> Option<FolderData> {
     let txn = self.collab.transact();
     self.body.get_folder_data(&txn, workspace_id, uid)
   }
 
-  /// Fetches the current workspace.
+  /// Fetches the current workspace. The uid parameter is accepted for API consistency
+  /// but not used as workspace data is shared across all users.
   ///
   /// This function fetches the ID of the current workspace from the meta object,
   /// and uses this ID to fetch the actual workspace object.
   ///
-  pub fn get_workspace_info(&self, workspace_id: &WorkspaceId, uid: i64) -> Option<Workspace> {
+  pub fn get_workspace_info(
+    &self,
+    workspace_id: &WorkspaceId,
+    uid: Option<i64>,
+  ) -> Option<Workspace> {
     let txn = self.collab.transact();
     self.body.get_workspace_info(&txn, workspace_id, uid)
   }
@@ -180,24 +186,30 @@ impl Folder {
     self.body.get_workspace_id(&txn)?.parse().ok()
   }
 
-  pub fn get_all_views(&self, uid: i64) -> Vec<Arc<View>> {
+  /// Get all views. When uid is provided, includes user-specific data like is_favorite.
+  /// When uid is None, returns base view data without user-specific enrichment.
+  pub fn get_all_views(&self, uid: Option<i64>) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_all_views(&txn, uid)
   }
 
-  pub fn get_views(&self, view_ids: &[ViewId], uid: i64) -> Vec<Arc<View>> {
+  /// Get multiple views by ids. When uid is provided, includes user-specific data like is_favorite.
+  /// When uid is None, returns base view data without user-specific enrichment.
+  pub fn get_views(&self, view_ids: &[ViewId], uid: Option<i64>) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_views(&txn, view_ids, uid)
   }
 
-  pub fn get_views_belong_to(&self, parent_id: &ViewId, uid: i64) -> Vec<Arc<View>> {
+  /// Get all views belonging to a parent. When uid is provided, includes user-specific data.
+  /// When uid is None, returns base view data without user-specific enrichment.
+  pub fn get_views_belong_to(&self, parent_id: &ViewId, uid: Option<i64>) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_views_belong_to(&txn, parent_id, uid)
   }
 
   pub fn move_view(&mut self, view_id: &ViewId, from: u32, to: u32, uid: i64) -> Option<Arc<View>> {
     let mut txn = self.collab.transact_mut();
-    self.body.move_view(&mut txn, view_id, from, to, uid)
+    self.body.move_view(&mut txn, view_id, from, to, Some(uid))
   }
 
   /// Moves a nested view to a new location in the hierarchy.
@@ -227,17 +239,17 @@ impl Folder {
     let mut txn = self.collab.transact_mut();
     self
       .body
-      .move_nested_view(&mut txn, view_id, new_parent_id, prev_view_id, uid)
+      .move_nested_view(&mut txn, view_id, new_parent_id, prev_view_id, Some(uid))
   }
 
   pub fn set_current_view(&mut self, view_id: ViewId, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    self.body.set_current_view(&mut txn, view_id, uid);
+    self.body.set_current_view(&mut txn, view_id, Some(uid));
   }
 
   pub fn get_current_view(&self, uid: i64) -> Option<ViewId> {
     let txn = self.collab.transact();
-    self.body.get_current_view(&txn, uid)
+    self.body.get_current_view(&txn, Some(uid))
   }
 
   pub fn update_view<F>(&mut self, view_id: &ViewId, f: F, uid: i64) -> Option<Arc<View>>
@@ -283,17 +295,175 @@ impl Folder {
     }
   }
 
-  pub fn get_my_favorite_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Retrieves the favorite views for a specific user.
+  ///
+  /// # How Sections Work
+  ///
+  /// Sections are **user-specific collections** stored in the collaborative folder.
+  /// The folder maintains four predefined sections: Favorite, Recent, Trash, and Private.
+  ///
+  /// **Data Structure:**
+  /// ```text
+  /// Folder (CRDT)
+  ///   └─ SectionMap
+  ///       └─ "favorite" (Section)
+  ///           ├─ "1" (uid) → [SectionItem { id: view_uuid, timestamp }, ...]
+  ///           ├─ "2" (uid) → [SectionItem { id: view_uuid, timestamp }, ...]
+  ///           └─ "3" (uid) → [SectionItem { id: view_uuid, timestamp }, ...]
+  /// ```
+  ///
+  /// Each section type (favorite/recent/trash/private) contains a map where:
+  /// - **Key**: User ID (as string representation of i64)
+  /// - **Value**: Array of `SectionItem` structs, each containing:
+  ///   - `id`: ViewId (UUID) of the view in this section
+  ///   - `timestamp`: When the view was added to this section
+  ///
+  /// This architecture allows multiple users to collaborate on the same folder
+  /// while maintaining separate personal collections (favorites, recent views, etc.).
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID to query favorites for
+  ///   - `Some(uid)`: Returns the favorite views for the specified user
+  ///   - `None`: Returns an empty vector (no user context = no user-specific data)
+  ///
+  /// # Returns
+  ///
+  /// A vector of `SectionItem` structs representing the user's favorite views.
+  /// Each item contains the view's UUID and the timestamp when it was favorited.
+  /// Returns empty vector if:
+  /// - `uid` is `None`
+  /// - The user has no favorites
+  /// - The favorite section doesn't exist
+  ///
+  /// # Why `Option<i64>` for Query Operations?
+  ///
+  /// This method uses `Option<i64>` (not required `i64`) because:
+  /// 1. **Safe degradation**: Can return meaningful result (empty) when uid is unknown
+  /// 2. **Flexible usage**: Callers can query without having user context
+  /// 3. **No side effects**: Read-only operation that doesn't modify data
+  ///
+  /// Compare with mutation operations like `add_favorite_view_ids(uid: i64)` which
+  /// require `i64` because adding favorites without a user ID would be meaningless.
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_all_favorites_sections`]: Gets favorites across all users (admin mode)
+  /// - [`add_favorite_view_ids`]: Adds views to user's favorites (requires `i64`)
+  /// - [`delete_favorite_view_ids`]: Removes views from user's favorites (requires `i64`)
+  /// - [`get_my_trash_sections`]: Similar pattern for trash section
+  /// - [`get_my_private_sections`]: Similar pattern for private section
+  /// - [`get_my_recent_sections`]: Similar pattern for recent section
+  ///
+  /// # Examples
+  ///
+  /// ```rust,ignore
+  /// // Get favorites for a specific user
+  /// let user_id = UserId::from(123);
+  /// let favorites = folder.get_my_favorite_sections(Some(user_id.as_i64()));
+  /// for item in favorites {
+  ///     println!("View {} was favorited at {}", item.id, item.timestamp);
+  /// }
+  ///
+  /// // Query without user context (returns empty)
+  /// let no_favorites = folder.get_my_favorite_sections(None);
+  /// assert!(no_favorites.is_empty());
+  ///
+  /// // Check if a view is favorited
+  /// let is_favorited = folder.get_my_favorite_sections(Some(uid))
+  ///     .iter()
+  ///     .any(|item| item.id == target_view_id);
+  /// ```
+  ///
+  /// # Implementation Details
+  ///
+  /// Internally, this method:
+  /// 1. Creates a read transaction on the Collab CRDT
+  /// 2. Gets a `SectionOperation` for the Favorite section with the given uid
+  /// 3. Calls `get_all_section_item()` which:
+  ///    - Looks up the array at key `uid.to_string()` in the favorite section
+  ///    - Deserializes each Yrs array element into a `SectionItem`
+  ///    - Returns the vector of items
+  ///
+  /// The operation is **read-only** and **lock-free** thanks to CRDT properties.
+  pub fn get_my_favorite_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
+    let Some(uid) = uid else {
+      return vec![];
+    };
     let txn = self.collab.transact();
     self
       .body
       .section
-      .section_op(&txn, Section::Favorite, uid)
+      .section_op(&txn, Section::Favorite, Some(uid))
       .map(|op| op.get_all_section_item(&txn))
       .unwrap_or_default()
   }
 
-  pub fn get_all_favorites_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Retrieves favorite views across all users, with optional filtering by user.
+  ///
+  /// This is the "admin mode" variant of [`get_my_favorite_sections`]. While `get_my_*`
+  /// returns empty when uid is None, this method returns **all users' favorites** when
+  /// uid is None.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID for filtering
+  ///   - `Some(uid)`: Returns only the favorites for the specified user (same as `get_my_favorite_sections`)
+  ///   - `None`: Returns favorites from **all users** (admin/global query mode)
+  ///
+  /// # Returns
+  ///
+  /// A flattened vector of all `SectionItem` entries across the queried user(s).
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// **This is the key difference from `get_my_favorite_sections`:**
+  ///
+  /// When `uid` is `None`, this method returns favorites from **all users**, not an empty vector.
+  /// This enables admin/debugging operations like:
+  /// - Viewing all favorited content across the workspace
+  /// - Finding popular/frequently favorited views
+  /// - Debugging favorite state
+  ///
+  /// ```text
+  /// get_my_favorite_sections(None)   → []  (empty - no user context)
+  /// get_all_favorites_sections(None) → [user1's favorites, user2's favorites, ...] (all users)
+  /// ```
+  ///
+  /// # Use Cases
+  ///
+  /// ## Admin Dashboard - Popular Views
+  /// ```rust,ignore
+  /// // Get all favorited views across all users
+  /// let all_favorites = folder.get_all_favorites_sections(None);
+  /// let view_counts: HashMap<ViewId, usize> = all_favorites
+  ///     .iter()
+  ///     .fold(HashMap::new(), |mut map, item| {
+  ///         *map.entry(item.id).or_insert(0) += 1;
+  ///         map
+  ///     });
+  ///
+  /// // Find most favorited views
+  /// let popular = view_counts
+  ///     .into_iter()
+  ///     .filter(|(_, count)| *count >= 3)
+  ///     .collect::<Vec<_>>();
+  /// ```
+  ///
+  /// ## Check Specific User (Alternative to get_my_*)
+  /// ```rust,ignore
+  /// // These are equivalent:
+  /// let favorites_a = folder.get_my_favorite_sections(Some(uid));
+  /// let favorites_b = folder.get_all_favorites_sections(Some(uid));
+  /// assert_eq!(favorites_a, favorites_b);
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_my_favorite_sections`]: User-scoped version (returns empty when uid is None)
+  /// - [`add_favorite_view_ids`]: Add favorites for a user (requires `i64`)
+  /// - [`delete_favorite_view_ids`]: Remove favorites for a user (requires `i64`)
+  pub fn get_all_favorites_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let txn = self.collab.transact();
     self
       .body
@@ -308,14 +478,22 @@ impl Folder {
 
   pub fn remove_all_my_favorite_sections(&mut self, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, uid) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Favorite, Some(uid))
+    {
       op.clear(&mut txn);
     }
   }
 
   pub fn move_favorite_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Favorite, uid) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Favorite, Some(uid))
+    {
       op.move_section_item_with_txn(&mut txn, id, prev_id);
     }
   }
@@ -349,17 +527,155 @@ impl Folder {
     }
   }
 
-  pub fn get_my_trash_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Retrieves the trashed views for a specific user.
+  ///
+  /// The trash section contains views that have been deleted by the user but not yet
+  /// permanently removed. This allows for a "trash bin" functionality where users can
+  /// recover accidentally deleted views.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID to query trash for
+  ///   - `Some(uid)`: Returns the trashed views for the specified user
+  ///   - `None`: Returns an empty vector (no user = no trash to show)
+  ///
+  /// # Returns
+  ///
+  /// A vector of `SectionItem` structs where:
+  /// - `item.id`: The view UUID that was trashed
+  /// - `item.timestamp`: When the view was moved to trash (for auto-deletion policies)
+  ///
+  /// Returns empty vector if:
+  /// - `uid` is `None` (no user context)
+  /// - The user has no items in trash
+  /// - The trash section doesn't exist
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, this method returns an empty vector because trash is
+  /// **user-specific** data. Without knowing which user's trash to query, the method
+  /// cannot return meaningful results. This design:
+  /// - Prevents accidentally showing another user's deleted items
+  /// - Fails safely (empty instead of error)
+  /// - Maintains consistency with other user-scoped queries
+  ///
+  /// If you need to query trash across all users (e.g., for admin purposes), use
+  /// [`get_all_trash_sections`] instead.
+  ///
+  /// # Common Use Cases
+  ///
+  /// ## Display Trash Bin
+  /// ```rust,ignore
+  /// let trash_items = folder.get_my_trash_sections(Some(current_user_id));
+  /// for item in trash_items {
+  ///     show_trashed_view(item.id, item.timestamp);
+  /// }
+  /// ```
+  ///
+  /// ## Auto-Delete Old Items
+  /// ```rust,ignore
+  /// let trash = folder.get_my_trash_sections(Some(uid));
+  /// let thirty_days_ago = current_timestamp() - (30 * 24 * 60 * 60 * 1000);
+  ///
+  /// let to_permanently_delete: Vec<_> = trash
+  ///     .iter()
+  ///     .filter(|item| item.timestamp < thirty_days_ago)
+  ///     .map(|item| item.id.to_string())
+  ///     .collect();
+  ///
+  /// if !to_permanently_delete.is_empty() {
+  ///     folder.delete_trash_view_ids(to_permanently_delete, uid);
+  /// }
+  /// ```
+  ///
+  /// ## Check if View is in Trash
+  /// ```rust,ignore
+  /// let is_trashed = folder.get_my_trash_sections(Some(uid))
+  ///     .iter()
+  ///     .any(|item| item.id == target_view_id);
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`add_trash_view_ids`]: Move views to trash (requires `i64`)
+  /// - [`delete_trash_view_ids`]: Permanently delete from trash (requires `i64`)
+  /// - [`get_all_trash_sections`]: Query trash across all users (admin mode)
+  /// - [`get_my_trash_info`]: Get trash with additional view metadata
+  pub fn get_my_trash_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
+    let Some(uid) = uid else {
+      return vec![];
+    };
     let txn = self.collab.transact();
     self
       .body
       .section
-      .section_op(&txn, Section::Trash, uid)
+      .section_op(&txn, Section::Trash, Some(uid))
       .map(|op| op.get_all_section_item(&txn))
       .unwrap_or_default()
   }
 
-  pub fn get_all_trash_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Retrieves trashed views across all users, with optional filtering by user.
+  ///
+  /// This is the "admin mode" variant of [`get_my_trash_sections`]. While `get_my_trash_sections`
+  /// returns empty when uid is None, this method returns **all users' trash** when uid is None.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID for filtering
+  ///   - `Some(uid)`: Returns only the trash for the specified user
+  ///   - `None`: Returns trash from **all users** (admin/cleanup mode)
+  ///
+  /// # Returns
+  ///
+  /// A flattened vector of all trashed `SectionItem` entries across the queried user(s).
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, this method returns trash items from **all users**:
+  ///
+  /// ```text
+  /// get_my_trash_sections(None)   → []  (empty - no user context)
+  /// get_all_trash_sections(None) → [user1's trash, user2's trash, ...] (all users)
+  /// ```
+  ///
+  /// This is useful for:
+  /// - Admin cleanup operations (find all deleted content)
+  /// - Global auto-deletion policies (remove items older than N days across all users)
+  /// - Debugging trash state
+  /// - Recovering content when user ID is unknown
+  ///
+  /// # Use Cases
+  ///
+  /// ## Global Cleanup - Delete Old Trash
+  /// ```rust,ignore
+  /// // Find all trash items older than 30 days across ALL users
+  /// let all_trash = folder.get_all_trash_sections(None);
+  /// let thirty_days_ago = current_timestamp() - (30 * 24 * 60 * 60 * 1000);
+  ///
+  /// let old_trash: Vec<_> = all_trash
+  ///     .into_iter()
+  ///     .filter(|item| item.timestamp < thirty_days_ago)
+  ///     .collect();
+  ///
+  /// // Note: Actual deletion requires uid per item, so you'd need to
+  /// // track which user owns which trash item separately
+  /// ```
+  ///
+  /// ## Admin Dashboard - Trash Statistics
+  /// ```rust,ignore
+  /// let all_trash = folder.get_all_trash_sections(None);
+  /// println!("Total items in trash across all users: {}", all_trash.len());
+  ///
+  /// // Calculate trash size per user (requires additional tracking)
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_my_trash_sections`]: User-scoped version (returns empty when uid is None)
+  /// - [`get_my_trash_info`]: User-scoped with view names
+  /// - [`add_trash_view_ids`]: Move views to trash (requires `i64`)
+  /// - [`delete_trash_view_ids`]: Permanently delete from trash (requires `i64`)
+  pub fn get_all_trash_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let txn = self.collab.transact();
     self
       .body
@@ -374,14 +690,22 @@ impl Folder {
 
   pub fn remove_all_my_trash_sections(&mut self, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, uid) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Trash, Some(uid))
+    {
       op.clear(&mut txn);
     }
   }
 
   pub fn move_trash_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Trash, uid) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Trash, Some(uid))
+    {
       op.move_section_item_with_txn(&mut txn, id, prev_id);
     }
   }
@@ -415,17 +739,166 @@ impl Folder {
     }
   }
 
-  pub fn get_my_private_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Retrieves the private views for a specific user.
+  ///
+  /// The private section contains views that are marked as private/personal to the user
+  /// and should be hidden from other collaborators. This enables personal workspace areas
+  /// within a shared collaborative folder.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID to query private views for
+  ///   - `Some(uid)`: Returns the private views for the specified user
+  ///   - `None`: Returns an empty vector (no user = no private views to show)
+  ///
+  /// # Returns
+  ///
+  /// A vector of `SectionItem` structs where:
+  /// - `item.id`: The view UUID marked as private
+  /// - `item.timestamp`: When the view was marked as private
+  ///
+  /// Returns empty vector if:
+  /// - `uid` is `None` (no user context)
+  /// - The user has no private views
+  /// - The private section doesn't exist
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, this method returns an empty vector because private views are
+  /// **inherently user-specific**. The concept of "private" only makes sense in the context
+  /// of a specific user - views are private *to someone*. Without a user ID:
+  /// - Cannot determine whose private views to return
+  /// - Returning all users' private views would violate privacy
+  /// - Empty result is the safest, most consistent behavior
+  ///
+  /// For admin operations that need to see all private views across users, use
+  /// [`get_all_private_sections`] instead.
+  ///
+  /// # Privacy Semantics
+  ///
+  /// **Important**: This method only returns which views are *marked* as private. The actual
+  /// visibility enforcement (hiding these views from other users) must be implemented by
+  /// the application layer. The section system provides the data structure, not the access
+  /// control mechanism.
+  ///
+  /// # Common Use Cases
+  ///
+  /// ## Filter Out Other Users' Private Views
+  /// ```rust,ignore
+  /// let all_views = folder.get_all_views(Some(current_user_id));
+  /// let other_private_views = folder.get_all_private_sections(Some(current_user_id));
+  ///
+  /// let visible_views: Vec<_> = all_views
+  ///     .into_iter()
+  ///     .filter(|view| {
+  ///         !other_private_views.iter().any(|private| private.id == view.id)
+  ///     })
+  ///     .collect();
+  /// ```
+  ///
+  /// ## Show User's Personal Workspace
+  /// ```rust,ignore
+  /// let my_private = folder.get_my_private_sections(Some(uid));
+  /// if !my_private.is_empty() {
+  ///     render_private_section_ui(&my_private);
+  /// }
+  /// ```
+  ///
+  /// ## Check if View is Private
+  /// ```rust,ignore
+  /// let is_private = folder.get_my_private_sections(Some(uid))
+  ///     .iter()
+  ///     .any(|item| item.id == view_id);
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`add_private_view_ids`]: Mark views as private (requires `i64`)
+  /// - [`delete_private_view_ids`]: Unmark views as private (requires `i64`)
+  /// - [`get_all_private_sections`]: Query private views across all users (admin mode)
+  pub fn get_my_private_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
+    let Some(uid) = uid else {
+      return vec![];
+    };
     let txn = self.collab.transact();
     self
       .body
       .section
-      .section_op(&txn, Section::Private, uid)
+      .section_op(&txn, Section::Private, Some(uid))
       .map(|op| op.get_all_section_item(&txn))
       .unwrap_or_default()
   }
 
-  pub fn get_all_private_sections(&self, uid: i64) -> Vec<SectionItem> {
+  /// Retrieves private views across all users, with optional filtering by user.
+  ///
+  /// This is the "admin mode" variant of [`get_my_private_sections`]. While `get_my_private_sections`
+  /// returns empty when uid is None, this method returns **all users' private views** when uid is None.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID for filtering
+  ///   - `Some(uid)`: Returns only the private views for the specified user
+  ///   - `None`: Returns private views from **all users** (admin/audit mode)
+  ///
+  /// # Returns
+  ///
+  /// A flattened vector of all private `SectionItem` entries across the queried user(s).
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, this method returns private items from **all users**:
+  ///
+  /// ```text
+  /// get_my_private_sections(None)   → []  (empty - no user context)
+  /// get_all_private_sections(None) → [user1's private, user2's private, ...] (all users)
+  /// ```
+  ///
+  /// **Privacy Note**: Returning all users' private views may have privacy implications.
+  /// This method should typically only be called:
+  /// - In admin/debugging contexts
+  /// - For workspace-level operations (e.g., migration, backup)
+  /// - When implementing view filtering logic (to hide *other* users' private views)
+  ///
+  /// # Use Cases
+  ///
+  /// ## Filter Out Other Users' Private Views
+  /// ```rust,ignore
+  /// // Get all views, then filter out views private to other users
+  /// let all_views = folder.get_all_views(Some(current_user_id));
+  /// let my_private_views = folder.get_my_private_sections(Some(current_user_id));
+  /// let others_private_views = folder.get_all_private_sections(None);
+  ///
+  /// let visible_to_me: Vec<_> = all_views
+  ///     .into_iter()
+  ///     .filter(|view| {
+  ///         // Show if it's my private view OR not private to anyone else
+  ///         my_private_views.iter().any(|p| p.id == view.id)
+  ///             || !others_private_views.iter().any(|p| p.id == view.id)
+  ///     })
+  ///     .collect();
+  /// ```
+  ///
+  /// ## Admin Audit - Find All Private Content
+  /// ```rust,ignore
+  /// let all_private = folder.get_all_private_sections(None);
+  /// println!("Total private views across workspace: {}", all_private.len());
+  ///
+  /// // Identify users with private content (requires user tracking)
+  /// ```
+  ///
+  /// ## Migration/Backup Operations
+  /// ```rust,ignore
+  /// // When migrating workspace, preserve all private view metadata
+  /// let all_private = folder.get_all_private_sections(None);
+  /// save_to_backup("private_sections.json", &all_private);
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_my_private_sections`]: User-scoped version (returns empty when uid is None)
+  /// - [`add_private_view_ids`]: Mark views as private (requires `i64`)
+  /// - [`delete_private_view_ids`]: Unmark views as private (requires `i64`)
+  pub fn get_all_private_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let txn = self.collab.transact();
     self
       .body
@@ -440,22 +913,136 @@ impl Folder {
 
   pub fn remove_all_my_private_sections(&mut self, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Private, uid) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Private, Some(uid))
+    {
       op.clear(&mut txn);
     }
   }
 
   pub fn move_private_view_id(&mut self, id: &str, prev_id: Option<&str>, uid: i64) {
     let mut txn = self.collab.transact_mut();
-    if let Some(op) = self.body.section.section_op(&txn, Section::Private, uid) {
+    if let Some(op) = self
+      .body
+      .section
+      .section_op(&txn, Section::Private, Some(uid))
+    {
       op.move_section_item_with_txn(&mut txn, id, prev_id);
     }
   }
 
-  pub fn get_my_trash_info(&self, uid: i64) -> Vec<TrashInfo> {
+  /// Retrieves enriched trash information for a specific user.
+  ///
+  /// This is an enhanced version of [`get_my_trash_sections`] that includes additional
+  /// view metadata (name) for each trashed item. This is useful for displaying trash bins
+  /// in the UI where you need to show the view name, not just its ID.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID to query trash info for
+  ///   - `Some(uid)`: Returns trash info for the specified user
+  ///   - `None`: Returns an empty vector (no user = no trash to show)
+  ///
+  /// # Returns
+  ///
+  /// A vector of `TrashInfo` structs where each contains:
+  /// - `id`: ViewId (UUID) of the trashed view
+  /// - `name`: Human-readable name of the view (e.g., "My Document")
+  /// - `created_at`: Timestamp when the view was moved to trash
+  ///
+  /// Returns empty vector if:
+  /// - `uid` is `None` (no user context)
+  /// - The user has no items in trash
+  /// - The trash section doesn't exist
+  ///
+  /// **Note**: If a view ID exists in the trash section but the view itself has been
+  /// permanently deleted or its name cannot be retrieved, that item will be **omitted**
+  /// from the results (via `flat_map` semantics). This ensures the returned data is
+  /// always consistent and displayable.
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, returns an empty vector because:
+  /// - Trash is user-specific data
+  /// - Cannot determine which user's trash to query
+  /// - Prevents privacy leaks (showing other users' deleted items)
+  /// - Consistent with [`get_my_trash_sections`] behavior
+  ///
+  /// For admin operations, use `get_my_trash_sections` with all user IDs manually,
+  /// as there's no `get_all_trash_info` variant (by design, to prevent accidentally
+  /// exposing sensitive deleted data).
+  ///
+  /// # Comparison with get_my_trash_sections
+  ///
+  /// | Method | Returns | View Name | Use When |
+  /// |--------|---------|-----------|----------|
+  /// | `get_my_trash_sections` | `Vec<SectionItem>` | No | Need just IDs/timestamps |
+  /// | `get_my_trash_info` | `Vec<TrashInfo>` | Yes | Displaying UI |
+  ///
+  /// Use `get_my_trash_info` when you need to show trash items to the user with readable
+  /// names. Use `get_my_trash_sections` when you only need view IDs (e.g., checking if
+  /// a view is trashed).
+  ///
+  /// # Common Use Cases
+  ///
+  /// ## Display Trash Bin UI
+  /// ```rust,ignore
+  /// let trash_info = folder.get_my_trash_info(Some(current_user_id));
+  /// for item in trash_info {
+  ///     render_trash_item(
+  ///         item.id,
+  ///         &item.name,
+  ///         format_timestamp(item.created_at)
+  ///     );
+  /// }
+  /// ```
+  ///
+  /// ## Restore Deleted View by Name
+  /// ```rust,ignore
+  /// let trash = folder.get_my_trash_info(Some(uid));
+  /// if let Some(item) = trash.iter().find(|t| t.name == "Important Doc") {
+  ///     folder.delete_trash_view_ids(vec![item.id.to_string()], uid);
+  ///     println!("Restored: {}", item.name);
+  /// }
+  /// ```
+  ///
+  /// ## Show Time Since Deletion
+  /// ```rust,ignore
+  /// let trash = folder.get_my_trash_info(Some(uid));
+  /// let now = current_timestamp();
+  ///
+  /// for item in trash {
+  ///     let days_ago = (now - item.created_at) / (24 * 60 * 60 * 1000);
+  ///     println!("{} (deleted {} days ago)", item.name, days_ago);
+  /// }
+  /// ```
+  ///
+  /// # Implementation Details
+  ///
+  /// Internally, this method:
+  /// 1. Calls `get_my_trash_sections(uid)` to get the list of trashed view IDs
+  /// 2. For each `SectionItem`, looks up the view name from the CRDT
+  /// 3. Combines ID + name + timestamp into `TrashInfo`
+  /// 4. Uses `flat_map` to filter out items where name lookup fails
+  ///
+  /// The operation requires two CRDT lookups per item (section + view name), so for
+  /// very large trash bins, `get_my_trash_sections` may be more efficient if you only
+  /// need IDs.
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_my_trash_sections`]: Get trash without view names (more efficient)
+  /// - [`add_trash_view_ids`]: Move views to trash (requires `i64`)
+  /// - [`delete_trash_view_ids`]: Permanently delete from trash (requires `i64`)
+  pub fn get_my_trash_info(&self, uid: Option<i64>) -> Vec<TrashInfo> {
+    let Some(uid_val) = uid else {
+      return vec![];
+    };
     let txn = self.collab.transact();
     self
-      .get_my_trash_sections(uid)
+      .get_my_trash_sections(Some(uid_val))
       .into_iter()
       .flat_map(|section| {
         self
@@ -513,18 +1100,24 @@ impl Folder {
 
   pub fn replace_view(&mut self, from: &ViewId, to: &ViewId, uid: i64) -> bool {
     let mut txn = self.collab.transact_mut();
-    self.body.replace_view(&mut txn, from, to, uid)
+    self.body.replace_view(&mut txn, from, to, Some(uid))
   }
 
-  pub fn get_view(&self, view_id: &ViewId, uid: i64) -> Option<Arc<View>> {
+  /// Get a view by id. When uid is provided, includes user-specific data like is_favorite.
+  /// When uid is None, returns base view data without user-specific enrichment.
+  pub fn get_view(&self, view_id: &ViewId, uid: Option<i64>) -> Option<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_view(&txn, view_id, uid)
   }
 
-  pub fn is_view_in_section(&self, section: Section, view_id: &ViewId, uid: i64) -> bool {
+  pub fn is_view_in_section(&self, section: Section, view_id: &ViewId, uid: Option<i64>) -> bool {
     let txn = self.collab.transact();
-    if let Some(op) = self.body.section.section_op(&txn, section, uid) {
-      op.contains_with_txn(&txn, view_id)
+    if let Some(uid) = uid {
+      if let Some(op) = self.body.section.section_op(&txn, section, Some(uid)) {
+        op.contains_with_txn(&txn, view_id)
+      } else {
+        false
+      }
     } else {
       false
     }
@@ -557,7 +1150,7 @@ impl Folder {
   /// # Returns
   ///
   /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
-  pub fn get_view_recursively(&self, view_id: &ViewId, uid: i64) -> Vec<View> {
+  pub fn get_view_recursively(&self, view_id: &ViewId, uid: Option<i64>) -> Vec<View> {
     let txn = self.collab.transact();
     let mut views = vec![];
     self.body.get_view_recursively_with_txn(
@@ -697,13 +1290,14 @@ impl FolderBody {
         );
       }
 
-      if let Some(fav_section) = section.section_op(&txn, Section::Favorite, folder_data.uid) {
+      if let Some(fav_section) = section.section_op(&txn, Section::Favorite, Some(folder_data.uid))
+      {
         for (uid, sections) in folder_data.favorites {
           fav_section.add_sections_for_user_with_txn(&mut txn, &uid, sections);
         }
       }
 
-      if let Some(trash_section) = section.section_op(&txn, Section::Trash, folder_data.uid) {
+      if let Some(trash_section) = section.section_op(&txn, Section::Trash, Some(folder_data.uid)) {
         for (uid, sections) in folder_data.trash {
           trash_section.add_sections_for_user_with_txn(&mut txn, &uid, sections);
         }
@@ -746,7 +1340,7 @@ impl FolderBody {
     view_id: &ViewId,
     visited: &mut HashSet<String>,
     accumulated_views: &mut Vec<View>,
-    uid: i64,
+    uid: Option<i64>,
   ) {
     let mut stack = vec![*view_id];
     while let Some(current_id) = stack.pop() {
@@ -766,7 +1360,7 @@ impl FolderBody {
     &self,
     txn: &T,
     workspace_id: &WorkspaceId,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<Workspace> {
     let folder_workspace_id: String = self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)?;
     // Convert workspace_id UUID to string for comparison
@@ -784,8 +1378,9 @@ impl FolderBody {
     &self,
     txn: &T,
     workspace_id: &str,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<FolderData> {
+    let uid = uid?;
     let folder_workspace_id = self.get_workspace_id_with_txn(txn)?;
     // Parse workspace_id as UUID, return None if invalid
     let workspace_uuid = match uuid::Uuid::parse_str(workspace_id) {
@@ -806,25 +1401,28 @@ impl FolderBody {
     let workspace = Workspace::from(
       self
         .views
-        .get_view_with_txn(txn, &workspace_uuid, uid)?
+        .get_view_with_txn(txn, &workspace_uuid, Some(uid))?
         .as_ref(),
     );
-    let current_view = self.get_current_view(txn, uid);
+    let current_view = self.get_current_view(txn, Some(uid));
     let mut views = vec![];
     let orphan_views = self
       .views
-      .get_orphan_views_with_txn(txn, uid)
+      .get_orphan_views_with_txn(txn, Some(uid))
       .iter()
       .map(|view| view.as_ref().clone())
       .collect::<Vec<View>>();
-    for view in self.views.get_views_belong_to(txn, &workspace_uuid, uid) {
+    for view in self
+      .views
+      .get_views_belong_to(txn, &workspace_uuid, Some(uid))
+    {
       let mut all_views_in_workspace = vec![];
       self.get_view_recursively_with_txn(
         txn,
         &view.id,
         &mut HashSet::default(),
         &mut all_views_in_workspace,
-        uid,
+        Some(uid),
       );
       views.extend(all_views_in_workspace);
     }
@@ -832,24 +1430,24 @@ impl FolderBody {
 
     let favorites = self
       .section
-      .section_op(txn, Section::Favorite, uid)
+      .section_op(txn, Section::Favorite, Some(uid))
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
     let recent = self
       .section
-      .section_op(txn, Section::Recent, uid)
+      .section_op(txn, Section::Recent, Some(uid))
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
 
     let trash = self
       .section
-      .section_op(txn, Section::Trash, uid)
+      .section_op(txn, Section::Trash, Some(uid))
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
 
     let private = self
       .section
-      .section_op(txn, Section::Private, uid)
+      .section_op(txn, Section::Private, Some(uid))
       .map(|op| op.get_sections(txn))
       .unwrap_or_default();
 
@@ -869,7 +1467,7 @@ impl FolderBody {
     self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)
   }
 
-  pub async fn observe_view_changes(&self, uid: i64) {
+  pub async fn observe_view_changes(&self, uid: Option<i64>) {
     self.views.observe_view_change(uid, HashMap::new()).await;
   }
 
@@ -886,7 +1484,7 @@ impl FolderBody {
     view_id: &ViewId,
     from: u32,
     to: u32,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<Arc<View>> {
     let view = self.views.get_view_with_txn(txn, view_id, uid)?;
     if let Some(parent_uuid) = &view.parent_view_id {
@@ -901,14 +1499,15 @@ impl FolderBody {
     view_id: &ViewId,
     new_parent_id: &ViewId,
     prev_view_id: Option<ViewId>,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<Arc<View>> {
+    let uid = uid?;
     tracing::debug!("Move nested view: {}", view_id);
-    let view = self.views.get_view_with_txn(txn, view_id, uid)?;
+    let view = self.views.get_view_with_txn(txn, view_id, Some(uid))?;
     let current_workspace_id = self.get_workspace_id_with_txn(txn)?;
     let parent_id = &view.parent_view_id;
 
-    let new_parent_view = self.views.get_view_with_txn(txn, new_parent_id, uid);
+    let new_parent_view = self.views.get_view_with_txn(txn, new_parent_id, Some(uid));
 
     // If the new parent is not a view, it must be a workspace.
     // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
@@ -938,17 +1537,18 @@ impl FolderBody {
     Some(view)
   }
 
-  pub fn get_child_of_first_public_view<T: ReadTxn>(&self, txn: &T, uid: i64) -> Option<ViewId> {
+  pub fn get_child_of_first_public_view<T: ReadTxn>(
+    &self,
+    txn: &T,
+    uid: Option<i64>,
+  ) -> Option<ViewId> {
     self
       .get_workspace_id(txn)
-      .and_then(|workspace_id| {
-        uuid::Uuid::parse_str(&workspace_id)
-          .ok()
-          .and_then(|uuid| self.views.get_view(txn, &uuid, uid))
-      })
+      .and_then(|workspace_id| uuid::Uuid::parse_str(&workspace_id).ok())
+      .and_then(|uuid| self.views.get_view_with_txn(txn, &uuid, uid))
       .and_then(|root_view| {
         let first_public_space_view_id_with_child = root_view.children.iter().find(|space_id| {
-          match self.views.get_view(txn, &space_id.id, uid) {
+          match self.views.get_view_with_txn(txn, &space_id.id, uid) {
             Some(space_view) => {
               let is_public_space = space_view
                 .space_info()
@@ -965,7 +1565,7 @@ impl FolderBody {
       .and_then(|first_public_space_view_id_with_child| {
         self
           .views
-          .get_view(txn, &first_public_space_view_id_with_child, uid)
+          .get_view_with_txn(txn, &first_public_space_view_id_with_child, uid)
       })
       .and_then(|first_public_space_view_with_child| {
         first_public_space_view_with_child
@@ -976,7 +1576,7 @@ impl FolderBody {
       })
   }
 
-  pub fn get_current_view<T: ReadTxn>(&self, txn: &T, uid: i64) -> Option<ViewId> {
+  pub fn get_current_view<T: ReadTxn>(&self, txn: &T, uid: Option<i64>) -> Option<ViewId> {
     // Fallback to CURRENT_VIEW if CURRENT_VIEW_FOR_USER is not present. This could happen for
     // workspace folder created by older version of the app before CURRENT_VIEW_FOR_USER is introduced.
     // If user cannot be found in CURRENT_VIEW_FOR_USER, use the first child of the first public space
@@ -985,24 +1585,32 @@ impl FolderBody {
       Some(YrsValue::YMap(map)) => Some(map),
       _ => None,
     };
-    match current_view_for_user_map {
-      Some(current_view_for_user) => {
+    match (uid, current_view_for_user_map) {
+      (Some(uid), Some(current_view_for_user)) => {
         let view_for_user: Option<String> =
           current_view_for_user.get_with_txn(txn, uid.to_string().as_ref());
         view_for_user
           .and_then(|s| Uuid::parse_str(&s).ok())
-          .or(self.get_child_of_first_public_view(txn, uid))
+          .or_else(|| self.get_child_of_first_public_view(txn, Some(uid)))
       },
-      None => {
+      (Some(uid), None) => {
+        let current_view: Option<String> = self.meta.get_with_txn(txn, CURRENT_VIEW);
+        current_view
+          .and_then(|s| Uuid::parse_str(&s).ok())
+          .or_else(|| self.get_child_of_first_public_view(txn, Some(uid)))
+      },
+      (None, _) => {
         let current_view: Option<String> = self.meta.get_with_txn(txn, CURRENT_VIEW);
         current_view.and_then(|s| Uuid::parse_str(&s).ok())
       },
     }
   }
 
-  pub fn set_current_view(&self, txn: &mut TransactionMut, view: ViewId, uid: i64) {
-    let current_view_for_user = self.meta.get_or_init_map(txn, CURRENT_VIEW_FOR_USER);
-    current_view_for_user.try_update(txn, uid.to_string(), view.to_string());
+  pub fn set_current_view(&self, txn: &mut TransactionMut, view: ViewId, uid: Option<i64>) {
+    if let Some(uid) = uid {
+      let current_view_for_user = self.meta.get_or_init_map(txn, CURRENT_VIEW_FOR_USER);
+      current_view_for_user.try_update(txn, uid.to_string(), view.to_string());
+    }
   }
 
   pub fn replace_view(
@@ -1010,9 +1618,11 @@ impl FolderBody {
     txn: &mut TransactionMut,
     old_view_id: &ViewId,
     new_view_id: &ViewId,
-    uid: i64,
+    uid: Option<i64>,
   ) -> bool {
-    self.views.replace_view(txn, old_view_id, new_view_id, uid)
+    uid
+      .map(|uid| self.views.replace_view(txn, old_view_id, new_view_id, uid))
+      .unwrap_or(false)
   }
 }
 
@@ -1193,7 +1803,7 @@ mod tests {
       private: Default::default(),
     };
     let mut folder = Folder::create(collab, None, folder_data);
-    let favorite_sections = folder.get_all_favorites_sections(uid);
+    let favorite_sections = folder.get_all_favorites_sections(Some(uid));
     // Initially, all 3 views should be in favorites
     assert_eq!(favorite_sections.len(), 3);
     assert_eq!(favorite_sections[0].id, views[0].id);
@@ -1205,7 +1815,7 @@ mod tests {
       Some(&views[1].id.to_string()),
       uid,
     );
-    let favorite_sections = folder.get_all_favorites_sections(uid);
+    let favorite_sections = folder.get_all_favorites_sections(Some(uid));
     // After moving views[0] after views[1], order should be: views[1], views[0], views[2]
     assert_eq!(favorite_sections.len(), 3);
     assert_eq!(favorite_sections[0].id, views[1].id);
@@ -1213,7 +1823,7 @@ mod tests {
     assert_eq!(favorite_sections[2].id, views[2].id);
     // Move views[2] to the beginning (None means first position)
     folder.move_favorite_view_id(&views[2].id.to_string(), None, uid);
-    let favorite_sections = folder.get_all_favorites_sections(uid);
+    let favorite_sections = folder.get_all_favorites_sections(Some(uid));
     // After moving views[2] to the beginning, order should be: views[2], views[1], views[0]
     assert_eq!(favorite_sections.len(), 3);
     assert_eq!(favorite_sections[0].id, views[2].id);
