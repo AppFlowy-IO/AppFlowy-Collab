@@ -295,7 +295,97 @@ impl Folder {
     }
   }
 
-  /// Get favorite sections for a specific user. Returns empty vec when uid is None.
+  /// Retrieves the favorite views for a specific user.
+  ///
+  /// # How Sections Work
+  ///
+  /// Sections are **user-specific collections** stored in the collaborative folder.
+  /// The folder maintains four predefined sections: Favorite, Recent, Trash, and Private.
+  ///
+  /// **Data Structure:**
+  /// ```text
+  /// Folder (CRDT)
+  ///   └─ SectionMap
+  ///       └─ "favorite" (Section)
+  ///           ├─ "1" (uid) → [SectionItem { id: view_uuid, timestamp }, ...]
+  ///           ├─ "2" (uid) → [SectionItem { id: view_uuid, timestamp }, ...]
+  ///           └─ "3" (uid) → [SectionItem { id: view_uuid, timestamp }, ...]
+  /// ```
+  ///
+  /// Each section type (favorite/recent/trash/private) contains a map where:
+  /// - **Key**: User ID (as string representation of i64)
+  /// - **Value**: Array of `SectionItem` structs, each containing:
+  ///   - `id`: ViewId (UUID) of the view in this section
+  ///   - `timestamp`: When the view was added to this section
+  ///
+  /// This architecture allows multiple users to collaborate on the same folder
+  /// while maintaining separate personal collections (favorites, recent views, etc.).
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID to query favorites for
+  ///   - `Some(uid)`: Returns the favorite views for the specified user
+  ///   - `None`: Returns an empty vector (no user context = no user-specific data)
+  ///
+  /// # Returns
+  ///
+  /// A vector of `SectionItem` structs representing the user's favorite views.
+  /// Each item contains the view's UUID and the timestamp when it was favorited.
+  /// Returns empty vector if:
+  /// - `uid` is `None`
+  /// - The user has no favorites
+  /// - The favorite section doesn't exist
+  ///
+  /// # Why `Option<i64>` for Query Operations?
+  ///
+  /// This method uses `Option<i64>` (not required `i64`) because:
+  /// 1. **Safe degradation**: Can return meaningful result (empty) when uid is unknown
+  /// 2. **Flexible usage**: Callers can query without having user context
+  /// 3. **No side effects**: Read-only operation that doesn't modify data
+  ///
+  /// Compare with mutation operations like `add_favorite_view_ids(uid: i64)` which
+  /// require `i64` because adding favorites without a user ID would be meaningless.
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_all_favorites_sections`]: Gets favorites across all users (admin mode)
+  /// - [`add_favorite_view_ids`]: Adds views to user's favorites (requires `i64`)
+  /// - [`delete_favorite_view_ids`]: Removes views from user's favorites (requires `i64`)
+  /// - [`get_my_trash_sections`]: Similar pattern for trash section
+  /// - [`get_my_private_sections`]: Similar pattern for private section
+  /// - [`get_my_recent_sections`]: Similar pattern for recent section
+  ///
+  /// # Examples
+  ///
+  /// ```rust,ignore
+  /// // Get favorites for a specific user
+  /// let user_id = UserId::from(123);
+  /// let favorites = folder.get_my_favorite_sections(Some(user_id.as_i64()));
+  /// for item in favorites {
+  ///     println!("View {} was favorited at {}", item.id, item.timestamp);
+  /// }
+  ///
+  /// // Query without user context (returns empty)
+  /// let no_favorites = folder.get_my_favorite_sections(None);
+  /// assert!(no_favorites.is_empty());
+  ///
+  /// // Check if a view is favorited
+  /// let is_favorited = folder.get_my_favorite_sections(Some(uid))
+  ///     .iter()
+  ///     .any(|item| item.id == target_view_id);
+  /// ```
+  ///
+  /// # Implementation Details
+  ///
+  /// Internally, this method:
+  /// 1. Creates a read transaction on the Collab CRDT
+  /// 2. Gets a `SectionOperation` for the Favorite section with the given uid
+  /// 3. Calls `get_all_section_item()` which:
+  ///    - Looks up the array at key `uid.to_string()` in the favorite section
+  ///    - Deserializes each Yrs array element into a `SectionItem`
+  ///    - Returns the vector of items
+  ///
+  /// The operation is **read-only** and **lock-free** thanks to CRDT properties.
   pub fn get_my_favorite_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let Some(uid) = uid else {
       return vec![];
@@ -309,8 +399,70 @@ impl Folder {
       .unwrap_or_default()
   }
 
-  /// Get all favorite sections across all users. When uid is provided, scoped to that user.
-  /// When uid is None, returns sections for all users (admin mode).
+  /// Retrieves favorite views across all users, with optional filtering by user.
+  ///
+  /// This is the "admin mode" variant of [`get_my_favorite_sections`]. While `get_my_*`
+  /// returns empty when uid is None, this method returns **all users' favorites** when
+  /// uid is None.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID for filtering
+  ///   - `Some(uid)`: Returns only the favorites for the specified user (same as `get_my_favorite_sections`)
+  ///   - `None`: Returns favorites from **all users** (admin/global query mode)
+  ///
+  /// # Returns
+  ///
+  /// A flattened vector of all `SectionItem` entries across the queried user(s).
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// **This is the key difference from `get_my_favorite_sections`:**
+  ///
+  /// When `uid` is `None`, this method returns favorites from **all users**, not an empty vector.
+  /// This enables admin/debugging operations like:
+  /// - Viewing all favorited content across the workspace
+  /// - Finding popular/frequently favorited views
+  /// - Debugging favorite state
+  ///
+  /// ```text
+  /// get_my_favorite_sections(None)   → []  (empty - no user context)
+  /// get_all_favorites_sections(None) → [user1's favorites, user2's favorites, ...] (all users)
+  /// ```
+  ///
+  /// # Use Cases
+  ///
+  /// ## Admin Dashboard - Popular Views
+  /// ```rust,ignore
+  /// // Get all favorited views across all users
+  /// let all_favorites = folder.get_all_favorites_sections(None);
+  /// let view_counts: HashMap<ViewId, usize> = all_favorites
+  ///     .iter()
+  ///     .fold(HashMap::new(), |mut map, item| {
+  ///         *map.entry(item.id).or_insert(0) += 1;
+  ///         map
+  ///     });
+  ///
+  /// // Find most favorited views
+  /// let popular = view_counts
+  ///     .into_iter()
+  ///     .filter(|(_, count)| *count >= 3)
+  ///     .collect::<Vec<_>>();
+  /// ```
+  ///
+  /// ## Check Specific User (Alternative to get_my_*)
+  /// ```rust,ignore
+  /// // These are equivalent:
+  /// let favorites_a = folder.get_my_favorite_sections(Some(uid));
+  /// let favorites_b = folder.get_all_favorites_sections(Some(uid));
+  /// assert_eq!(favorites_a, favorites_b);
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_my_favorite_sections`]: User-scoped version (returns empty when uid is None)
+  /// - [`add_favorite_view_ids`]: Add favorites for a user (requires `i64`)
+  /// - [`delete_favorite_view_ids`]: Remove favorites for a user (requires `i64`)
   pub fn get_all_favorites_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let txn = self.collab.transact();
     self
@@ -375,7 +527,80 @@ impl Folder {
     }
   }
 
-  /// Get trash sections for a specific user. Returns empty vec when uid is None.
+  /// Retrieves the trashed views for a specific user.
+  ///
+  /// The trash section contains views that have been deleted by the user but not yet
+  /// permanently removed. This allows for a "trash bin" functionality where users can
+  /// recover accidentally deleted views.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID to query trash for
+  ///   - `Some(uid)`: Returns the trashed views for the specified user
+  ///   - `None`: Returns an empty vector (no user = no trash to show)
+  ///
+  /// # Returns
+  ///
+  /// A vector of `SectionItem` structs where:
+  /// - `item.id`: The view UUID that was trashed
+  /// - `item.timestamp`: When the view was moved to trash (for auto-deletion policies)
+  ///
+  /// Returns empty vector if:
+  /// - `uid` is `None` (no user context)
+  /// - The user has no items in trash
+  /// - The trash section doesn't exist
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, this method returns an empty vector because trash is
+  /// **user-specific** data. Without knowing which user's trash to query, the method
+  /// cannot return meaningful results. This design:
+  /// - Prevents accidentally showing another user's deleted items
+  /// - Fails safely (empty instead of error)
+  /// - Maintains consistency with other user-scoped queries
+  ///
+  /// If you need to query trash across all users (e.g., for admin purposes), use
+  /// [`get_all_trash_sections`] instead.
+  ///
+  /// # Common Use Cases
+  ///
+  /// ## Display Trash Bin
+  /// ```rust,ignore
+  /// let trash_items = folder.get_my_trash_sections(Some(current_user_id));
+  /// for item in trash_items {
+  ///     show_trashed_view(item.id, item.timestamp);
+  /// }
+  /// ```
+  ///
+  /// ## Auto-Delete Old Items
+  /// ```rust,ignore
+  /// let trash = folder.get_my_trash_sections(Some(uid));
+  /// let thirty_days_ago = current_timestamp() - (30 * 24 * 60 * 60 * 1000);
+  ///
+  /// let to_permanently_delete: Vec<_> = trash
+  ///     .iter()
+  ///     .filter(|item| item.timestamp < thirty_days_ago)
+  ///     .map(|item| item.id.to_string())
+  ///     .collect();
+  ///
+  /// if !to_permanently_delete.is_empty() {
+  ///     folder.delete_trash_view_ids(to_permanently_delete, uid);
+  /// }
+  /// ```
+  ///
+  /// ## Check if View is in Trash
+  /// ```rust,ignore
+  /// let is_trashed = folder.get_my_trash_sections(Some(uid))
+  ///     .iter()
+  ///     .any(|item| item.id == target_view_id);
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`add_trash_view_ids`]: Move views to trash (requires `i64`)
+  /// - [`delete_trash_view_ids`]: Permanently delete from trash (requires `i64`)
+  /// - [`get_all_trash_sections`]: Query trash across all users (admin mode)
+  /// - [`get_my_trash_info`]: Get trash with additional view metadata
   pub fn get_my_trash_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let Some(uid) = uid else {
       return vec![];
@@ -389,8 +614,67 @@ impl Folder {
       .unwrap_or_default()
   }
 
-  /// Get all trash sections across all users. When uid is provided, scoped to that user.
-  /// When uid is None, returns sections for all users (admin mode).
+  /// Retrieves trashed views across all users, with optional filtering by user.
+  ///
+  /// This is the "admin mode" variant of [`get_my_trash_sections`]. While `get_my_trash_sections`
+  /// returns empty when uid is None, this method returns **all users' trash** when uid is None.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID for filtering
+  ///   - `Some(uid)`: Returns only the trash for the specified user
+  ///   - `None`: Returns trash from **all users** (admin/cleanup mode)
+  ///
+  /// # Returns
+  ///
+  /// A flattened vector of all trashed `SectionItem` entries across the queried user(s).
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, this method returns trash items from **all users**:
+  ///
+  /// ```text
+  /// get_my_trash_sections(None)   → []  (empty - no user context)
+  /// get_all_trash_sections(None) → [user1's trash, user2's trash, ...] (all users)
+  /// ```
+  ///
+  /// This is useful for:
+  /// - Admin cleanup operations (find all deleted content)
+  /// - Global auto-deletion policies (remove items older than N days across all users)
+  /// - Debugging trash state
+  /// - Recovering content when user ID is unknown
+  ///
+  /// # Use Cases
+  ///
+  /// ## Global Cleanup - Delete Old Trash
+  /// ```rust,ignore
+  /// // Find all trash items older than 30 days across ALL users
+  /// let all_trash = folder.get_all_trash_sections(None);
+  /// let thirty_days_ago = current_timestamp() - (30 * 24 * 60 * 60 * 1000);
+  ///
+  /// let old_trash: Vec<_> = all_trash
+  ///     .into_iter()
+  ///     .filter(|item| item.timestamp < thirty_days_ago)
+  ///     .collect();
+  ///
+  /// // Note: Actual deletion requires uid per item, so you'd need to
+  /// // track which user owns which trash item separately
+  /// ```
+  ///
+  /// ## Admin Dashboard - Trash Statistics
+  /// ```rust,ignore
+  /// let all_trash = folder.get_all_trash_sections(None);
+  /// println!("Total items in trash across all users: {}", all_trash.len());
+  ///
+  /// // Calculate trash size per user (requires additional tracking)
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_my_trash_sections`]: User-scoped version (returns empty when uid is None)
+  /// - [`get_my_trash_info`]: User-scoped with view names
+  /// - [`add_trash_view_ids`]: Move views to trash (requires `i64`)
+  /// - [`delete_trash_view_ids`]: Permanently delete from trash (requires `i64`)
   pub fn get_all_trash_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let txn = self.collab.transact();
     self
@@ -455,7 +739,83 @@ impl Folder {
     }
   }
 
-  /// Get private sections for a specific user. Returns empty vec when uid is None.
+  /// Retrieves the private views for a specific user.
+  ///
+  /// The private section contains views that are marked as private/personal to the user
+  /// and should be hidden from other collaborators. This enables personal workspace areas
+  /// within a shared collaborative folder.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID to query private views for
+  ///   - `Some(uid)`: Returns the private views for the specified user
+  ///   - `None`: Returns an empty vector (no user = no private views to show)
+  ///
+  /// # Returns
+  ///
+  /// A vector of `SectionItem` structs where:
+  /// - `item.id`: The view UUID marked as private
+  /// - `item.timestamp`: When the view was marked as private
+  ///
+  /// Returns empty vector if:
+  /// - `uid` is `None` (no user context)
+  /// - The user has no private views
+  /// - The private section doesn't exist
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, this method returns an empty vector because private views are
+  /// **inherently user-specific**. The concept of "private" only makes sense in the context
+  /// of a specific user - views are private *to someone*. Without a user ID:
+  /// - Cannot determine whose private views to return
+  /// - Returning all users' private views would violate privacy
+  /// - Empty result is the safest, most consistent behavior
+  ///
+  /// For admin operations that need to see all private views across users, use
+  /// [`get_all_private_sections`] instead.
+  ///
+  /// # Privacy Semantics
+  ///
+  /// **Important**: This method only returns which views are *marked* as private. The actual
+  /// visibility enforcement (hiding these views from other users) must be implemented by
+  /// the application layer. The section system provides the data structure, not the access
+  /// control mechanism.
+  ///
+  /// # Common Use Cases
+  ///
+  /// ## Filter Out Other Users' Private Views
+  /// ```rust,ignore
+  /// let all_views = folder.get_all_views(Some(current_user_id));
+  /// let other_private_views = folder.get_all_private_sections(Some(current_user_id));
+  ///
+  /// let visible_views: Vec<_> = all_views
+  ///     .into_iter()
+  ///     .filter(|view| {
+  ///         !other_private_views.iter().any(|private| private.id == view.id)
+  ///     })
+  ///     .collect();
+  /// ```
+  ///
+  /// ## Show User's Personal Workspace
+  /// ```rust,ignore
+  /// let my_private = folder.get_my_private_sections(Some(uid));
+  /// if !my_private.is_empty() {
+  ///     render_private_section_ui(&my_private);
+  /// }
+  /// ```
+  ///
+  /// ## Check if View is Private
+  /// ```rust,ignore
+  /// let is_private = folder.get_my_private_sections(Some(uid))
+  ///     .iter()
+  ///     .any(|item| item.id == view_id);
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`add_private_view_ids`]: Mark views as private (requires `i64`)
+  /// - [`delete_private_view_ids`]: Unmark views as private (requires `i64`)
+  /// - [`get_all_private_sections`]: Query private views across all users (admin mode)
   pub fn get_my_private_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let Some(uid) = uid else {
       return vec![];
@@ -469,8 +829,75 @@ impl Folder {
       .unwrap_or_default()
   }
 
-  /// Get all private sections across all users. When uid is provided, scoped to that user.
-  /// When uid is None, returns sections for all users (admin mode).
+  /// Retrieves private views across all users, with optional filtering by user.
+  ///
+  /// This is the "admin mode" variant of [`get_my_private_sections`]. While `get_my_private_sections`
+  /// returns empty when uid is None, this method returns **all users' private views** when uid is None.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID for filtering
+  ///   - `Some(uid)`: Returns only the private views for the specified user
+  ///   - `None`: Returns private views from **all users** (admin/audit mode)
+  ///
+  /// # Returns
+  ///
+  /// A flattened vector of all private `SectionItem` entries across the queried user(s).
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, this method returns private items from **all users**:
+  ///
+  /// ```text
+  /// get_my_private_sections(None)   → []  (empty - no user context)
+  /// get_all_private_sections(None) → [user1's private, user2's private, ...] (all users)
+  /// ```
+  ///
+  /// **Privacy Note**: Returning all users' private views may have privacy implications.
+  /// This method should typically only be called:
+  /// - In admin/debugging contexts
+  /// - For workspace-level operations (e.g., migration, backup)
+  /// - When implementing view filtering logic (to hide *other* users' private views)
+  ///
+  /// # Use Cases
+  ///
+  /// ## Filter Out Other Users' Private Views
+  /// ```rust,ignore
+  /// // Get all views, then filter out views private to other users
+  /// let all_views = folder.get_all_views(Some(current_user_id));
+  /// let my_private_views = folder.get_my_private_sections(Some(current_user_id));
+  /// let others_private_views = folder.get_all_private_sections(None);
+  ///
+  /// let visible_to_me: Vec<_> = all_views
+  ///     .into_iter()
+  ///     .filter(|view| {
+  ///         // Show if it's my private view OR not private to anyone else
+  ///         my_private_views.iter().any(|p| p.id == view.id)
+  ///             || !others_private_views.iter().any(|p| p.id == view.id)
+  ///     })
+  ///     .collect();
+  /// ```
+  ///
+  /// ## Admin Audit - Find All Private Content
+  /// ```rust,ignore
+  /// let all_private = folder.get_all_private_sections(None);
+  /// println!("Total private views across workspace: {}", all_private.len());
+  ///
+  /// // Identify users with private content (requires user tracking)
+  /// ```
+  ///
+  /// ## Migration/Backup Operations
+  /// ```rust,ignore
+  /// // When migrating workspace, preserve all private view metadata
+  /// let all_private = folder.get_all_private_sections(None);
+  /// save_to_backup("private_sections.json", &all_private);
+  /// ```
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_my_private_sections`]: User-scoped version (returns empty when uid is None)
+  /// - [`add_private_view_ids`]: Mark views as private (requires `i64`)
+  /// - [`delete_private_view_ids`]: Unmark views as private (requires `i64`)
   pub fn get_all_private_sections(&self, uid: Option<i64>) -> Vec<SectionItem> {
     let txn = self.collab.transact();
     self
@@ -506,7 +933,109 @@ impl Folder {
     }
   }
 
-  /// Get trash info for a specific user. Returns empty vec when uid is None.
+  /// Retrieves enriched trash information for a specific user.
+  ///
+  /// This is an enhanced version of [`get_my_trash_sections`] that includes additional
+  /// view metadata (name) for each trashed item. This is useful for displaying trash bins
+  /// in the UI where you need to show the view name, not just its ID.
+  ///
+  /// # Parameters
+  ///
+  /// * `uid` - Optional user ID to query trash info for
+  ///   - `Some(uid)`: Returns trash info for the specified user
+  ///   - `None`: Returns an empty vector (no user = no trash to show)
+  ///
+  /// # Returns
+  ///
+  /// A vector of `TrashInfo` structs where each contains:
+  /// - `id`: ViewId (UUID) of the trashed view
+  /// - `name`: Human-readable name of the view (e.g., "My Document")
+  /// - `created_at`: Timestamp when the view was moved to trash
+  ///
+  /// Returns empty vector if:
+  /// - `uid` is `None` (no user context)
+  /// - The user has no items in trash
+  /// - The trash section doesn't exist
+  ///
+  /// **Note**: If a view ID exists in the trash section but the view itself has been
+  /// permanently deleted or its name cannot be retrieved, that item will be **omitted**
+  /// from the results (via `flat_map` semantics). This ensures the returned data is
+  /// always consistent and displayable.
+  ///
+  /// # Behavior When uid is None
+  ///
+  /// When `uid` is `None`, returns an empty vector because:
+  /// - Trash is user-specific data
+  /// - Cannot determine which user's trash to query
+  /// - Prevents privacy leaks (showing other users' deleted items)
+  /// - Consistent with [`get_my_trash_sections`] behavior
+  ///
+  /// For admin operations, use `get_my_trash_sections` with all user IDs manually,
+  /// as there's no `get_all_trash_info` variant (by design, to prevent accidentally
+  /// exposing sensitive deleted data).
+  ///
+  /// # Comparison with get_my_trash_sections
+  ///
+  /// | Method | Returns | View Name | Use When |
+  /// |--------|---------|-----------|----------|
+  /// | `get_my_trash_sections` | `Vec<SectionItem>` | No | Need just IDs/timestamps |
+  /// | `get_my_trash_info` | `Vec<TrashInfo>` | Yes | Displaying UI |
+  ///
+  /// Use `get_my_trash_info` when you need to show trash items to the user with readable
+  /// names. Use `get_my_trash_sections` when you only need view IDs (e.g., checking if
+  /// a view is trashed).
+  ///
+  /// # Common Use Cases
+  ///
+  /// ## Display Trash Bin UI
+  /// ```rust,ignore
+  /// let trash_info = folder.get_my_trash_info(Some(current_user_id));
+  /// for item in trash_info {
+  ///     render_trash_item(
+  ///         item.id,
+  ///         &item.name,
+  ///         format_timestamp(item.created_at)
+  ///     );
+  /// }
+  /// ```
+  ///
+  /// ## Restore Deleted View by Name
+  /// ```rust,ignore
+  /// let trash = folder.get_my_trash_info(Some(uid));
+  /// if let Some(item) = trash.iter().find(|t| t.name == "Important Doc") {
+  ///     folder.delete_trash_view_ids(vec![item.id.to_string()], uid);
+  ///     println!("Restored: {}", item.name);
+  /// }
+  /// ```
+  ///
+  /// ## Show Time Since Deletion
+  /// ```rust,ignore
+  /// let trash = folder.get_my_trash_info(Some(uid));
+  /// let now = current_timestamp();
+  ///
+  /// for item in trash {
+  ///     let days_ago = (now - item.created_at) / (24 * 60 * 60 * 1000);
+  ///     println!("{} (deleted {} days ago)", item.name, days_ago);
+  /// }
+  /// ```
+  ///
+  /// # Implementation Details
+  ///
+  /// Internally, this method:
+  /// 1. Calls `get_my_trash_sections(uid)` to get the list of trashed view IDs
+  /// 2. For each `SectionItem`, looks up the view name from the CRDT
+  /// 3. Combines ID + name + timestamp into `TrashInfo`
+  /// 4. Uses `flat_map` to filter out items where name lookup fails
+  ///
+  /// The operation requires two CRDT lookups per item (section + view name), so for
+  /// very large trash bins, `get_my_trash_sections` may be more efficient if you only
+  /// need IDs.
+  ///
+  /// # Related Methods
+  ///
+  /// - [`get_my_trash_sections`]: Get trash without view names (more efficient)
+  /// - [`add_trash_view_ids`]: Move views to trash (requires `i64`)
+  /// - [`delete_trash_view_ids`]: Permanently delete from trash (requires `i64`)
   pub fn get_my_trash_info(&self, uid: Option<i64>) -> Vec<TrashInfo> {
     let Some(uid_val) = uid else {
       return vec![];
