@@ -45,11 +45,11 @@ impl SectionMap {
     &self,
     txn: &T,
     section: Section,
-    uid: i64,
+    uid: Option<i64>,
   ) -> Option<SectionOperation> {
     let container = self.get_section(txn, section.as_ref())?;
     Some(SectionOperation {
-      uid: UserId::from(uid),
+      uid: uid.map(UserId::from),
       container,
       section,
       change_tx: self.change_tx.clone(),
@@ -65,6 +65,71 @@ impl SectionMap {
   }
 }
 
+/// Represents different types of user-specific view collections in a folder.
+///
+/// Sections are **per-user** organizational categories that allow each user in a
+/// collaborative folder to maintain their own personal view collections. Each section
+/// type has a specific semantic purpose.
+///
+/// # Section Types
+///
+/// ## Predefined Sections
+///
+/// - **Favorite**: Views the user has marked as favorites for quick access
+/// - **Recent**: Recently accessed views, typically ordered by access time
+/// - **Trash**: Views the user has deleted (pending permanent removal)
+/// - **Private**: Views that are private to the user and hidden from others
+///
+/// ## Custom Sections
+///
+/// - **Custom(String)**: User-defined section types for extensibility
+///
+/// # Storage Architecture
+///
+/// Each section in the CRDT is stored as a nested map structure:
+///
+/// ```text
+/// SectionMap
+///   ├─ "favorite" (MapRef)
+///   │   ├─ "1" (uid) → Array[SectionItem, SectionItem, ...]
+///   │   ├─ "2" (uid) → Array[SectionItem, SectionItem, ...]
+///   │   └─ ...
+///   ├─ "recent" (MapRef)
+///   │   └─ ...
+///   ├─ "trash" (MapRef)
+///   │   └─ ...
+///   └─ "private" (MapRef)
+///       └─ ...
+/// ```
+///
+/// This allows multiple users to collaborate on the same folder while maintaining
+/// independent personal collections. For example:
+/// - User 1's favorites don't affect User 2's favorites
+/// - Each user has their own trash bin
+/// - Each user has their own private views
+///
+/// # String Representation
+///
+/// Each section variant has a unique string identifier used as the CRDT map key:
+/// - `Favorite` → `"favorite"`
+/// - `Recent` → `"recent"`
+/// - `Trash` → `"trash"`
+/// - `Private` → `"private"`
+/// - `Custom("my_section")` → `"my_section"`
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use collab::folder::Section;
+///
+/// // Predefined sections
+/// let fav = Section::Favorite;
+/// assert_eq!(fav.as_ref(), "favorite");
+///
+/// // Custom section
+/// let custom = Section::from("my_custom_section".to_string());
+/// assert_eq!(custom.as_ref(), "my_custom_section");
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Section {
   Favorite,
@@ -119,7 +184,7 @@ pub enum TrashSectionChange {
 pub type SectionsByUid = HashMap<UserId, Vec<SectionItem>>;
 
 pub struct SectionOperation {
-  uid: UserId,
+  uid: Option<UserId>,
   container: MapRef,
   section: Section,
   change_tx: Option<SectionChangeSender>,
@@ -130,8 +195,8 @@ impl SectionOperation {
     &self.container
   }
 
-  fn uid(&self) -> &UserId {
-    &self.uid
+  fn uid(&self) -> Option<&UserId> {
+    self.uid.as_ref()
   }
 
   pub fn get_sections<T: ReadTxn>(&self, txn: &T) -> SectionsByUid {
@@ -154,9 +219,12 @@ impl SectionOperation {
   }
 
   pub fn contains_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &ViewId) -> bool {
+    let Some(uid) = self.uid() else {
+      return false;
+    };
     match self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref())
     {
       None => false,
       Some(array) => {
@@ -173,9 +241,12 @@ impl SectionOperation {
   }
 
   pub fn get_all_section_item<T: ReadTxn>(&self, txn: &T) -> Vec<SectionItem> {
+    let Some(uid) = self.uid() else {
+      return vec![];
+    };
     match self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref())
     {
       None => vec![],
       Some(array) => {
@@ -201,6 +272,9 @@ impl SectionOperation {
     id: T,
     prev_id: Option<T>,
   ) {
+    let Some(uid) = self.uid() else {
+      return;
+    };
     let section_items = self.get_all_section_item(txn);
     let id = id.as_ref();
     let old_pos = section_items
@@ -217,7 +291,7 @@ impl SectionOperation {
       .unwrap_or(0);
     let section_array = self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref());
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref());
     // If the new position index is greater than the length of the section, yrs will panic
     if new_pos > section_items.len() as u32 {
       return;
@@ -233,9 +307,12 @@ impl SectionOperation {
     txn: &mut TransactionMut,
     ids: Vec<T>,
   ) {
+    let Some(uid) = self.uid() else {
+      return;
+    };
     if let Some(fav_array) = self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref())
     {
       for id in &ids {
         if let Some(pos) = self
@@ -267,8 +344,11 @@ impl SectionOperation {
   }
 
   pub fn add_sections_item(&self, txn: &mut TransactionMut, items: Vec<SectionItem>) {
+    let Some(uid) = self.uid() else {
+      return;
+    };
     let item_ids = items.iter().map(|item| item.id).collect::<Vec<_>>();
-    self.add_sections_for_user_with_txn(txn, self.uid(), items);
+    self.add_sections_for_user_with_txn(txn, uid, items);
     if let Some(change_tx) = self.change_tx.as_ref() {
       match self.section {
         Section::Favorite => {},
@@ -298,9 +378,12 @@ impl SectionOperation {
   }
 
   pub fn clear(&self, txn: &mut TransactionMut) {
+    let Some(uid) = self.uid() else {
+      return;
+    };
     if let Some(array) = self
       .container()
-      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref())
+      .get_with_txn::<_, ArrayRef>(txn, uid.as_ref())
     {
       let len = array.iter(txn).count();
       array.remove_range(txn, 0, len as u32);
@@ -308,6 +391,64 @@ impl SectionOperation {
   }
 }
 
+/// An item in a user's section, representing a view and when it was added.
+///
+/// `SectionItem` is the fundamental unit stored in sections (Favorite, Recent, Trash, Private).
+/// Each item records both which view is in the section and when it was added, enabling
+/// time-based operations like sorting by recency or tracking deletion times.
+///
+/// # Fields
+///
+/// * `id` - The UUID of the view in this section
+/// * `timestamp` - Unix timestamp (milliseconds) when the view was added to this section
+///
+/// # Storage Format
+///
+/// SectionItems are serialized as Yrs `Any` values (essentially JSON-like maps) in the CRDT:
+///
+/// ```json
+/// {
+///   "id": "550e8400-e29b-41d4-a716-446655440000",
+///   "timestamp": 1704067200000
+/// }
+/// ```
+///
+/// Multiple items are stored in a Yrs array per user per section:
+///
+/// ```text
+/// section["favorite"]["123"] = [
+///   SectionItem { id: view_1, timestamp: 1704067200000 },
+///   SectionItem { id: view_2, timestamp: 1704068000000 },
+///   ...
+/// ]
+/// ```
+///
+/// # Usage Patterns
+///
+/// ## Favorite Sections
+/// ```rust,ignore
+/// let favorites = folder.get_my_favorite_sections(Some(uid));
+/// for item in favorites {
+///     println!("View {} favorited at {}", item.id, item.timestamp);
+/// }
+/// ```
+///
+/// ## Recent Sections (sorted by timestamp)
+/// ```rust,ignore
+/// let mut recent = folder.get_my_recent_sections(Some(uid));
+/// recent.sort_by_key(|item| std::cmp::Reverse(item.timestamp)); // newest first
+/// let most_recent = recent.first();
+/// ```
+///
+/// ## Trash Sections (check deletion time)
+/// ```rust,ignore
+/// let trash = folder.get_my_trash_sections(Some(uid));
+/// let thirty_days_ago = current_timestamp() - (30 * 24 * 60 * 60 * 1000);
+/// let permanently_delete = trash
+///     .iter()
+///     .filter(|item| item.timestamp < thirty_days_ago)
+///     .collect::<Vec<_>>();
+/// ```
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SectionItem {
   pub id: ViewId,

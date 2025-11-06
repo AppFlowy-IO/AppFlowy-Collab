@@ -67,7 +67,7 @@ fn view_json_serde() {
     let views = folder
       .body
       .views
-      .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
+      .get_views_belong_to(&txn, &workspace_id, Some(uid.as_i64()));
     assert_eq!(views.len(), 2);
   }
 
@@ -256,14 +256,14 @@ async fn deserialize_folder_data() {
     let handle = tokio::spawn(async move {
       let start = Instant::now();
       let _trash_ids = folder
-        .get_all_trash_sections(clone_uid.as_i64())
+        .get_all_trash_sections(Some(clone_uid.as_i64()))
         .into_iter()
         .map(|trash| trash.id)
         .collect::<Vec<_>>();
 
       // get the private view ids
       let _private_view_ids = folder
-        .get_all_private_sections(clone_uid.as_i64())
+        .get_all_private_sections(Some(clone_uid.as_i64()))
         .into_iter()
         .map(|view| view.id)
         .collect::<Vec<_>>();
@@ -290,13 +290,13 @@ fn get_view_ids_should_be_filtered(folder: &Folder, uid: i64) -> Vec<ViewId> {
 
 fn get_other_private_view_ids(folder: &Folder, uid: i64) -> Vec<ViewId> {
   let my_private_view_ids = folder
-    .get_my_private_sections(uid)
+    .get_my_private_sections(Some(uid))
     .into_iter()
     .map(|view| view.id)
     .collect::<Vec<_>>();
 
   let all_private_view_ids = folder
-    .get_all_private_sections(uid)
+    .get_all_private_sections(Some(uid))
     .into_iter()
     .map(|view| view.id)
     .collect::<Vec<_>>();
@@ -309,7 +309,7 @@ fn get_other_private_view_ids(folder: &Folder, uid: i64) -> Vec<ViewId> {
 
 fn get_all_trash_ids(folder: &Folder, uid: i64) -> Vec<ViewId> {
   let trash_ids = folder
-    .get_all_trash_sections(uid)
+    .get_all_trash_sections(Some(uid))
     .into_iter()
     .map(|trash| trash.id)
     .collect::<Vec<_>>();
@@ -335,7 +335,7 @@ fn get_all_child_view_ids<T: ReadTxn>(
   let child_views = folder
     .body
     .views
-    .get_views_belong_to(txn, &parse_view_id(view_id), uid);
+    .get_views_belong_to(txn, &parse_view_id(view_id), Some(uid));
   let child_view_ids = child_views
     .iter()
     .map(|view| view.id)

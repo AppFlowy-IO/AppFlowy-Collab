@@ -48,19 +48,20 @@ fn create_child_views_test() {
   let v_1_child_views = folder
     .body
     .views
-    .get_views_belong_to(&txn, &v_1.id, uid.as_i64());
+    .get_views_belong_to(&txn, &v_1.id, Some(uid.as_i64()));
   assert_eq!(v_1_child_views.len(), 3);
 
-  let v_1_2_child_views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &v_1_2.id, uid.as_i64());
+  let v_1_2_child_views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &v_1_2.id, Some(uid.as_i64()));
   assert_eq!(v_1_2_child_views.len(), 2);
 
   let workspace_uuid_str = workspace_id.to_string();
   let folder_data = folder
     .body
-    .get_folder_data(&txn, &workspace_uuid_str, uid.as_i64())
+    .get_folder_data(&txn, &workspace_uuid_str, Some(uid.as_i64()))
     .unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
   let fake_w_1_uuid = workspace_uuid_str.clone();
@@ -217,7 +218,7 @@ fn move_child_views_test() {
   let v_1_child_views = folder
     .body
     .views
-    .get_views_belong_to(&txn, &v_1.id, uid.as_i64());
+    .get_views_belong_to(&txn, &v_1.id, Some(uid.as_i64()));
   assert_eq!(
     v_1_child_views[0].id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_1".as_bytes()).to_string()
@@ -237,7 +238,7 @@ fn move_child_views_test() {
   let v_1_child_views = folder
     .body
     .views
-    .get_view(&txn, &v_1.id, uid.as_i64())
+    .get_view(&txn, &v_1.id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(
     v_1_child_views.children[0].id.to_string(),
@@ -280,10 +281,11 @@ fn delete_view_test() {
     .insert(&mut txn, view_3, None, uid.as_i64());
 
   folder.body.views.remove_child(&mut txn, &workspace_id, 1);
-  let w_1_child_views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
+  let w_1_child_views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &workspace_id, Some(uid.as_i64()));
   assert_eq!(
     w_1_child_views[0].id.to_string(),
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1_1".as_bytes()).to_string()
@@ -321,17 +323,19 @@ fn delete_child_view_test() {
     .views
     .insert(&mut txn, view_2, None, uid.as_i64());
 
-  let views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &parse_view_id(&view_1_id), uid.as_i64());
+  let views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &parse_view_id(&view_1_id), Some(uid.as_i64()));
   assert_eq!(views.len(), 1);
 
   folder.body.views.delete_views(&mut txn, vec![view_1_1_id]);
-  let views = folder
-    .body
-    .views
-    .get_views_belong_to(&txn, &parse_view_id(&view_1_id), uid.as_i64());
+  let views =
+    folder
+      .body
+      .views
+      .get_views_belong_to(&txn, &parse_view_id(&view_1_id), Some(uid.as_i64()));
   assert!(views.is_empty());
 }
 
@@ -361,19 +365,19 @@ fn create_orphan_child_views_test() {
   let child_views = folder
     .body
     .views
-    .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
+    .get_views_belong_to(&txn, &workspace_id, Some(uid.as_i64()));
   assert_eq!(child_views.len(), 1);
 
   let orphan_views = folder
     .body
     .views
-    .get_orphan_views_with_txn(&txn, uid.as_i64());
+    .get_orphan_views_with_txn(&txn, Some(uid.as_i64()));
   assert_eq!(orphan_views.len(), 1);
 
   // The folder data should contains the orphan view
   let folder_data = folder
     .body
-    .get_folder_data(&txn, &workspace_uuid_str, uid.as_i64())
+    .get_folder_data(&txn, &workspace_uuid_str, Some(uid.as_i64()))
     .unwrap();
   let fake_w_1_uuid = workspace_uuid_str.clone();
   let id_1_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "1".as_bytes()).to_string();

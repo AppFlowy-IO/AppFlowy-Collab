@@ -23,7 +23,7 @@ fn create_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_id, uid.as_i64())
+    .get_view(&txn, &v1_id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(o_view.name, r_view.name);
   assert_eq!(o_view.parent_view_id, r_view.parent_view_id);
@@ -53,7 +53,7 @@ fn create_view_with_sub_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_id, uid.as_i64())
+    .get_view(&txn, &v1_id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(view.name, r_view.name);
   assert_eq!(view.parent_view_id, r_view.parent_view_id);
@@ -62,12 +62,12 @@ fn create_view_with_sub_view_test() {
   let r_sub_view = folder
     .body
     .views
-    .get_view(&txn, &r_view.children[0].id, uid.as_i64())
+    .get_view(&txn, &r_view.children[0].id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(child_view.name, r_sub_view.name);
   assert_eq!(child_view.parent_view_id, r_sub_view.parent_view_id);
 
-  let views = folder.body.views.get_all_views(&txn, uid.as_i64());
+  let views = folder.body.views.get_all_views(&txn, Some(uid.as_i64()));
   assert_eq!(views.len(), 3);
 }
 
@@ -101,7 +101,7 @@ fn delete_view_test() {
   let views = folder
     .body
     .views
-    .get_views(&txn, &[v1_id, v2_id, v3_id], uid.as_i64());
+    .get_views(&txn, &[v1_id, v2_id, v3_id], Some(uid.as_i64()));
   assert_eq!(
     views[0].id.to_string(),
     collab::entity::uuid_validation::view_id_from_any_string("v1").to_string()
@@ -123,7 +123,7 @@ fn delete_view_test() {
   let views = folder
     .body
     .views
-    .get_views(&txn, &[v1_id, v2_id, v3_id], uid.as_i64());
+    .get_views(&txn, &[v1_id, v2_id, v3_id], Some(uid.as_i64()));
   assert_eq!(views.len(), 0);
 }
 
@@ -162,7 +162,7 @@ fn update_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_id, uid.as_i64())
+    .get_view(&txn, &v1_id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.name, "Untitled");
   assert!(r_view.is_favorite);
@@ -203,7 +203,7 @@ fn update_view_icon_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_id, uid.as_i64())
+    .get_view(&txn, &v1_id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.icon, Some(icon));
 
@@ -224,7 +224,7 @@ fn update_view_icon_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_id, uid.as_i64())
+    .get_view(&txn, &v1_id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.icon, Some(new_icon));
   folder
@@ -240,7 +240,7 @@ fn update_view_icon_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_id, uid.as_i64())
+    .get_view(&txn, &v1_id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.icon, None);
   assert_eq!(r_view.last_edited_by, Some(uid.as_i64()));
@@ -278,7 +278,7 @@ fn different_icon_ty_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_id, uid.as_i64())
+    .get_view(&txn, &v1_id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.icon, Some(emoji));
 
@@ -299,7 +299,7 @@ fn different_icon_ty_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_id, uid.as_i64())
+    .get_view(&txn, &v1_id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.icon, Some(icon));
 
@@ -320,7 +320,7 @@ fn different_icon_ty_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_id, uid.as_i64())
+    .get_view(&txn, &v1_id, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.icon, Some(url));
 }
@@ -359,7 +359,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_uuid, uid.as_i64())
+    .get_view(&txn, &v1_uuid, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 1);
 
@@ -387,7 +387,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v2_uuid, uid.as_i64())
+    .get_view(&txn, &v2_uuid, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 0);
 
@@ -399,7 +399,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_uuid, uid.as_i64())
+    .get_view(&txn, &v1_uuid, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
   assert_eq!(r_view.children.items.first().unwrap().id, view_2_id);
@@ -412,7 +412,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_uuid, uid.as_i64())
+    .get_view(&txn, &v1_uuid, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 1);
 
@@ -424,7 +424,7 @@ fn dissociate_and_associate_view_test() {
   let r_view = folder
     .body
     .views
-    .get_view(&txn, &v1_uuid, uid.as_i64())
+    .get_view(&txn, &v1_uuid, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
   assert_eq!(r_view.children.items.first().unwrap().id, view_1_child_id);
@@ -463,9 +463,9 @@ fn move_view_across_parent_test() {
   assert!(res.is_none());
   // Move view_1_child from view_1 to view_2.
   folder.move_nested_view(&v1_child_uuid, &v2_uuid, None, uid.as_i64());
-  let view_1 = folder.get_view(&v1_uuid, uid.as_i64()).unwrap();
-  let view_2 = folder.get_view(&v2_uuid, uid.as_i64()).unwrap();
-  let view_1_child = folder.get_view(&v1_child_uuid, uid.as_i64()).unwrap();
+  let view_1 = folder.get_view(&v1_uuid, Some(uid.as_i64())).unwrap();
+  let view_2 = folder.get_view(&v2_uuid, Some(uid.as_i64())).unwrap();
+  let view_1_child = folder.get_view(&v1_child_uuid, Some(uid.as_i64())).unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 1);
   assert_eq!(view_1_child.parent_view_id, Some(view_2_id));
@@ -479,11 +479,11 @@ fn move_view_across_parent_test() {
     None,
     uid.as_i64(),
   );
-  let view_1 = folder.get_view(&v1_uuid, uid.as_i64()).unwrap();
-  let view_2 = folder.get_view(&v2_uuid, uid.as_i64()).unwrap();
-  let view_1_child = folder.get_view(&v1_child_uuid, uid.as_i64()).unwrap();
+  let view_1 = folder.get_view(&v1_uuid, Some(uid.as_i64())).unwrap();
+  let view_2 = folder.get_view(&v2_uuid, Some(uid.as_i64())).unwrap();
+  let view_1_child = folder.get_view(&v1_child_uuid, Some(uid.as_i64())).unwrap();
   let workspace = folder
-    .get_workspace_info(&workspace_uuid, uid.as_i64())
+    .get_workspace_info(&workspace_uuid, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 0);
@@ -501,11 +501,11 @@ fn move_view_across_parent_test() {
     Some(view_1_id),
     uid.as_i64(),
   );
-  let view_1 = folder.get_view(&v1_uuid, uid.as_i64()).unwrap();
-  let view_2 = folder.get_view(&v2_uuid, uid.as_i64()).unwrap();
-  let view_1_child = folder.get_view(&v1_child_uuid, uid.as_i64()).unwrap();
+  let view_1 = folder.get_view(&v1_uuid, Some(uid.as_i64())).unwrap();
+  let view_2 = folder.get_view(&v2_uuid, Some(uid.as_i64())).unwrap();
+  let view_1_child = folder.get_view(&v1_child_uuid, Some(uid.as_i64())).unwrap();
   let workspace = folder
-    .get_workspace_info(&workspace_uuid, uid.as_i64())
+    .get_workspace_info(&workspace_uuid, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 0);
@@ -519,11 +519,11 @@ fn move_view_across_parent_test() {
 
   // move view_1_child from current workspace to view_1
   folder.move_nested_view(&v1_child_uuid, &v1_uuid, None, uid.as_i64());
-  let view_1 = folder.get_view(&v1_uuid, uid.as_i64()).unwrap();
-  let view_2 = folder.get_view(&v2_uuid, uid.as_i64()).unwrap();
-  let view_1_child = folder.get_view(&v1_child_uuid, uid.as_i64()).unwrap();
+  let view_1 = folder.get_view(&v1_uuid, Some(uid.as_i64())).unwrap();
+  let view_2 = folder.get_view(&v2_uuid, Some(uid.as_i64())).unwrap();
+  let view_1_child = folder.get_view(&v1_child_uuid, Some(uid.as_i64())).unwrap();
   let workspace = folder
-    .get_workspace_info(&workspace_uuid, uid.as_i64())
+    .get_workspace_info(&workspace_uuid, Some(uid.as_i64()))
     .unwrap();
   assert_eq!(view_1.children.items.iter().len(), 1);
   assert_eq!(view_1.children.items.first().unwrap().id, view_1_child_id);
@@ -582,7 +582,7 @@ fn create_view_test_with_index() {
   let views = folder
     .body
     .views
-    .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
+    .get_views_belong_to(&txn, &workspace_id, Some(uid.as_i64()));
   assert_eq!(views.first().unwrap().id.to_string(), view_2.id.to_string());
   assert_eq!(views.get(1).unwrap().id.to_string(), view_3.id.to_string());
   assert_eq!(views.get(2).unwrap().id.to_string(), view_1.id.to_string());
@@ -608,7 +608,7 @@ fn check_created_and_edited_time_test() {
   let views = folder
     .body
     .views
-    .get_views_belong_to(&txn, &workspace_id, uid.as_i64());
+    .get_views_belong_to(&txn, &workspace_id, Some(uid.as_i64()));
   let v1 = views.first().unwrap();
   assert_eq!(v1.created_by.unwrap(), uid.as_i64());
   assert_eq!(v1.last_edited_by.unwrap(), uid.as_i64());
@@ -621,7 +621,7 @@ async fn create_view_and_then_sub_index_content_test() {
   folder_test
     .folder
     .body
-    .observe_view_changes(uid.as_i64())
+    .observe_view_changes(Some(uid.as_i64()))
     .await;
 
   let mut change_rx = folder_test
@@ -656,7 +656,7 @@ async fn create_view_and_then_sub_index_content_test() {
     let r_view = folder
       .body
       .views
-      .get_view(&txn, &v1_id, uid.as_i64())
+      .get_view(&txn, &v1_id, Some(uid.as_i64()))
       .unwrap();
     assert_eq!(o_view.name, r_view.name);
     assert_eq!(o_view.parent_view_id, r_view.parent_view_id);
