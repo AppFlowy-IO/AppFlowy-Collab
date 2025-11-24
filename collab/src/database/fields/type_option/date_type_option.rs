@@ -206,8 +206,8 @@ impl DateTypeOption {
     });
     Self {
       timezone_id,
-      date_format: None,
-      time_format: None,
+      date_format: Some(DateFormat::default()),
+      time_format: Some(TimeFormat::default()),
     }
   }
 
