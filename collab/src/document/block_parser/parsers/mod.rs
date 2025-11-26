@@ -1,3 +1,7 @@
+pub mod ai_meeting;
+pub mod ai_meeting_notes;
+pub mod ai_meeting_summary;
+pub mod ai_meeting_transcription;
 pub mod bulleted_list;
 pub mod callout;
 pub mod code_block;
@@ -20,6 +24,10 @@ pub mod subpage;
 pub mod todo_list;
 pub mod toggle_list;
 
+pub use ai_meeting::*;
+pub use ai_meeting_notes::*;
+pub use ai_meeting_summary::*;
+pub use ai_meeting_transcription::*;
 pub use bulleted_list::*;
 pub use callout::*;
 pub use code_block::*;

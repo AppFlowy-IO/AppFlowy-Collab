@@ -1,3 +1,4 @@
+mod ai_meeting_test;
 mod bulleted_list_test;
 mod callout_test;
 mod code_block_test;
