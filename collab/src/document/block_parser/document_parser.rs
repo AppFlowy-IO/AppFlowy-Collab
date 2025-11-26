@@ -1,4 +1,5 @@
 use super::{
+  AiMeetingNotesParser, AiMeetingParser, AiMeetingSummaryParser, AiMeetingTranscriptionParser,
   BlockParserRegistry, BulletedListParser, CalloutParser, CodeBlockParser, DividerParser,
   DocumentParserDelegate, FileBlockParser, HeadingParser, ImageParser, LinkPreviewParser,
   MathEquationParser, NumberedListParser, OutputFormat, PageParser, ParagraphParser, ParseContext,
@@ -82,7 +83,11 @@ impl DocumentParser {
       .register(Arc::new(SimpleTableParser))
       .register(Arc::new(SimpleTableRowParser))
       .register(Arc::new(SimpleTableCellParser))
-      .register(Arc::new(SubpageParser));
+      .register(Arc::new(SubpageParser))
+      .register(Arc::new(AiMeetingParser))
+      .register(Arc::new(AiMeetingSummaryParser))
+      .register(Arc::new(AiMeetingNotesParser))
+      .register(Arc::new(AiMeetingTranscriptionParser));
 
     parser
   }
