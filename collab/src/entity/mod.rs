@@ -20,7 +20,7 @@ pub struct EncodedCollab {
   pub doc_state: Bytes,
   #[serde(default)]
   pub version: EncoderVersion,
-  #[serde(default)]
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub collab_version: Option<CollabVersion>,
 }
 

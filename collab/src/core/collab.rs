@@ -29,7 +29,7 @@ use yrs::{
 
 use crate::entity::{EncodedCollab, EncoderVersion};
 use crate::error::CollabError;
-use crate::preclude::JsonValue;
+use crate::preclude::{JsonValue, PermanentUserData};
 use uuid::Uuid;
 
 pub const DATA_SECTION: &str = "data";
@@ -87,17 +87,25 @@ pub struct CollabContext {
   /// The current transaction that is being executed.
   current_txn: Option<TransactionMut<'static>>,
   version: Option<CollabVersion>,
+  /// Structure managing list of editors.
+  editors: Option<PermanentUserData>,
 }
 
 unsafe impl Send for CollabContext {}
 unsafe impl Sync for CollabContext {}
 
 impl CollabContext {
-  fn new(origin: CollabOrigin, awareness: Awareness, version: Option<CollabVersion>) -> Self {
+  fn new(
+    origin: CollabOrigin,
+    awareness: Awareness,
+    version: Option<CollabVersion>,
+    user_data: Option<PermanentUserData>,
+  ) -> Self {
     CollabContext {
       origin,
       awareness,
       version,
+      editors: user_data,
       undo_manager: None,
       current_txn: None,
     }
@@ -109,6 +117,10 @@ impl CollabContext {
 
   pub fn version_mut(&mut self) -> &mut Option<CollabVersion> {
     &mut self.version
+  }
+
+  pub fn user_data(&self) -> Option<&PermanentUserData> {
+    self.editors.as_ref()
   }
 
   pub fn with_txn<F, T>(&mut self, f: F) -> Result<T, CollabError>
@@ -304,6 +316,7 @@ pub struct CollabOptions {
   pub data_source: Option<DataSource>,
   pub client_id: ClientID,
   pub skip_gc: bool,
+  pub remember_user: bool,
 }
 
 impl Display for CollabOptions {
@@ -324,11 +337,17 @@ impl CollabOptions {
       data_source: None,
       client_id,
       skip_gc: false,
+      remember_user: false,
     }
   }
 
   pub fn with_data_source(mut self, data_source: DataSource) -> Self {
     self.data_source = Some(data_source);
+    self
+  }
+
+  pub fn with_remember_user(mut self, remember_user: bool) -> Self {
+    self.remember_user = remember_user;
     self
   }
 
@@ -356,12 +375,18 @@ impl Collab {
     let plugins = Plugins::new(vec![]);
     let state = Arc::new(State::new(&object_id.to_string()));
     let awareness = Awareness::new(doc);
+    let user_data = if options.remember_user {
+      Some(PermanentUserData::new(awareness.doc(), origin.clone()))
+    } else {
+      None
+    };
     let mut this = Self {
       object_id,
       context: CollabContext::new(
         origin,
         awareness,
         options.data_source.as_ref().and_then(DataSource::version),
+        user_data,
       ),
       state,
       data,
@@ -431,7 +456,7 @@ impl Collab {
       object_id,
       // if not the fact that we need origin here, it would be
       // not necessary either
-      context: CollabContext::new(origin, awareness, None),
+      context: CollabContext::new(origin, awareness, None, None),
       state,
       data,
       meta,
