@@ -405,8 +405,9 @@ mod test {
   use crate::preclude::{Collab, Doc, PermanentUserData};
   use std::collections::{HashMap, HashSet};
   use uuid::Uuid;
+  use yrs::types::ToJson;
   use yrs::updates::decoder::Decode;
-  use yrs::{ReadTxn, Snapshot, StateVector, Text, Transact, Update};
+  use yrs::{ReadTxn, Snapshot, StateVector, Text, Transact, Update, any};
 
   #[test]
   fn add_or_remove_user_mappings() {
@@ -549,5 +550,22 @@ mod test {
       users.user_by_client_id(client_id).unwrap(),
       uid.to_string().into()
     );
+  }
+
+  #[test]
+  fn collab_doesnt_fill_user_data_automatically_if_no_data_was_written() {
+    let uid = 1;
+    let client_id = default_client_id();
+    let oid = Uuid::new_v4();
+    let origin = CollabOrigin::Client(CollabClient::new(uid, "device-1"));
+    let options = CollabOptions::new(oid, client_id).with_remember_user(true);
+    let mut collab = Collab::new_with_options(origin, options).unwrap();
+
+    // we use mutable transaction but we don't write anything
+    let json = collab.data.to_json(&collab.context.transact_mut());
+    assert_eq!(json, any!({}));
+
+    let pud = collab.user_data().unwrap();
+    assert!(pud.user_by_client_id(client_id).is_none());
   }
 }
