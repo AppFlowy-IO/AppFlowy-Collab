@@ -1,4 +1,5 @@
 use crate::core::origin::CollabOrigin;
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ pub type UserDescription = Arc<str>;
 
 #[derive(Default)]
 struct State {
-  clients: HashMap<u64, UserDescription>,
+  clients: HashMap<ClientID, UserDescription>,
   dss: HashMap<UserDescription, DeleteSet>,
   action_queue: Vec<Action>,
   current_users: Vec<UserDescription>,
@@ -54,6 +55,13 @@ impl PermanentUserData {
       }
     });
 
+    let client_id = doc.client_id();
+    let uid: Option<Arc<str>> = if let CollabOrigin::Client(c) = &local_origin {
+      Some(c.uid.to_string().into())
+    } else {
+      None
+    };
+
     let local_origin: Origin = local_origin.into();
     let s = state.clone();
     let users_clone = users.clone();
@@ -72,18 +80,34 @@ impl PermanentUserData {
         }
 
         // if transaction was local add delete set to current user's ds array
-        let ds = txn.delete_set();
-        if txn.origin() == Some(&local_origin) && !ds.is_empty() {
-          let encoded_ds = ds.encode_v1();
-          let lock = s.read();
-          for user_description in &lock.current_users {
-            let user: MapRef = users_clone
-              .get(txn, user_description)
-              .unwrap()
-              .cast()
-              .unwrap();
-            let yds: ArrayRef = user.get(txn, "ds").unwrap().cast().unwrap();
-            yds.push_back(txn, encoded_ds.clone());
+        let has_deletes = !txn.delete_set().is_empty();
+        let has_inserts = txn.after_state() != txn.before_state();
+        if txn.origin() == Some(&local_origin) && has_deletes || has_inserts {
+          // the transaction originates locally and it made some writes
+
+          if let Some(uid) = &uid {
+            // check if we already defined the current user
+            let mut lock = s.write();
+            if let Entry::Vacant(e) = lock.clients.entry(client_id) {
+              e.insert(uid.clone());
+              drop(lock);
+              Self::map_user_internal(users_clone.clone(), s.clone(), txn, client_id, uid.clone());
+            }
+          }
+
+          if has_deletes {
+            // store new deletes info in permanent user data part of the document
+            let encoded_ds = txn.delete_set().encode_v1();
+            let lock = s.read();
+            for user_description in &lock.current_users {
+              let user: MapRef = users_clone
+                .get(txn, user_description)
+                .unwrap()
+                .cast()
+                .unwrap();
+              let yds: ArrayRef = user.get(txn, "ds").unwrap().cast().unwrap();
+              yds.push_back(txn, encoded_ds.clone());
+            }
           }
         }
       })
@@ -211,10 +235,25 @@ impl PermanentUserData {
     client_id: ClientID,
     description: S,
   ) {
-    let user_description = description.into();
-    let user = match self.users.get(tx, &user_description) {
+    Self::map_user_internal(
+      self.users.clone(),
+      self.state.clone(),
+      tx,
+      client_id,
+      description.into(),
+    );
+  }
+
+  fn map_user_internal(
+    users: MapRef,
+    state: Arc<parking_lot::RwLock<State>>,
+    tx: &mut TransactionMut,
+    client_id: ClientID,
+    user_description: UserDescription,
+  ) {
+    let user = match users.get(tx, &user_description) {
       Some(Out::YMap(value)) => value,
-      _ => self.users.insert(
+      _ => users.insert(
         tx,
         user_description.clone(),
         MapPrelim::from([
@@ -227,22 +266,24 @@ impl PermanentUserData {
     ids.push_back(tx, Any::BigInt(client_id as i64));
 
     // check if current user was overridden
-    let state = self.state.clone();
-    let users = self.users.clone();
     let description_clone = user_description.clone();
-    self.users.observe_with("pud", move |txn, _| {
-      let old_user = users.get(txn, &description_clone);
+    let weak_state = Arc::downgrade(&state);
+    let users_clone = users.clone();
+    users.observe_with("pud", move |txn, _| {
+      let old_user = users_clone.get(txn, &description_clone);
       if old_user != Some(Out::YMap(user.clone())) {
         // user was overridden
-        let mut lock = state.write();
-        lock
-          .action_queue
-          .push(Action::UserOverridden(description_clone.clone()));
+        if let Some(state) = weak_state.upgrade() {
+          let mut lock = state.write();
+          lock
+            .action_queue
+            .push(Action::UserOverridden(description_clone.clone()));
+        }
       }
     });
 
     // keep track of current user
-    self.state.write().current_users.push(user_description);
+    state.write().current_users.push(user_description);
   }
 
   /// Get user description by client id.
@@ -358,9 +399,12 @@ enum Action {
 
 #[cfg(test)]
 mod test {
+  use crate::core::collab::{CollabOptions, default_client_id};
   use crate::core::origin::{CollabClient, CollabOrigin};
-  use crate::preclude::{Doc, PermanentUserData};
-  use std::collections::HashSet;
+  use crate::document::{BlockType, Document, DocumentData, DocumentMeta, generate_id};
+  use crate::preclude::{Collab, Doc, PermanentUserData};
+  use std::collections::{HashMap, HashSet};
+  use uuid::Uuid;
   use yrs::updates::decoder::Decode;
   use yrs::{ReadTxn, Snapshot, StateVector, Text, Transact, Update};
 
@@ -464,5 +508,46 @@ mod test {
         }
       }
     }
+  }
+
+  #[test]
+  fn collab_fills_user_data_automatically() {
+    let uid = 1;
+    let client_id = default_client_id();
+    let oid = Uuid::new_v4();
+    let origin = CollabOrigin::Client(CollabClient::new(uid, "device-1"));
+    let options = CollabOptions::new(oid, client_id).with_remember_user(true);
+    let collab = Collab::new_with_options(origin, options).unwrap();
+    let page_id = generate_id();
+    let mut document = Document::create_with_data(
+      collab,
+      DocumentData {
+        page_id: page_id.clone(),
+        blocks: HashMap::from([(
+          page_id.clone(),
+          crate::document::Block {
+            id: page_id.clone(),
+            ty: BlockType::Page.to_string(),
+            parent: "".to_string(),
+            children: "".to_string(),
+            external_id: None,
+            external_type: None,
+            data: Default::default(),
+          },
+        )]),
+        meta: DocumentMeta {
+          children_map: Default::default(),
+          text_map: Some(HashMap::default()),
+        },
+      },
+    )
+    .unwrap();
+    document.initialize();
+
+    let users = document.user_data().unwrap();
+    assert_eq!(
+      users.user_by_client_id(client_id).unwrap(),
+      uid.to_string().into()
+    );
   }
 }
