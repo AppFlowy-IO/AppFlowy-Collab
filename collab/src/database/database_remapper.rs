@@ -161,6 +161,7 @@ impl DatabaseCollabRemapper {
         group_settings: view.group_settings,
         sorts: view.sorts,
         field_settings: view.field_settings,
+        embedded: view.embedded,
         created_at: timestamp,
         modified_at: timestamp,
         ..Default::default()

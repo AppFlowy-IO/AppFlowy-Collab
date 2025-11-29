@@ -28,7 +28,7 @@ async fn test_parse_real_database_json() {
     assert_eq!(database.get_database_id().unwrap(), new_database_id);
   }
 
-  let views = database.get_all_views();
+  let views = database.get_all_views(true);
   assert_eq!(views.len(), 2);
 
   for view in &views {

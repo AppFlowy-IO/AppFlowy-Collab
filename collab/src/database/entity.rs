@@ -72,6 +72,8 @@ pub struct DatabaseView {
   pub modified_at: i64,
   #[serde(default)]
   pub is_inline: bool,
+  #[serde(default)]
+  pub embedded: bool,
 }
 
 impl DatabaseView {
@@ -100,6 +102,7 @@ pub struct DatabaseViewMeta {
   pub id: DatabaseViewId,
   pub name: String,
   pub is_inline: bool,
+  pub embedded: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -123,6 +126,8 @@ pub struct CreateViewParams {
   /// Each new field in `deps_fields` must also have an associated FieldSettings
   /// that will be inserted into each view according to the view's layout type
   pub deps_field_setting: Vec<HashMap<DatabaseLayout, FieldSettingsMap>>,
+  #[serde(default)]
+  pub embedded: bool,
 }
 
 impl CreateViewParams {
@@ -195,6 +200,7 @@ impl From<DatabaseView> for CreateViewParams {
       group_settings: view.group_settings,
       sorts: view.sorts,
       field_settings: view.field_settings,
+      embedded: view.embedded,
       ..Default::default()
     }
   }
@@ -265,6 +271,7 @@ impl CreateDatabaseParams {
         group_settings: view.group_settings,
         sorts: view.sorts,
         field_settings: view.field_settings,
+        embedded: view.embedded,
         created_at: timestamp,
         modified_at: timestamp,
         ..Default::default()

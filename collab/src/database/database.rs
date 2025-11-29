@@ -384,14 +384,14 @@ impl Database {
     }
   }
 
-  pub fn get_all_views(&self) -> Vec<DatabaseView> {
+  pub fn get_all_views(&self, include_embedded: bool) -> Vec<DatabaseView> {
     let txn = self.collab.transact();
     self
       .body
       .views
-      .get_all_views(&txn)
+      .get_all_views(&txn, include_embedded)
       .into_iter()
-      .filter(|view| !view.is_inline)
+      .filter(|view| !view.is_inline && !view.embedded)
       .collect()
   }
 
@@ -1492,7 +1492,7 @@ impl Database {
 
     let database_id = self.body.get_database_id(&txn)?;
     let inline_view_id = self.body.get_inline_view_id(&txn);
-    let views = self.get_all_views();
+    let views = self.get_all_views(true);
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
     let rows_stream = self.get_all_rows(chunk_size, None, auto_fetch).await?;
     let rows: Vec<Row> = rows_stream
@@ -1571,7 +1571,7 @@ impl Database {
     self
       .body
       .views
-      .get_all_views(&txn)
+      .get_all_views(&txn, false)
       .first()
       .map(|result| result.id.to_string())
   }
@@ -1773,7 +1773,7 @@ where
     .get_with_path::<_, _, MapRef>(&txn, [DATABASE, VIEWS])
   {
     let views = DatabaseViews::new(origin, container, None);
-    let mut reset_views = views.get_all_views(&txn);
+    let mut reset_views = views.get_all_views(&txn, true);
 
     reset_views.iter_mut().for_each(f);
     for view in reset_views {
@@ -2214,6 +2214,7 @@ impl DatabaseBody {
       created_at: params.created_at,
       modified_at: params.modified_at,
       is_inline: false,
+      embedded: params.embedded,
     };
 
     trace!(

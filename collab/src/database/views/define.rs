@@ -12,4 +12,5 @@ pub const DATABASE_VIEW_FIELD_ORDERS: &str = "field_orders";
 pub const VIEW_CREATE_AT: &str = "created_at";
 pub const VIEW_MODIFY_AT: &str = "modified_at";
 pub const IS_INLINE: &str = "is_inline";
+pub const EMBEDDED: &str = "embedded";
 pub const VIEW_CALCULATIONS: &str = "calculations";
