@@ -478,9 +478,7 @@ pub fn view_meta_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Data
   let id: String = map_ref.get_with_txn(txn, VIEW_ID)?;
   let name: String = map_ref.get_with_txn(txn, VIEW_NAME).unwrap_or_default();
   let is_inline = map_ref.get_with_txn(txn, IS_INLINE).unwrap_or_default();
-  let embedded = map_ref
-    .get_with_txn(txn, EMBEDDED)
-    .unwrap_or_default();
+  let embedded = map_ref.get_with_txn(txn, EMBEDDED).unwrap_or_default();
   Some(DatabaseViewMeta {
     id: crate::entity::uuid_validation::try_parse_database_view_id(&id)
       .unwrap_or_else(crate::entity::uuid_validation::generate_database_view_id),
