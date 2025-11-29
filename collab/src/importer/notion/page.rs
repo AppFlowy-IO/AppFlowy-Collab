@@ -515,7 +515,7 @@ impl NotionPage {
         let mut resources = vec![content.resource];
         let view_ids = content
           .database
-          .get_all_views()
+          .get_all_views(false)
           .into_iter()
           .map(|view| view.id)
           .collect::<Vec<_>>();

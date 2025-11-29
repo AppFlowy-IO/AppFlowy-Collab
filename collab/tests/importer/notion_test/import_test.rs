@@ -521,7 +521,7 @@ async fn check_task_database(linked_view: &NotionPage) {
 
   let csv_file = parse_csv(linked_view.notion_file.file_path().unwrap());
   let database = linked_view.as_database().await.unwrap().database;
-  let views = database.get_all_views();
+  let views = database.get_all_views(true);
   assert_eq!(views.len(), 1);
   assert_eq!(linked_view.view_id, views[0].id.to_string());
 
