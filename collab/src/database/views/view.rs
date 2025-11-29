@@ -78,6 +78,11 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     self
   }
 
+  pub fn set_embedded(self, embedded: bool) -> Self {
+    self.map_ref.insert(self.txn, EMBEDDED, embedded);
+    self
+  }
+
   pub fn set_database_id<T: AsRef<str>>(self, value: T) -> Self {
     self
       .map_ref
@@ -473,11 +478,15 @@ pub fn view_meta_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Data
   let id: String = map_ref.get_with_txn(txn, VIEW_ID)?;
   let name: String = map_ref.get_with_txn(txn, VIEW_NAME).unwrap_or_default();
   let is_inline = map_ref.get_with_txn(txn, IS_INLINE).unwrap_or_default();
+  let embedded = map_ref
+    .get_with_txn(txn, EMBEDDED)
+    .unwrap_or_default();
   Some(DatabaseViewMeta {
     id: crate::entity::uuid_validation::try_parse_database_view_id(&id)
       .unwrap_or_else(crate::entity::uuid_validation::generate_database_view_id),
     name,
     is_inline,
+    embedded,
   })
 }
 
@@ -603,6 +612,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     .unwrap_or_default();
 
   let is_inline: bool = map_ref.get_with_txn(txn, IS_INLINE).unwrap_or(false);
+  let embedded: bool = map_ref.get_with_txn(txn, EMBEDDED).unwrap_or(false);
 
   Some(DatabaseView {
     id: crate::entity::uuid_validation::try_parse_database_view_id(&id)
@@ -621,6 +631,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     created_at,
     modified_at,
     is_inline,
+    embedded,
   })
 }
 

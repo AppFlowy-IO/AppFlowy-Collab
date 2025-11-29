@@ -83,7 +83,8 @@ impl DatabaseViews {
         .set_sorts(view.sorts)
         .set_field_orders(view.field_orders)
         .set_row_orders(view.row_orders)
-        .set_is_inline(view.is_inline);
+        .set_is_inline(view.is_inline)
+        .set_embedded(view.embedded);
     });
   }
 
@@ -159,11 +160,12 @@ impl DatabaseViews {
     view_from_map_ref(&map_ref, txn)
   }
 
-  pub fn get_all_views<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseView> {
+  pub fn get_all_views<T: ReadTxn>(&self, txn: &T, include_embedded: bool) -> Vec<DatabaseView> {
     self
       .container
       .iter(txn)
       .flat_map(|(_k, v)| view_from_value(v, txn))
+      .filter(|view| include_embedded || !view.embedded)
       .collect::<Vec<_>>()
   }
 
