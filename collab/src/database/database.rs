@@ -395,6 +395,18 @@ impl Database {
       .collect()
   }
 
+  pub fn get_all_view_ids(&self, include_embedded: bool) -> Vec<DatabaseViewId> {
+    let txn = self.collab.transact();
+    self
+      .body
+      .views
+      .get_all_views(&txn, include_embedded)
+      .into_iter()
+      .filter(|view| !view.is_inline && !view.embedded)
+      .map(|view| view.id)
+      .collect()
+  }
+
   pub fn get_database_view_layout(&self, view_id: &str) -> DatabaseLayout {
     let txn = self.collab.transact();
     match self.body.parse_view_id(view_id) {
