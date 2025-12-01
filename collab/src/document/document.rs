@@ -289,9 +289,7 @@ impl Document {
   /// - view_ids: The database view IDs associated with this block
   /// - parent_id: The parent view ID (document ID for inline, original DB ID for linked)
   /// - database_id: The database storage ID
-  pub fn get_embedded_database_blocks(
-    &self,
-  ) -> Vec<EmbeddedDatabaseBlock> {
+  pub fn get_embedded_database_blocks(&self) -> Vec<EmbeddedDatabaseBlock> {
     let txn = self.collab.transact();
     let blocks = self.body.block_operation.get_all_blocks(&txn);
 

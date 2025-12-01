@@ -200,8 +200,7 @@ fn get_embedded_database_blocks_extracts_view_ids_array() {
   ];
   let view_ids_refs: Vec<&str> = view_ids.iter().map(|s| s.as_str()).collect();
 
-  let grid_block =
-    create_database_block("grid", &page_id, None, Some(view_ids_refs), None, None);
+  let grid_block = create_database_block("grid", &page_id, None, Some(view_ids_refs), None, None);
   insert_block(&mut test, grid_block, &page_id);
 
   let databases = test.document.get_embedded_database_blocks();
