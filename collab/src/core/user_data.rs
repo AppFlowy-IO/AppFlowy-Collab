@@ -1,7 +1,6 @@
 use crate::core::origin::CollabOrigin;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
-use std::ops::Range;
 use std::sync::Arc;
 use yrs::block::ClientID;
 use yrs::types::Change;
@@ -306,28 +305,29 @@ impl PermanentUserData {
   /// Return set of users that made edits between two snapshots.
   pub fn editors_between(&self, from: &Snapshot, to: &Snapshot) -> HashSet<UserDescription> {
     let mut result = HashSet::new();
+    let lock = self.state.read();
 
     // get client ids that have changes between from and to snapshots
     for (client_id, &to_clock) in to.state_map.iter() {
       let from_clock = from.state_map.get(client_id);
       if to_clock > from_clock {
-        if let Some(user) = self.user_by_client_id(*client_id) {
-          result.insert(user);
+        if let Some(user) = lock.clients.get(client_id) {
+          result.insert(user.clone());
         }
       }
     }
 
     // also check deleted ids
-    //TODO: this is not very efficient, consider optimizing if needed
-    let ds_diff = diff_delete_sets(&from.delete_set, &to.delete_set);
-    for (client_id, ranges) in ds_diff.iter() {
-      for range in ranges.iter() {
-        for clock in range.start..range.end {
-          let id = ID::new(*client_id, clock);
-          if let Some(user) = self.user_by_deleted_id(&id) {
-            result.insert(user);
-          }
-        }
+    for (user, ds) in lock.dss.iter() {
+      if result.contains(user) {
+        continue; // we already have that user
+      }
+      // pick the shared part between current user and `to` delete set
+      let intersect = ds.intersect(&to.delete_set);
+      if !intersect.is_empty() && !intersect.subset_of(&from.delete_set) {
+        // if the shared part doesn't fully belong to `from` delete set, it means that there were
+        // some deletes made by this user that fit into the window between from-to
+        result.insert(user.clone());
       }
     }
 
@@ -335,60 +335,41 @@ impl PermanentUserData {
   }
 }
 
-fn diff_delete_sets(old_ds: &DeleteSet, new_ds: &DeleteSet) -> DeleteSet {
-  let mut diff_ds = DeleteSet::new();
-
-  for (client_id, new_range) in new_ds.iter() {
-    let old_range = old_ds
-      .range(client_id)
-      .unwrap_or(&Default::default())
-      .clone();
-    let mut old_iter = old_range.iter();
-
-    for new_range in new_range.iter() {
-      if let Some(old_range) = old_iter.next() {
-        if intersects(new_range, old_range) {
-          // overlapping ranges, need to check for new deletions
-          if new_range.start < old_range.start {
-            // new deletion before old range
-            diff_ds.insert(
-              ID::new(*client_id, new_range.start),
-              old_range.start - new_range.start,
-            );
-          }
-          if new_range.end > old_range.end {
-            // new deletion after old range
-            diff_ds.insert(
-              ID::new(*client_id, old_range.end),
-              new_range.end - old_range.end,
-            );
-          }
-        } else if new_range.end <= old_range.start {
-          // new deletion before old range
-          diff_ds.insert(
-            ID::new(*client_id, new_range.start),
-            new_range.end - new_range.start,
-          );
-        } else if new_range.start >= old_range.end {
-          // new deletion after old range, continue to next old range
-          continue;
-        }
-      } else {
-        // all remaining new_ranges are new deletions
-        diff_ds.insert(
-          ID::new(*client_id, new_range.start),
-          new_range.end - new_range.start,
-        );
-      }
-    }
-  }
-
-  diff_ds
+trait DeleteSetExt {
+  fn intersect(&self, other: &Self) -> Self;
+  fn subset_of(&self, other: &Self) -> bool;
 }
 
-#[inline]
-fn intersects(x: &Range<u32>, y: &Range<u32>) -> bool {
-  x.start < y.end && y.start < x.end
+impl DeleteSetExt for DeleteSet {
+  fn intersect(&self, other: &Self) -> Self {
+    let mut result = DeleteSet::new();
+    for (client, ranges) in self.iter() {
+      if let Some(other_ranges) = other.range(client) {
+        for a in ranges.iter() {
+          for b in other_ranges.iter() {
+            if a.start <= b.end && a.end >= b.start {
+              // there's an intersection
+              let start = a.start.max(b.start);
+              let len = a.end.min(b.end) - start;
+              result.insert(ID::new(*client, start), len);
+            }
+          }
+        }
+      }
+    }
+    result
+  }
+
+  fn subset_of(&self, other: &Self) -> bool {
+    for (client_id, ranges) in self.iter() {
+      match other.range(client_id) {
+        None => return false,
+        Some(other_ranges) if !ranges.subset_of(other_ranges) => return false,
+        _ => { /* continue */ },
+      }
+    }
+    true
+  }
 }
 
 #[derive(Debug)]

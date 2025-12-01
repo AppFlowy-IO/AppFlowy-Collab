@@ -3,7 +3,7 @@ members = ["collab"]
 resolver = "2"
 
 [workspace.dependencies]
-yrs = { version = "0.24", features = ["sync"] }
+yrs = { version = "0.25", features = ["sync"] }
 anyhow = "1.0.94"
 thiserror = "1.0.39"
 serde = { version = "1.0.157", features = ["derive"] }
