@@ -278,6 +278,121 @@ impl Document {
     Ok(block_ids)
   }
 
+  /// Database block types that can be embedded in a document
+  pub const DATABASE_BLOCK_TYPES: &'static [&'static str] = &["grid", "board", "calendar"];
+
+  /// Get all embedded database blocks (grid, board, calendar) from the document.
+  ///
+  /// Returns a vector of tuples containing:
+  /// - block_id: The block's ID
+  /// - block_type: The block type ("grid", "board", or "calendar")
+  /// - view_ids: The database view IDs associated with this block
+  /// - parent_id: The parent view ID (document ID for inline, original DB ID for linked)
+  /// - database_id: The database storage ID
+  pub fn get_embedded_database_blocks(
+    &self,
+  ) -> Vec<EmbeddedDatabaseBlock> {
+    let txn = self.collab.transact();
+    let blocks = self.body.block_operation.get_all_blocks(&txn);
+
+    blocks
+      .values()
+      .filter(|block| Self::DATABASE_BLOCK_TYPES.contains(&block.ty.as_str()))
+      .map(|block| {
+        let view_ids = Self::extract_view_ids_from_block_data(&block.data);
+        let parent_id = block
+          .data
+          .get("parent_id")
+          .and_then(|v| v.as_str())
+          .and_then(|s| Uuid::parse_str(s).ok());
+        let database_id = block
+          .data
+          .get("database_id")
+          .and_then(|v| v.as_str())
+          .and_then(|s| Uuid::parse_str(s).ok());
+
+        EmbeddedDatabaseBlock {
+          block_id: block.id.clone(),
+          block_type: block.ty.clone(),
+          view_ids,
+          parent_id,
+          database_id,
+        }
+      })
+      .collect()
+  }
+
+  /// Get all database view IDs from embedded database blocks.
+  ///
+  /// This is a convenience method that returns just the view IDs
+  /// without the full block information.
+  pub fn get_embedded_database_view_ids(&self) -> Vec<Uuid> {
+    self
+      .get_embedded_database_blocks()
+      .into_iter()
+      .flat_map(|block| block.view_ids)
+      .collect()
+  }
+
+  /// Sub-page block type constant
+  pub const SUB_PAGE_BLOCK_TYPE: &'static str = "sub_page";
+
+  /// Get all sub-page (linked document) IDs from the document.
+  ///
+  /// This function iterates through all blocks and extracts the view_id
+  /// from blocks with type "sub_page". Sub-pages are documents that are
+  /// linked/embedded within another document.
+  ///
+  /// # Returns
+  /// A vector of UUIDs representing the view IDs of all linked sub-pages.
+  pub fn get_sub_page_ids(&self) -> Vec<Uuid> {
+    let txn = self.collab.transact();
+    let blocks = self.body.block_operation.get_all_blocks(&txn);
+
+    blocks
+      .values()
+      .filter(|block| block.ty == Self::SUB_PAGE_BLOCK_TYPE)
+      .filter_map(|block| {
+        block
+          .data
+          .get("view_id")
+          .and_then(|v| v.as_str())
+          .and_then(|s| Uuid::parse_str(s).ok())
+      })
+      .collect()
+  }
+
+  /// Extract view IDs from block data with backward compatibility.
+  ///
+  /// Checks for new `view_ids` array first, then falls back to legacy `view_id`.
+  fn extract_view_ids_from_block_data(data: &HashMap<String, Value>) -> Vec<Uuid> {
+    // Try new format: view_ids array
+    if let Some(view_ids_value) = data.get("view_ids") {
+      if let Some(view_ids_array) = view_ids_value.as_array() {
+        let view_ids: Vec<Uuid> = view_ids_array
+          .iter()
+          .filter_map(|v| v.as_str())
+          .filter_map(|s| Uuid::parse_str(s).ok())
+          .collect();
+
+        if !view_ids.is_empty() {
+          return view_ids;
+        }
+      }
+    }
+
+    // Fall back to legacy format: single view_id
+    if let Some(view_id_value) = data.get("view_id") {
+      if let Some(view_id_str) = view_id_value.as_str() {
+        if let Ok(view_id) = Uuid::parse_str(view_id_str) {
+          return vec![view_id];
+        }
+      }
+    }
+
+    Vec::new()
+  }
+
   /// Get the plain text from the text block with the given id.
   ///
   /// If the block is not found, return None.
@@ -1026,5 +1141,40 @@ impl From<&Document> for DocumentIndexContent {
     let text = text.join(" "); // all text of document
 
     Self { page_id, text }
+  }
+}
+
+/// Information about an embedded database block in a document.
+///
+/// Documents can contain embedded database blocks (grid, board, calendar) that reference
+/// database views. This struct contains the extracted information from such blocks.
+#[derive(Debug, Clone)]
+pub struct EmbeddedDatabaseBlock {
+  /// The block ID in the document
+  pub block_id: String,
+  /// The block type: "grid", "board", or "calendar"
+  pub block_type: String,
+  /// The view IDs associated with this database block
+  pub view_ids: Vec<Uuid>,
+  /// The parent view ID (typically the document ID for inline databases,
+  /// or the original database ID for linked/referenced databases)
+  pub parent_id: Option<Uuid>,
+  /// The database storage ID
+  pub database_id: Option<Uuid>,
+}
+
+impl EmbeddedDatabaseBlock {
+  /// Returns true if this is an inline/embedded database (parent_id matches the document)
+  pub fn is_inline_database(&self, document_id: &Uuid) -> bool {
+    self.parent_id.as_ref() == Some(document_id)
+  }
+
+  /// Returns true if this is a linked/referenced database (parent_id differs from the document)
+  pub fn is_linked_database(&self, document_id: &Uuid) -> bool {
+    self
+      .parent_id
+      .as_ref()
+      .map(|pid| pid != document_id)
+      .unwrap_or(false)
   }
 }
