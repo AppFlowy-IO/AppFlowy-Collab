@@ -1,6 +1,6 @@
 use crate::core::origin::CollabOrigin;
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
-use std::ops::Range;
 use std::sync::Arc;
 use yrs::block::ClientID;
 use yrs::types::Change;
@@ -16,7 +16,7 @@ pub type UserDescription = Arc<str>;
 
 #[derive(Default)]
 struct State {
-  clients: HashMap<u64, UserDescription>,
+  clients: HashMap<ClientID, UserDescription>,
   dss: HashMap<UserDescription, DeleteSet>,
   action_queue: Vec<Action>,
   current_users: Vec<UserDescription>,
@@ -54,6 +54,13 @@ impl PermanentUserData {
       }
     });
 
+    let client_id = doc.client_id();
+    let uid: Option<Arc<str>> = if let CollabOrigin::Client(c) = &local_origin {
+      Some(c.uid.to_string().into())
+    } else {
+      None
+    };
+
     let local_origin: Origin = local_origin.into();
     let s = state.clone();
     let users_clone = users.clone();
@@ -72,18 +79,34 @@ impl PermanentUserData {
         }
 
         // if transaction was local add delete set to current user's ds array
-        let ds = txn.delete_set();
-        if txn.origin() == Some(&local_origin) && !ds.is_empty() {
-          let encoded_ds = ds.encode_v1();
-          let lock = s.read();
-          for user_description in &lock.current_users {
-            let user: MapRef = users_clone
-              .get(txn, user_description)
-              .unwrap()
-              .cast()
-              .unwrap();
-            let yds: ArrayRef = user.get(txn, "ds").unwrap().cast().unwrap();
-            yds.push_back(txn, encoded_ds.clone());
+        let has_deletes = !txn.delete_set().is_empty();
+        let has_inserts = txn.after_state() != txn.before_state();
+        if txn.origin() == Some(&local_origin) && has_deletes || has_inserts {
+          // the transaction originates locally and it made some writes
+
+          if let Some(uid) = &uid {
+            // check if we already defined the current user
+            let mut lock = s.write();
+            if let Entry::Vacant(e) = lock.clients.entry(client_id) {
+              e.insert(uid.clone());
+              drop(lock);
+              Self::map_user_internal(users_clone.clone(), s.clone(), txn, client_id, uid.clone());
+            }
+          }
+
+          if has_deletes {
+            // store new deletes info in permanent user data part of the document
+            let encoded_ds = txn.delete_set().encode_v1();
+            let lock = s.read();
+            for user_description in &lock.current_users {
+              let user: MapRef = users_clone
+                .get(txn, user_description)
+                .unwrap()
+                .cast()
+                .unwrap();
+              let yds: ArrayRef = user.get(txn, "ds").unwrap().cast().unwrap();
+              yds.push_back(txn, encoded_ds.clone());
+            }
           }
         }
       })
@@ -211,10 +234,25 @@ impl PermanentUserData {
     client_id: ClientID,
     description: S,
   ) {
-    let user_description = description.into();
-    let user = match self.users.get(tx, &user_description) {
+    Self::map_user_internal(
+      self.users.clone(),
+      self.state.clone(),
+      tx,
+      client_id,
+      description.into(),
+    );
+  }
+
+  fn map_user_internal(
+    users: MapRef,
+    state: Arc<parking_lot::RwLock<State>>,
+    tx: &mut TransactionMut,
+    client_id: ClientID,
+    user_description: UserDescription,
+  ) {
+    let user = match users.get(tx, &user_description) {
       Some(Out::YMap(value)) => value,
-      _ => self.users.insert(
+      _ => users.insert(
         tx,
         user_description.clone(),
         MapPrelim::from([
@@ -227,22 +265,24 @@ impl PermanentUserData {
     ids.push_back(tx, Any::BigInt(client_id as i64));
 
     // check if current user was overridden
-    let state = self.state.clone();
-    let users = self.users.clone();
     let description_clone = user_description.clone();
-    self.users.observe_with("pud", move |txn, _| {
-      let old_user = users.get(txn, &description_clone);
+    let weak_state = Arc::downgrade(&state);
+    let users_clone = users.clone();
+    users.observe_with("pud", move |txn, _| {
+      let old_user = users_clone.get(txn, &description_clone);
       if old_user != Some(Out::YMap(user.clone())) {
         // user was overridden
-        let mut lock = state.write();
-        lock
-          .action_queue
-          .push(Action::UserOverridden(description_clone.clone()));
+        if let Some(state) = weak_state.upgrade() {
+          let mut lock = state.write();
+          lock
+            .action_queue
+            .push(Action::UserOverridden(description_clone.clone()));
+        }
       }
     });
 
     // keep track of current user
-    self.state.write().current_users.push(user_description);
+    state.write().current_users.push(user_description);
   }
 
   /// Get user description by client id.
@@ -265,28 +305,29 @@ impl PermanentUserData {
   /// Return set of users that made edits between two snapshots.
   pub fn editors_between(&self, from: &Snapshot, to: &Snapshot) -> HashSet<UserDescription> {
     let mut result = HashSet::new();
+    let lock = self.state.read();
 
     // get client ids that have changes between from and to snapshots
     for (client_id, &to_clock) in to.state_map.iter() {
       let from_clock = from.state_map.get(client_id);
       if to_clock > from_clock {
-        if let Some(user) = self.user_by_client_id(*client_id) {
-          result.insert(user);
+        if let Some(user) = lock.clients.get(client_id) {
+          result.insert(user.clone());
         }
       }
     }
 
     // also check deleted ids
-    //TODO: this is not very efficient, consider optimizing if needed
-    let ds_diff = diff_delete_sets(&from.delete_set, &to.delete_set);
-    for (client_id, ranges) in ds_diff.iter() {
-      for range in ranges.iter() {
-        for clock in range.start..range.end {
-          let id = ID::new(*client_id, clock);
-          if let Some(user) = self.user_by_deleted_id(&id) {
-            result.insert(user);
-          }
-        }
+    for (user, ds) in lock.dss.iter() {
+      if result.contains(user) {
+        continue; // we already have that user
+      }
+      // pick the shared part between current user and `to` delete set
+      let intersect = ds.intersect(&to.delete_set);
+      if !intersect.is_empty() && !intersect.subset_of(&from.delete_set) {
+        // if the shared part doesn't fully belong to `from` delete set, it means that there were
+        // some deletes made by this user that fit into the window between from-to
+        result.insert(user.clone());
       }
     }
 
@@ -294,60 +335,41 @@ impl PermanentUserData {
   }
 }
 
-fn diff_delete_sets(old_ds: &DeleteSet, new_ds: &DeleteSet) -> DeleteSet {
-  let mut diff_ds = DeleteSet::new();
-
-  for (client_id, new_range) in new_ds.iter() {
-    let old_range = old_ds
-      .range(client_id)
-      .unwrap_or(&Default::default())
-      .clone();
-    let mut old_iter = old_range.iter();
-
-    for new_range in new_range.iter() {
-      if let Some(old_range) = old_iter.next() {
-        if intersects(new_range, old_range) {
-          // overlapping ranges, need to check for new deletions
-          if new_range.start < old_range.start {
-            // new deletion before old range
-            diff_ds.insert(
-              ID::new(*client_id, new_range.start),
-              old_range.start - new_range.start,
-            );
-          }
-          if new_range.end > old_range.end {
-            // new deletion after old range
-            diff_ds.insert(
-              ID::new(*client_id, old_range.end),
-              new_range.end - old_range.end,
-            );
-          }
-        } else if new_range.end <= old_range.start {
-          // new deletion before old range
-          diff_ds.insert(
-            ID::new(*client_id, new_range.start),
-            new_range.end - new_range.start,
-          );
-        } else if new_range.start >= old_range.end {
-          // new deletion after old range, continue to next old range
-          continue;
-        }
-      } else {
-        // all remaining new_ranges are new deletions
-        diff_ds.insert(
-          ID::new(*client_id, new_range.start),
-          new_range.end - new_range.start,
-        );
-      }
-    }
-  }
-
-  diff_ds
+trait DeleteSetExt {
+  fn intersect(&self, other: &Self) -> Self;
+  fn subset_of(&self, other: &Self) -> bool;
 }
 
-#[inline]
-fn intersects(x: &Range<u32>, y: &Range<u32>) -> bool {
-  x.start < y.end && y.start < x.end
+impl DeleteSetExt for DeleteSet {
+  fn intersect(&self, other: &Self) -> Self {
+    let mut result = DeleteSet::new();
+    for (client, ranges) in self.iter() {
+      if let Some(other_ranges) = other.range(client) {
+        for a in ranges.iter() {
+          for b in other_ranges.iter() {
+            if a.start <= b.end && a.end >= b.start {
+              // there's an intersection
+              let start = a.start.max(b.start);
+              let len = a.end.min(b.end) - start;
+              result.insert(ID::new(*client, start), len);
+            }
+          }
+        }
+      }
+    }
+    result
+  }
+
+  fn subset_of(&self, other: &Self) -> bool {
+    for (client_id, ranges) in self.iter() {
+      match other.range(client_id) {
+        None => return false,
+        Some(other_ranges) if !ranges.subset_of(other_ranges) => return false,
+        _ => { /* continue */ },
+      }
+    }
+    true
+  }
 }
 
 #[derive(Debug)]
@@ -358,11 +380,15 @@ enum Action {
 
 #[cfg(test)]
 mod test {
+  use crate::core::collab::{CollabOptions, default_client_id};
   use crate::core::origin::{CollabClient, CollabOrigin};
-  use crate::preclude::{Doc, PermanentUserData};
-  use std::collections::HashSet;
+  use crate::document::{BlockType, Document, DocumentData, DocumentMeta, generate_id};
+  use crate::preclude::{Collab, Doc, PermanentUserData};
+  use std::collections::{HashMap, HashSet};
+  use uuid::Uuid;
+  use yrs::types::ToJson;
   use yrs::updates::decoder::Decode;
-  use yrs::{ReadTxn, Snapshot, StateVector, Text, Transact, Update};
+  use yrs::{ReadTxn, Snapshot, StateVector, Text, Transact, Update, any};
 
   #[test]
   fn add_or_remove_user_mappings() {
@@ -464,5 +490,63 @@ mod test {
         }
       }
     }
+  }
+
+  #[test]
+  fn collab_fills_user_data_automatically() {
+    let uid = 1;
+    let client_id = default_client_id();
+    let oid = Uuid::new_v4();
+    let origin = CollabOrigin::Client(CollabClient::new(uid, "device-1"));
+    let options = CollabOptions::new(oid, client_id).with_remember_user(true);
+    let collab = Collab::new_with_options(origin, options).unwrap();
+    let page_id = generate_id();
+    let mut document = Document::create_with_data(
+      collab,
+      DocumentData {
+        page_id: page_id.clone(),
+        blocks: HashMap::from([(
+          page_id.clone(),
+          crate::document::Block {
+            id: page_id.clone(),
+            ty: BlockType::Page.to_string(),
+            parent: "".to_string(),
+            children: "".to_string(),
+            external_id: None,
+            external_type: None,
+            data: Default::default(),
+          },
+        )]),
+        meta: DocumentMeta {
+          children_map: Default::default(),
+          text_map: Some(HashMap::default()),
+        },
+      },
+    )
+    .unwrap();
+    document.initialize();
+
+    let users = document.user_data().unwrap();
+    assert_eq!(
+      users.user_by_client_id(client_id).unwrap(),
+      uid.to_string().into()
+    );
+  }
+
+  #[test]
+  fn collab_doesnt_fill_user_data_automatically_if_no_data_was_written() {
+    let uid = 1;
+    let client_id = default_client_id();
+    let oid = Uuid::new_v4();
+    let origin = CollabOrigin::Client(CollabClient::new(uid, "device-1"));
+    let options = CollabOptions::new(oid, client_id).with_remember_user(true);
+    let mut collab = Collab::new_with_options(origin, options).unwrap();
+
+    // we use mutable transaction but we don't write anything
+    let json = collab.data.to_json(&collab.context.transact_mut());
+    assert_eq!(json, any!({}));
+
+    let pud = collab.user_data().unwrap();
+    assert!(pud.user_by_client_id(client_id).is_none());
   }
 }
