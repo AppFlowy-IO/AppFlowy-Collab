@@ -144,9 +144,8 @@ impl Folder {
     collab_doc_state: DataSource,
     workspace_id: &str,
     client_id: ClientID,
-  ) -> Result<Self, CollabError> {
+  ) -> Result<FolderOpenResult, CollabError> {
     Self::from_collab_doc_state_with_update(origin, collab_doc_state, workspace_id, client_id)
-      .map(|result| result.folder)
   }
 
   pub fn from_collab_doc_state_with_update(
