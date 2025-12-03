@@ -18,7 +18,6 @@ mod folder_migration;
 mod folder_observe;
 pub mod hierarchy_builder;
 mod relation;
-mod revision;
 mod section;
 pub mod space_info;
 mod view;

@@ -16,7 +16,6 @@ use uuid::Uuid;
 
 use super::folder_observe::ViewChangeSender;
 use super::hierarchy_builder::{FlattedViews, ParentChildViews};
-use super::revision::RevisionMapping;
 use super::section::{Section, SectionItem, SectionMap};
 use super::{
   FolderData, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
@@ -57,7 +56,6 @@ const VIEWS: &str = "views";
 const PARENT_CHILD_VIEW_RELATION: &str = "relation";
 const CURRENT_VIEW: &str = "current_view";
 const CURRENT_VIEW_FOR_USER: &str = "current_view_for_user";
-const REVISION_MAP: &str = "revision_map";
 
 pub(crate) const FAVORITES_V1: &str = "favorites";
 const SECTION: &str = "section";
@@ -1098,11 +1096,6 @@ impl Folder {
     }
   }
 
-  pub fn replace_view(&mut self, from: &ViewId, to: &ViewId, uid: i64) -> bool {
-    let mut txn = self.collab.transact_mut();
-    self.body.replace_view(&mut txn, from, to, Some(uid))
-  }
-
   /// Get a view by id. When uid is provided, includes user-specific data like is_favorite.
   /// When uid is None, returns base view data without user-specific enrichment.
   pub fn get_view(&self, view_id: &ViewId, uid: Option<i64>) -> Option<Arc<View>> {
@@ -1244,9 +1237,6 @@ impl FolderBody {
     let parent_child_relations = Arc::new(ParentChildRelations::new(
       root.get_or_init(&mut txn, PARENT_CHILD_VIEW_RELATION),
     ));
-    let revision_map = Arc::new(RevisionMapping::new(
-      root.get_or_init(&mut txn, REVISION_MAP),
-    ));
 
     let section = Arc::new(SectionMap::create(
       &mut txn,
@@ -1262,7 +1252,6 @@ impl FolderBody {
         .map(|notifier| notifier.view_change_tx.clone()),
       parent_child_relations,
       section.clone(),
-      revision_map,
     ));
 
     if let Some(folder_data) = folder_data {
@@ -1611,18 +1600,6 @@ impl FolderBody {
       let current_view_for_user = self.meta.get_or_init_map(txn, CURRENT_VIEW_FOR_USER);
       current_view_for_user.try_update(txn, uid.to_string(), view.to_string());
     }
-  }
-
-  pub fn replace_view(
-    &self,
-    txn: &mut TransactionMut,
-    old_view_id: &ViewId,
-    new_view_id: &ViewId,
-    uid: Option<i64>,
-  ) -> bool {
-    uid
-      .map(|uid| self.views.replace_view(txn, old_view_id, new_view_id, uid))
-      .unwrap_or(false)
   }
 }
 
