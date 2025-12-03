@@ -59,7 +59,7 @@ blake3.workspace = true
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "sync", "rt"] }
 tempfile = "3.8.0"
-collab = { path = "", default-features = false }
+collab = { path = "", features = ["plugins"] }
 chrono.workspace = true
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
@@ -69,7 +69,7 @@ rand = "0.8.4"
 tokio-test = "0.4"
 
 [features]
-default = ["plugins"]
+default = []
 plugins = ["dep:rocksdb", "dep:smallvec"]
 verbose_log = []
 trace_transact = []
