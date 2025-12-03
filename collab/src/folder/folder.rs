@@ -92,23 +92,51 @@ pub struct Folder {
   pub body: FolderBody,
 }
 
+/// Result of opening a folder, including any migration update produced while initializing.
+pub struct FolderOpenResult {
+  pub folder: Folder,
+  /// Encoded Yrs update v1 representing changes made during initialization (if any).
+  pub update: Option<Vec<u8>>,
+}
+
+pub struct FolderBodyOpenResult {
+  pub body: FolderBody,
+  pub update: Option<Vec<u8>>,
+}
+
 impl Folder {
-  pub fn open(mut collab: Collab, notifier: Option<FolderNotify>) -> Result<Self, CollabError> {
-    let body = FolderBody::open(&mut collab, notifier)?;
-    let folder = Folder { collab, body };
+  pub fn open(collab: Collab, notifier: Option<FolderNotify>) -> Result<Self, CollabError> {
+    Self::open_with_update(collab, notifier).map(|result| result.folder)
+  }
+
+  pub fn open_with_update(
+    mut collab: Collab,
+    notifier: Option<FolderNotify>,
+  ) -> Result<FolderOpenResult, CollabError> {
+    let open_result = FolderBody::open(&mut collab, notifier)?;
+    let folder = Folder {
+      collab,
+      body: open_result.body,
+    };
     if folder.get_workspace_id().is_none() {
       // When the folder is opened, the workspace id must be present.
       Err(CollabError::FolderMissingRequiredData(
         "missing workspace id".into(),
       ))
     } else {
-      Ok(folder)
+      Ok(FolderOpenResult {
+        folder,
+        update: open_result.update,
+      })
     }
   }
 
   pub fn create(mut collab: Collab, notifier: Option<FolderNotify>, data: FolderData) -> Self {
-    let body = FolderBody::open_with(&mut collab, notifier, Some(data));
-    Folder { collab, body }
+    let result = FolderBody::open_with(&mut collab, notifier, Some(data));
+    Folder {
+      collab,
+      body: result.body,
+    }
   }
 
   pub fn from_collab_doc_state(
@@ -116,12 +144,21 @@ impl Folder {
     collab_doc_state: DataSource,
     workspace_id: &str,
     client_id: ClientID,
-  ) -> Result<Self, CollabError> {
+  ) -> Result<FolderOpenResult, CollabError> {
+    Self::from_collab_doc_state_with_update(origin, collab_doc_state, workspace_id, client_id)
+  }
+
+  pub fn from_collab_doc_state_with_update(
+    origin: CollabOrigin,
+    collab_doc_state: DataSource,
+    workspace_id: &str,
+    client_id: ClientID,
+  ) -> Result<FolderOpenResult, CollabError> {
     let workspace_uuid = Uuid::parse_str(workspace_id)
       .map_err(|_| CollabError::Internal(anyhow!("Invalid workspace id format")))?;
     let options = CollabOptions::new(workspace_uuid, client_id).with_data_source(collab_doc_state);
     let collab = Collab::new_with_options(origin, options)?;
-    Self::open(collab, None)
+    Self::open_with_update(collab, None)
   }
 
   pub fn close(&self) {
@@ -1216,7 +1253,10 @@ pub struct FolderBody {
 }
 
 impl FolderBody {
-  pub fn open(collab: &mut Collab, notifier: Option<FolderNotify>) -> Result<Self, CollabError> {
+  pub fn open(
+    collab: &mut Collab,
+    notifier: Option<FolderNotify>,
+  ) -> Result<FolderBodyOpenResult, CollabError> {
     CollabType::Folder.validate_require_data(collab)?;
     Ok(Self::open_with(collab, notifier, None))
   }
@@ -1225,7 +1265,8 @@ impl FolderBody {
     collab: &mut Collab,
     notifier: Option<FolderNotify>,
     folder_data: Option<FolderData>,
-  ) -> Self {
+  ) -> FolderBodyOpenResult {
+    let sv = collab.transact().state_vector();
     let mut txn = collab.context.transact_mut();
     // create the folder
     let root = collab.data.get_or_init_map(&mut txn, FOLDER);
@@ -1292,12 +1333,23 @@ impl FolderBody {
         }
       }
     }
-    Self {
-      root,
-      views,
-      section,
-      meta,
-      notifier,
+    let update = {
+      let encoded = txn.encode_diff_v1(&sv);
+      if encoded.is_empty() {
+        None
+      } else {
+        Some(encoded)
+      }
+    };
+    FolderBodyOpenResult {
+      body: Self {
+        root,
+        views,
+        section,
+        meta,
+        notifier,
+      },
+      update,
     }
   }
 
@@ -1632,6 +1684,7 @@ mod tests {
 
   use crate::core::collab::default_client_id;
   use crate::core::{collab::CollabOptions, origin::CollabOrigin};
+
   use crate::folder::{
     Folder, FolderData, RepeatedViewIdentifier, SectionItem, SpaceInfo, UserId, View,
     ViewIdentifier, ViewLayout, Workspace,

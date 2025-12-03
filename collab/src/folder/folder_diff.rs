@@ -32,7 +32,8 @@ impl Folder {
       encoded_collab.into(),
       &workspace_id,
       client_id,
-    )?;
+    )?
+    .folder;
     let cloned_container = other.body.views.container.clone();
     let sub = {
       let changes = changes.clone();
