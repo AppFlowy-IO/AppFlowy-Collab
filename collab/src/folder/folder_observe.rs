@@ -6,7 +6,6 @@ use crate::preclude::{
 };
 use tokio::sync::broadcast;
 
-use super::revision::RevisionMapping;
 use super::section::SectionMap;
 use super::view::FOLDER_VIEW_ID;
 use super::{ParentChildRelations, View, ViewId, view_from_map_ref};
@@ -27,7 +26,6 @@ pub(crate) fn subscribe_view_change(
   change_tx: ViewChangeSender,
   view_relations: Arc<ParentChildRelations>,
   section_map: Arc<SectionMap>,
-  revision_mapping: Arc<RevisionMapping>,
   uid: i64,
 ) -> Subscription {
   let r = root.clone();
@@ -45,16 +43,10 @@ pub(crate) fn subscribe_view_change(
                   if let Some(view_id_str) = map_ref.get_with_txn::<_, String>(txn, FOLDER_VIEW_ID)
                   {
                     if let Ok(view_uuid) = uuid::Uuid::parse_str(&view_id_str) {
-                      let (view_id, mappings) = revision_mapping.mappings(txn, view_uuid);
-                      if let Some(YrsValue::YMap(map_ref)) = r.get(txn, &view_id.to_string()) {
-                        if let Some(view) = view_from_map_ref(
-                          &map_ref,
-                          txn,
-                          &view_relations,
-                          &section_map,
-                          Some(uid),
-                          mappings,
-                        ) {
+                      if let Some(YrsValue::YMap(map_ref)) = r.get(txn, &view_uuid.to_string()) {
+                        if let Some(view) =
+                          view_from_map_ref(&map_ref, txn, &view_relations, &section_map, Some(uid))
+                        {
                           deletion_cache.insert(view.id, Arc::new(view.clone()));
 
                           // Send indexing view
@@ -71,16 +63,10 @@ pub(crate) fn subscribe_view_change(
                   .get_with_txn::<_, String>(txn, FOLDER_VIEW_ID)
                 {
                   if let Ok(view_uuid) = uuid::Uuid::parse_str(&view_id_str) {
-                    let (view_id, mappings) = revision_mapping.mappings(txn, view_uuid);
-                    if let Some(YrsValue::YMap(map_ref)) = r.get(txn, &view_id.to_string()) {
-                      if let Some(view) = view_from_map_ref(
-                        &map_ref,
-                        txn,
-                        &view_relations,
-                        &section_map,
-                        Some(uid),
-                        mappings,
-                      ) {
+                    if let Some(YrsValue::YMap(map_ref)) = r.get(txn, &view_uuid.to_string()) {
+                      if let Some(view) =
+                        view_from_map_ref(&map_ref, txn, &view_relations, &section_map, Some(uid))
+                      {
                         // Update deletion cache with the updated view
                         deletion_cache.insert(view.id, Arc::new(view.clone()));
                         let _ = change_tx.send(ViewChange::DidUpdate { view });
