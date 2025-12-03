@@ -156,7 +156,7 @@ async fn observe_move_database_row_test() {
   let cloned_database_test = database_test.clone();
   let cloned_row_id_1 = row_id_1;
 
-  let views = database_test.lock().await.get_all_views();
+  let views = database_test.lock().await.get_all_views(false);
   assert_eq!(views.len(), 1);
   let view_id = views[0].id;
   let row_orders = database_test
@@ -275,7 +275,7 @@ async fn observe_move_database_view_row_test() {
     .unwrap();
 
   let second_view_id = uuid::Uuid::new_v4().to_string();
-  let first_view_id = database_test.get_all_views().first().unwrap().id;
+  let first_view_id = database_test.get_all_views(false).first().unwrap().id;
   database_test
     .create_linked_view(CreateViewParams {
       database_id: database_uuid,
@@ -290,7 +290,7 @@ async fn observe_move_database_view_row_test() {
   let cloned_database_test = database_test.clone();
   let cloned_row_id_1 = row_id_1;
 
-  let views = database_test.lock().await.get_all_views();
+  let views = database_test.lock().await.get_all_views(false);
   assert_eq!(views.len(), 2);
 
   let cloned_row_id_3 = row_id_3;

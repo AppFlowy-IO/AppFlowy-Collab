@@ -1,5 +1,3 @@
-#![cfg(feature = "plugins")]
-
 mod child_views_test;
 mod custom_section;
 mod favorite_test;

@@ -69,7 +69,7 @@ rand = "0.8.4"
 tokio-test = "0.4"
 
 [features]
-default = []
+default = ["plugins"]
 plugins = ["dep:rocksdb", "dep:smallvec"]
 verbose_log = []
 trace_transact = []
@@ -78,9 +78,28 @@ rwlock_reason = []
 import_csv = []
 
 [[test]]
+name = "database"
+path = "tests/database/main.rs"
+
+[[test]]
+name = "document"
+path = "tests/document/main.rs"
+
+[[test]]
+name = "folder"
+path = "tests/folder/main.rs"
+
+[[test]]
+name = "importer"
+path = "tests/importer/main.rs"
+
+[[test]]
+name = "user"
+path = "tests/user/main.rs"
+
+[[test]]
 name = "plugins"
 path = "tests/plugins/main.rs"
-required-features = ["plugins"]
 
 [build-dependencies]
 prost-build = "0.12"
