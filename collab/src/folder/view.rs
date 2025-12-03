@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -15,7 +15,6 @@ use uuid::Uuid;
 use super::folder_observe::ViewChangeSender;
 
 use super::UserId;
-use super::revision::RevisionMapping;
 use super::section::{Section, SectionItem, SectionMap};
 use super::space_info::SpaceInfo;
 use super::{ParentChildRelations, RepeatedViewIdentifier, ViewIdentifier, subscribe_view_change};
@@ -44,7 +43,6 @@ pub struct ViewsMap {
   pub(crate) container: MapRef,
   pub(crate) parent_children_relation: Arc<ParentChildRelations>,
   pub(crate) section_map: Arc<SectionMap>,
-  pub(crate) revision_map: Arc<RevisionMapping>,
   // Minimal cache only for deletion notifications - stores basic view info
   deletion_cache: Arc<DashMap<ViewId, Arc<View>>>,
   subscription: Mutex<Option<Subscription>>,
@@ -57,7 +55,6 @@ impl ViewsMap {
     change_tx: Option<ViewChangeSender>,
     view_relations: Arc<ParentChildRelations>,
     section_map: Arc<SectionMap>,
-    revision_map: Arc<RevisionMapping>,
   ) -> ViewsMap {
     trace!("Initializing ViewsMap with deletion cache for proper deletion notifications");
     // Initialize deletion cache with existing views
@@ -67,7 +64,6 @@ impl ViewsMap {
       change_tx,
       parent_children_relation: view_relations,
       section_map,
-      revision_map,
       deletion_cache: Arc::new(DashMap::new()),
     }
   }
@@ -87,7 +83,6 @@ impl ViewsMap {
         change_tx.clone(),
         self.parent_children_relation.clone(),
         self.section_map.clone(),
-        self.revision_map.clone(),
         uid,
       )
     });
@@ -174,10 +169,9 @@ impl ViewsMap {
         .iter()
         .flat_map(|child| {
           // Always load fresh from storage
-          let (child_id, mappings) = self.revision_map.mappings(txn, child.id);
           self
             .container
-            .get_with_txn(txn, &child_id.to_string())
+            .get_with_txn(txn, &child.id.to_string())
             .and_then(|map| {
               view_from_map_ref(
                 &map,
@@ -185,7 +179,6 @@ impl ViewsMap {
                 &self.parent_children_relation,
                 &self.section_map,
                 uid,
-                mappings,
               )
             })
             .map(Arc::new)
@@ -225,41 +218,19 @@ impl ViewsMap {
 
   /// Get all views. When uid is provided, includes user-specific enrichment like is_favorite.
   pub fn get_all_views<T: ReadTxn>(&self, txn: &T, uid: Option<i64>) -> Vec<Arc<View>> {
-    // since views can be mapped through revisions, we need a map of final_view_id and its predecessors
-
-    // first split the keys into ones that have existing mappings (roots) and ones that have not more mapping (leafs)
-    let (roots, leafs): (Vec<_>, Vec<_>) = self
+    self
       .container
-      .keys(txn)
-      .partition(|view_id| self.revision_map.contains_key(txn, view_id));
-
-    let mut mapped: HashMap<_, _> = leafs
-      .into_iter()
-      .map(|view_id| (view_id.to_string(), HashSet::new()))
-      .collect();
-
-    for view_id in roots {
-      let view_uuid = Uuid::parse_str(view_id).unwrap_or_else(|_| Uuid::nil());
-      let (_, mappings) = self.revision_map.mappings(txn, view_uuid);
-      let values = mapped
-        .entry(view_id.to_string())
-        .or_insert_with(HashSet::new);
-      values.extend(mappings);
-    }
-
-    mapped
-      .into_iter()
-      .flat_map(|(final_id, predecessors)| {
-        let map_ref = self.container.get_with_txn(txn, &final_id)?;
-        view_from_map_ref(
-          &map_ref,
+      .iter(txn)
+      .flat_map(|(_, v)| match v {
+        yrs::Out::YMap(map) => view_from_map_ref(
+          &map,
           txn,
           &self.parent_children_relation,
           &self.section_map,
           uid,
-          predecessors,
         )
-        .map(Arc::new)
+        .map(Arc::new),
+        _ => None,
       })
       .collect()
   }
@@ -300,7 +271,6 @@ impl ViewsMap {
     view_id: &ViewId,
     uid: Option<i64>,
   ) -> Option<Arc<View>> {
-    let (view_id, mappings) = self.revision_map.mappings(txn, *view_id);
     let map_ref = self.container.get_with_txn(txn, &view_id.to_string())?;
     view_from_map_ref(
       &map_ref,
@@ -308,7 +278,6 @@ impl ViewsMap {
       &self.parent_children_relation,
       &self.section_map,
       uid,
-      mappings,
     )
     .map(Arc::new)
   }
@@ -505,31 +474,6 @@ impl ViewsMap {
       timestamp
     }
   }
-
-  pub fn replace_view(
-    &self,
-    txn: &mut TransactionMut,
-    old_view_id: &ViewId,
-    new_view_id: &ViewId,
-    uid: i64,
-  ) -> bool {
-    if let Some(old_view) = self.get_view(txn, old_view_id, Some(uid)) {
-      let mut new_view = (*old_view).clone();
-      new_view.id = *new_view_id;
-      new_view.last_edited_by = Some(uid);
-      new_view.last_edited_time = timestamp();
-
-      self.insert(txn, new_view, None, uid);
-
-      self
-        .revision_map
-        .replace_view(txn, old_view_id, new_view_id);
-
-      true
-    } else {
-      false
-    }
-  }
 }
 
 pub(crate) fn view_from_map_ref<T: ReadTxn>(
@@ -538,7 +482,6 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   view_relations: &Arc<ParentChildRelations>,
   section_map: &SectionMap,
   uid: Option<i64>,
-  mappings: impl IntoIterator<Item = ViewId>,
 ) -> Option<View> {
   let parent_view_id: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
   let parent_view_id = if parent_view_id.is_empty() {
@@ -558,22 +501,10 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .get_with_txn::<_, i64>(txn, VIEW_LAYOUT)
     .and_then(|v| v.try_into().ok())?;
 
-  let mut children = view_relations
+  let children = view_relations
     .get_children_with_txn(txn, &id)
     .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
-
-  for view_id in mappings {
-    let ids = view_relations
-      .get_children_with_txn(txn, &view_id)
-      .map(|array| array.get_children_with_txn(txn))
-      .unwrap_or_default();
-    for view_id in ids.items {
-      if !children.items.contains(&view_id) {
-        children.items.push(view_id);
-      }
-    }
-  }
 
   let icon = get_icon_from_view_map(map_ref, txn);
   let is_favorite = uid
@@ -915,7 +846,6 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
       &self.children_map,
       self.section_map,
       Some(self.uid.as_i64()),
-      [],
     )
   }
 }
