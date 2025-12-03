@@ -1,5 +1,3 @@
-#![cfg(feature = "plugins")]
-
 use std::ops::{Deref, Range, RangeTo};
 use std::sync::Arc;
 use std::thread;

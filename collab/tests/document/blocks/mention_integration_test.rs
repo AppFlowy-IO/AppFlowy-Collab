@@ -25,58 +25,33 @@ fn test_create_document_with_all_mention_types() {
   document.insert_block(block, None).unwrap();
 
   // Build a rich delta with all mention types
-  let mut deltas = Vec::new();
-
-  // Regular text
-  deltas.push(TextDelta::Inserted("Hello ".to_string(), None));
-
-  // Person mention
-  deltas.push(build_mention_person_delta(
-    "person_123",
-    "Alice",
-    &page_id,
-    Some(&block_id),
-    None,
-  ));
-
-  // More text
-  deltas.push(TextDelta::Inserted("! Check ".to_string(), None));
-
-  // Page mention
-  deltas.push(build_mention_page_delta(
-    MentionPageType::Page,
-    "page_456",
-    Some("block_789"),
-    None,
-  ));
-
-  // Text
-  deltas.push(TextDelta::Inserted(" and ".to_string(), None));
-
-  // Child page mention
-  deltas.push(build_mention_page_delta(
-    MentionPageType::ChildPage,
-    "child_page_999",
-    None,
-    None,
-  ));
-
-  // Text
-  deltas.push(TextDelta::Inserted(" on ".to_string(), None));
-
-  // Date mention with reminder
-  deltas.push(build_mention_date_delta(
-    "2025-01-30T10:00:00Z",
-    Some("reminder_abc"),
-    Some("atTimeOfEvent"),
-    true,
-  ));
-
-  // Text
-  deltas.push(TextDelta::Inserted(". Link: ".to_string(), None));
-
-  // External link mention
-  deltas.push(build_mention_external_link_delta("https://appflowy.io"));
+  let deltas = vec![
+    // Regular text
+    TextDelta::Inserted("Hello ".to_string(), None),
+    // Person mention
+    build_mention_person_delta("person_123", "Alice", &page_id, Some(&block_id), None),
+    // More text
+    TextDelta::Inserted("! Check ".to_string(), None),
+    // Page mention
+    build_mention_page_delta(MentionPageType::Page, "page_456", Some("block_789"), None),
+    // Text
+    TextDelta::Inserted(" and ".to_string(), None),
+    // Child page mention
+    build_mention_page_delta(MentionPageType::ChildPage, "child_page_999", None, None),
+    // Text
+    TextDelta::Inserted(" on ".to_string(), None),
+    // Date mention with reminder
+    build_mention_date_delta(
+      "2025-01-30T10:00:00Z",
+      Some("reminder_abc"),
+      Some("atTimeOfEvent"),
+      true,
+    ),
+    // Text
+    TextDelta::Inserted(". Link: ".to_string(), None),
+    // External link mention
+    build_mention_external_link_delta("https://appflowy.io"),
+  ];
 
   // Apply deltas to document
   let delta_json = serde_json::to_string(&deltas).unwrap();
@@ -307,7 +282,7 @@ fn test_mention_data_enum() {
       date, include_time, ..
     }) => {
       assert_eq!(date, "2025-01-30T10:00:00Z");
-      assert_eq!(include_time, false);
+      assert!(!include_time);
     },
     _ => panic!("Expected Date mention data"),
   }
@@ -334,7 +309,7 @@ fn test_date_without_time() {
       reminder_option,
     }) => {
       assert_eq!(date, "2025-01-30T00:00:00Z");
-      assert_eq!(include_time, false);
+      assert!(!include_time);
       assert_eq!(reminder_id, None);
       assert_eq!(reminder_option, None);
     },

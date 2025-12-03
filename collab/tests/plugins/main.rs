@@ -1,6 +1,3 @@
-#![cfg(feature = "plugins")]
-
-#[cfg(feature = "plugins")]
 mod disk;
 
 pub fn setup_log() {

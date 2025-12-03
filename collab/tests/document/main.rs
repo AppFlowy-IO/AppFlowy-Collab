@@ -1,5 +1,3 @@
-#![cfg(feature = "plugins")]
-
 mod block_parser;
 mod blocks;
 mod conversions;

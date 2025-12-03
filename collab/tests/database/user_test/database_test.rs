@@ -19,7 +19,7 @@ async fn create_database_test() {
   .await;
 
   // Inline view id should not appear in the database's linked views.
-  let non_inline_views = database.get_all_views();
+  let non_inline_views = database.get_all_views(false);
   assert_eq!(non_inline_views.len(), 1);
   assert_eq!(non_inline_views[0].id, view_id);
 }
@@ -170,17 +170,17 @@ async fn delete_database_linked_view_test() {
     })
     .unwrap();
 
-  let views = database.get_all_views();
+  let views = database.get_all_views(false);
   assert_eq!(views.len(), 2);
 
   database.delete_view(TEST_VIEW_ID_V2);
 
-  let views = database.get_all_views();
+  let views = database.get_all_views(false);
   assert_eq!(views.len(), 1);
 
   database.delete_view(TEST_VIEW_ID_V1);
 
-  let views = database.get_all_views();
+  let views = database.get_all_views(false);
   assert_eq!(views.len(), 0);
 }
 
@@ -209,11 +209,11 @@ async fn delete_database_inline_view_test() {
   }
 
   // there should be 4 views: v1, v2, v3 and v4.
-  let views = database.get_all_views();
+  let views = database.get_all_views(false);
   assert_eq!(views.len(), 4);
 
   database.delete_view(TEST_VIEW_ID_V1);
-  let views = database.get_all_views();
+  let views = database.get_all_views(false);
   assert_eq!(views.len(), 3);
 }
 

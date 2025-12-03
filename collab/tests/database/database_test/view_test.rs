@@ -39,7 +39,7 @@ async fn create_initial_database_test() {
     database_id
   );
 
-  let views = database_test.get_all_views();
+  let views = database_test.get_all_views(false);
   assert_eq!(views.len(), 1);
   assert_eq!(views[0].database_id.to_string(), database_id);
   assert_ne!(views[0].database_id.to_string(), views[0].id.to_string());
@@ -213,13 +213,13 @@ async fn delete_database_view_test() {
     database_test.create_linked_view(params).unwrap();
   }
 
-  let views = database_test.get_all_views();
+  let views = database_test.get_all_views(false);
   assert_eq!(views.len(), 4);
 
   let deleted_view_id = view_ids[1].to_string();
   database_test.delete_view(&deleted_view_id);
   let views = database_test
-    .get_all_views()
+    .get_all_views(false)
     .iter()
     .map(|view| view.id)
     .map(|id| id.to_string())
@@ -233,7 +233,7 @@ async fn duplicate_database_view_test() {
   let database_id = uuid::Uuid::new_v4();
   let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
 
-  let views = database_test.get_all_views();
+  let views = database_test.get_all_views(false);
   assert_eq!(views.len(), 1);
 
   let view = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
@@ -241,7 +241,7 @@ async fn duplicate_database_view_test() {
     .duplicate_linked_view(TEST_VIEW_ID_V1)
     .unwrap();
 
-  let views = database_test.get_all_views();
+  let views = database_test.get_all_views(false);
   assert_eq!(views.len(), 2);
 
   assert_eq!(duplicated_view.name, format!("{}-copy", view.name));

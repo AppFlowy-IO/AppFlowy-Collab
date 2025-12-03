@@ -1,5 +1,3 @@
-#![cfg(feature = "plugins")]
-
 use crate::disk::util::rocks_db;
 use collab::plugins::CollabKVDB;
 use collab::plugins::local_storage::kv::doc::{

@@ -59,7 +59,7 @@ blake3.workspace = true
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "sync", "rt"] }
 tempfile = "3.8.0"
-collab = { path = "", default-features = false }
+collab = { path = "", features = ["plugins"] }
 chrono.workspace = true
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
@@ -78,9 +78,28 @@ rwlock_reason = []
 import_csv = []
 
 [[test]]
+name = "database"
+path = "tests/database/main.rs"
+
+[[test]]
+name = "document"
+path = "tests/document/main.rs"
+
+[[test]]
+name = "folder"
+path = "tests/folder/main.rs"
+
+[[test]]
+name = "importer"
+path = "tests/importer/main.rs"
+
+[[test]]
+name = "user"
+path = "tests/user/main.rs"
+
+[[test]]
 name = "plugins"
 path = "tests/plugins/main.rs"
-required-features = ["plugins"]
 
 [build-dependencies]
 prost-build = "0.12"
