@@ -5,7 +5,7 @@ use assert_json_diff::assert_json_eq;
 use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::database::database::{DatabaseBody, DatabaseData, gen_row_id};
-use collab::database::entity::CreateViewParams;
+use collab::database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab::database::fields::Field;
 use collab::database::rows::{CreateRowParams, Row};
 use collab::database::views::{DatabaseLayout, LayoutSetting, OrderObjectPosition};
@@ -250,10 +250,51 @@ async fn duplicate_database_view_test() {
 }
 
 #[tokio::test]
+async fn duplicate_database_excludes_embedded_views_test() {
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
+
+  let embedded_view_id = Uuid::new_v4();
+  database_test
+    .create_linked_view(CreateViewParams {
+      database_id,
+      view_id: embedded_view_id,
+      name: "embedded view".to_string(),
+      embedded: true,
+      ..Default::default()
+    })
+    .unwrap();
+
+  let data = database_test
+    .get_database_data(20, false, true)
+    .await
+    .unwrap();
+
+  let non_embedded_view_id = data.views.iter().find(|v| !v.embedded).unwrap().id;
+
+  let params_without_embedded = CreateDatabaseParams::from_database_data(
+    data.clone(),
+    non_embedded_view_id,
+    Uuid::new_v4(),
+    false,
+  );
+  assert_eq!(params_without_embedded.views.len(), 1);
+  assert!(params_without_embedded.views.iter().all(|v| !v.embedded));
+
+  let params_with_embedded =
+    CreateDatabaseParams::from_database_data(data, non_embedded_view_id, Uuid::new_v4(), true);
+  assert_eq!(params_with_embedded.views.len(), 2);
+  assert!(params_with_embedded.views.iter().any(|v| v.embedded));
+}
+
+#[tokio::test]
 async fn database_data_serde_test() {
   let database_id = uuid::Uuid::new_v4();
   let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
-  let database_data = database_test.get_database_data(20, false).await.unwrap();
+  let database_data = database_test
+    .get_database_data(20, false, false)
+    .await
+    .unwrap();
 
   let json = database_data.to_json().unwrap();
   let database_data2 = DatabaseData::from_json(&json).unwrap();

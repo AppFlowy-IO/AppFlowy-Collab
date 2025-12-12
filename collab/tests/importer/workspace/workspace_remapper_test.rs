@@ -115,7 +115,7 @@ async fn test_workspace_remapper_with_row_meta() {
   assert_eq!(databases.len(), 1);
 
   let database = &databases[0];
-  let database_data = database.get_database_data(20, false).await.unwrap();
+  let database_data = database.get_database_data(20, false, true).await.unwrap();
 
   assert_eq!(database_data.row_metas.len(), 4);
   assert_eq!(database_data.rows.len(), 4);
