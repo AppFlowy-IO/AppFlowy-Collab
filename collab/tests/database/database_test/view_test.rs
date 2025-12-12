@@ -270,12 +270,7 @@ async fn duplicate_database_excludes_embedded_views_test() {
     .await
     .unwrap();
 
-  let non_embedded_view_id = data
-    .views
-    .iter()
-    .find(|v| !v.embedded)
-    .unwrap()
-    .id;
+  let non_embedded_view_id = data.views.iter().find(|v| !v.embedded).unwrap().id;
 
   let params_without_embedded = CreateDatabaseParams::from_database_data(
     data.clone(),
@@ -286,12 +281,8 @@ async fn duplicate_database_excludes_embedded_views_test() {
   assert_eq!(params_without_embedded.views.len(), 1);
   assert!(params_without_embedded.views.iter().all(|v| !v.embedded));
 
-  let params_with_embedded = CreateDatabaseParams::from_database_data(
-    data,
-    non_embedded_view_id,
-    Uuid::new_v4(),
-    true,
-  );
+  let params_with_embedded =
+    CreateDatabaseParams::from_database_data(data, non_embedded_view_id, Uuid::new_v4(), true);
   assert_eq!(params_with_embedded.views.len(), 2);
   assert!(params_with_embedded.views.iter().any(|v| v.embedded));
 }
