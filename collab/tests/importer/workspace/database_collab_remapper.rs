@@ -43,7 +43,7 @@ async fn test_parse_real_database_json() {
   let fields = database.get_all_fields();
   assert_eq!(fields.len(), 5);
 
-  let database_data = database.get_database_data(20, false).await.unwrap();
+  let database_data = database.get_database_data(20, false, true).await.unwrap();
   assert_eq!(database_data.rows.len(), 5);
 
   let original_uuids = [
