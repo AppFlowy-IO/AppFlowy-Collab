@@ -1483,16 +1483,25 @@ impl Database {
     self.body.fields.get_all_fields(&txn)
   }
 
+  /// Collect full database data for duplication/import/export.
+  /// If `include_embedded` is false, embedded views are excluded.
   pub async fn get_database_data(
     &self,
     chunk_size: usize,
     auto_fetch: bool,
+    include_embedded: bool,
   ) -> Result<DatabaseData, CollabError> {
     let txn = self.collab.transact();
 
     let database_id = self.body.get_database_id(&txn)?;
     let inline_view_id = self.body.get_inline_view_id(&txn);
-    let views = self.get_all_views(true);
+    let views = self
+      .body
+      .views
+      .get_all_views(&txn, include_embedded)
+      .into_iter()
+      .filter(|view| !view.is_inline)
+      .collect();
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
     let rows_stream = self.get_all_rows(chunk_size, None, auto_fetch).await?;
     let rows: Vec<Row> = rows_stream
@@ -1523,7 +1532,7 @@ impl Database {
   }
 
   pub async fn to_json_value(&self) -> Result<JsonValue, CollabError> {
-    let database_data = self.get_database_data(20, false).await?;
+    let database_data = self.get_database_data(20, false, false).await?;
     Ok(serde_json::to_value(&database_data).unwrap())
   }
 

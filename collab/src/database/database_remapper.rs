@@ -87,7 +87,7 @@ impl DatabaseCollabRemapper {
       body: database_body,
       collab_service,
     };
-    let database_data = database.get_database_data(20, false).await?;
+    let database_data = database.get_database_data(20, false, true).await?;
     Ok(database_data)
   }
 

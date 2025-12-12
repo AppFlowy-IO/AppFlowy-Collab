@@ -223,14 +223,14 @@ pub struct CreateDatabaseParams {
 }
 
 impl CreateDatabaseParams {
-  /// This function creates a converts a `CreateDatabaseParams` that can be used to create a new
-  /// database with the same data inside the given `DatabaseData` struct containing all the
-  /// data of a database. The internal `database_id`, the database views' `view_id`s and the rows'
-  /// `row_id`s will all be regenerated.
+  /// Convert a `DatabaseData` into `CreateDatabaseParams` for duplicating a database.
+  /// The internal `database_id`, database views' `view_id`s, and rows' `row_id`s are regenerated.
+  /// If `include_embedded` is false, embedded views are not duplicated.
   pub fn from_database_data(
     data: DatabaseData,
     database_view_id: DatabaseViewId,
     new_database_view_id: DatabaseViewId,
+    include_embedded: bool,
   ) -> Self {
     let database_id = gen_database_id();
     let timestamp = timestamp();
@@ -257,6 +257,7 @@ impl CreateDatabaseParams {
     let create_view_params = data
       .views
       .into_iter()
+      .filter(|view| include_embedded || !view.embedded)
       .map(|view| CreateViewParams {
         database_id,
         view_id: if view.id == database_view_id {
