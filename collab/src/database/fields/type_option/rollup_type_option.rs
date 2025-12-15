@@ -86,7 +86,10 @@ impl From<RollupTypeOption> for TypeOptionData {
         "target_field_id".into(),
         Any::String(data.target_field_id.into()),
       ),
-      ("calculation_type".into(), Any::BigInt(data.calculation_type)),
+      (
+        "calculation_type".into(),
+        Any::BigInt(data.calculation_type),
+      ),
       ("show_as".into(), Any::BigInt(i64::from(data.show_as))),
       (
         "condition_value".into(),
