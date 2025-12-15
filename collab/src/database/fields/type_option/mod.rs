@@ -5,6 +5,7 @@ pub mod media_type_option;
 pub mod number_type_option;
 pub mod person_type_option;
 pub mod relation_type_option;
+pub mod rollup_type_option;
 pub mod select_type_option;
 pub mod summary_type_option;
 pub mod text_type_option;
@@ -22,6 +23,7 @@ use crate::database::fields::media_type_option::MediaTypeOption;
 use crate::database::fields::number_type_option::NumberTypeOption;
 use crate::database::fields::person_type_option::PersonTypeOption;
 use crate::database::fields::relation_type_option::RelationTypeOption;
+use crate::database::fields::rollup_type_option::RollupTypeOption;
 use crate::database::fields::select_type_option::{MultiSelectTypeOption, SingleSelectTypeOption};
 use crate::database::fields::summary_type_option::SummarizationTypeOption;
 use crate::database::fields::timestamp_type_option::TimestampTypeOption;
@@ -181,6 +183,7 @@ pub fn type_option_cell_writer(
     FieldType::Summary => Box::new(SummarizationTypeOption::from(type_option_data)),
     FieldType::Translate => Box::new(TranslateTypeOption::from(type_option_data)),
     FieldType::Person => Box::new(PersonTypeOption::from(type_option_data)),
+    FieldType::Rollup => Box::new(RollupTypeOption::from(type_option_data)),
   }
 }
 
@@ -205,5 +208,6 @@ pub fn type_option_cell_reader(
     FieldType::Summary => Box::new(SummarizationTypeOption::from(type_option_data)),
     FieldType::Translate => Box::new(TranslateTypeOption::from(type_option_data)),
     FieldType::Person => Box::new(PersonTypeOption::from(type_option_data)),
+    FieldType::Rollup => Box::new(RollupTypeOption::from(type_option_data)),
   }
 }
