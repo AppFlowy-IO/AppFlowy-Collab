@@ -237,10 +237,7 @@ fn rollup_type_option_convert_json_array_to_cell() {
 
   let cell = option.convert_json_to_cell(json_value);
 
-  assert_eq!(
-    cell.get(CELL_DATA).unwrap(),
-    &Any::String("[1,2,3]".into())
-  );
+  assert_eq!(cell.get(CELL_DATA).unwrap(), &Any::String("[1,2,3]".into()));
 }
 
 // ==================== FieldType::Rollup Tests ====================
