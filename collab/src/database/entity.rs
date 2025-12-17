@@ -9,6 +9,7 @@ use crate::database::fields::media_type_option::MediaTypeOption;
 use crate::database::fields::number_type_option::NumberTypeOption;
 use crate::database::fields::person_type_option::PersonTypeOption;
 use crate::database::fields::relation_type_option::RelationTypeOption;
+use crate::database::fields::rollup_type_option::RollupTypeOption;
 use crate::database::fields::select_type_option::{MultiSelectTypeOption, SingleSelectTypeOption};
 use crate::database::fields::summary_type_option::SummarizationTypeOption;
 use crate::database::fields::text_type_option::RichTextTypeOption;
@@ -307,6 +308,7 @@ pub enum FieldType {
   Time = 13,
   Media = 14,
   Person = 15,
+  Rollup = 16,
 }
 
 impl FieldType {
@@ -380,6 +382,7 @@ impl FieldType {
       FieldType::Time => "Time",
       FieldType::Media => "Media",
       FieldType::Person => "Person",
+      FieldType::Rollup => "Rollup",
     };
     s.to_string()
   }
@@ -436,6 +439,10 @@ impl FieldType {
     matches!(self, FieldType::Relation)
   }
 
+  pub fn is_rollup(&self) -> bool {
+    matches!(self, FieldType::Rollup)
+  }
+
   pub fn is_time(&self) -> bool {
     matches!(self, FieldType::Time)
   }
@@ -472,6 +479,7 @@ impl From<i64> for FieldType {
       13 => FieldType::Time,
       14 => FieldType::Media,
       15 => FieldType::Person,
+      16 => FieldType::Rollup,
       _ => {
         error!("Unknown field type: {}, fallback to text", index);
         FieldType::RichText
@@ -501,6 +509,7 @@ pub fn default_type_option_data_from_type(field_type: FieldType) -> TypeOptionDa
     FieldType::Summary => SummarizationTypeOption::default().into(),
     FieldType::Translate => TranslateTypeOption::default().into(),
     FieldType::Person => PersonTypeOption::default().into(),
+    FieldType::Rollup => RollupTypeOption::default().into(),
   }
 }
 
