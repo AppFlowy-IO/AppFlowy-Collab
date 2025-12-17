@@ -1857,7 +1857,11 @@ impl DatabaseBody {
     let views: MapRef = root.get_or_init(&mut txn, VIEWS); // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
     let metas: MapRef = root.get_or_init(&mut txn, DATABASE_METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
 
-    let fields = FieldMap::new(fields, Some(context.notifier.field_change_tx.clone()));
+    let fields = FieldMap::new(
+      origin.clone(),
+      fields,
+      Some(context.notifier.field_change_tx.clone()),
+    );
     let views = DatabaseViews::new(origin, views, Some(context.notifier.view_change_tx.clone()));
     let block = Block::new(
       database_id,
@@ -1938,7 +1942,11 @@ impl DatabaseBody {
     let views: MapRef = root.get_with_txn(&txn, VIEWS)?; // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
     let metas: MapRef = root.get_with_txn(&txn, DATABASE_METAS)?; // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
 
-    let fields = FieldMap::new(fields, notifier.as_ref().map(|n| n.field_change_tx.clone()));
+    let fields = FieldMap::new(
+      origin.clone(),
+      fields,
+      notifier.as_ref().map(|n| n.field_change_tx.clone()),
+    );
     let views = DatabaseViews::new(
       origin,
       views,

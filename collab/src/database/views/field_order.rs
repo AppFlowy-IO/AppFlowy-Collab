@@ -21,7 +21,7 @@ impl OrderArray for FieldOrderArray {
 
   /// Create a new [SFieldOrder] instance from the given value
   fn object_from_value<T: ReadTxn>(&self, value: YrsValue, txn: &T) -> Option<Self::Object> {
-    field_order_from_value(value, txn)
+    field_order_from_value(&value, txn)
   }
 }
 
@@ -40,7 +40,7 @@ impl FieldOrderArray {
     self
       .array_ref
       .iter(txn)
-      .flat_map(|v| field_order_from_value(v, txn))
+      .filter_map(|v| field_order_from_value(&v, txn))
       .collect::<Vec<FieldOrder>>()
   }
 
@@ -49,7 +49,7 @@ impl FieldOrderArray {
       self
         .array_ref
         .iter(txn)
-        .position(|value| match field_order_from_value(value, txn) {
+        .position(|value| match field_order_from_value(&value, txn) {
           None => false,
           Some(field_order) => field_order.id == field_id,
         })?;
@@ -97,11 +97,17 @@ impl From<&Field> for FieldOrder {
   }
 }
 
-impl From<Any> for FieldOrder {
-  fn from(any: Any) -> Self {
+impl From<&Any> for FieldOrder {
+  fn from(any: &Any) -> Self {
     let mut json = String::new();
     any.to_json(&mut json);
     serde_json::from_str(&json).unwrap()
+  }
+}
+
+impl From<Any> for FieldOrder {
+  fn from(any: Any) -> Self {
+    FieldOrder::from(&any)
   }
 }
 
@@ -112,7 +118,7 @@ impl From<FieldOrder> for Any {
   }
 }
 
-pub fn field_order_from_value<T: ReadTxn>(value: YrsValue, _txn: &T) -> Option<FieldOrder> {
+pub fn field_order_from_value<T: ReadTxn>(value: &YrsValue, _txn: &T) -> Option<FieldOrder> {
   if let YrsValue::Any(value) = value {
     Some(FieldOrder::from(value))
   } else {

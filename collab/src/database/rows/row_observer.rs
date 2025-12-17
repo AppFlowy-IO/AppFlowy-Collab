@@ -188,3 +188,206 @@ impl From<&str> for RowChangeValue {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::database::rows::{CellBuilder, CellsUpdate};
+  use crate::preclude::{Any, Doc, Map, MapExt, Transact};
+  use std::collections::HashMap;
+  use std::time::Duration;
+  use tokio::sync::broadcast;
+  use tokio::time::timeout;
+  use uuid::Uuid;
+
+  const CHANGE_TIMEOUT: Duration = Duration::from_secs(2);
+
+  async fn recv_with_timeout(rx: &mut RowChangeReceiver) -> RowChange {
+    timeout(CHANGE_TIMEOUT, rx.recv())
+      .await
+      .expect("timed out waiting for row change")
+      .expect("row change channel closed unexpectedly")
+  }
+
+  fn drain(rx: &mut RowChangeReceiver) {
+    loop {
+      match rx.try_recv() {
+        Ok(_) => continue,
+        Err(broadcast::error::TryRecvError::Empty) => break,
+        Err(broadcast::error::TryRecvError::Closed) => break,
+        Err(broadcast::error::TryRecvError::Lagged(_)) => continue,
+      }
+    }
+  }
+
+  #[tokio::test]
+  async fn row_observer_emits_cell_height_and_visibility_changes() {
+    let doc = Doc::new();
+    let row_data_map: MapRef = doc.get_or_insert_map("row_data");
+    let row_id = Uuid::new_v4();
+
+    let (change_tx, mut change_rx) = broadcast::channel(256);
+    subscribe_row_data_change(row_id, &row_data_map, change_tx);
+
+    let field_id = Uuid::new_v4().to_string();
+    let initial_cell: CellBuilder = HashMap::from([
+      ("field_type".into(), Any::BigInt(0)),
+      ("content".into(), Any::from("v1")),
+    ]);
+
+    {
+      let mut txn = doc.transact_mut();
+      let cells_map: MapRef = row_data_map.get_or_init(&mut txn, ROW_CELLS);
+      drop(cells_map);
+    }
+
+    {
+      let mut txn = doc.transact_mut();
+      let cells_map: MapRef = row_data_map
+        .get_with_txn(&txn, ROW_CELLS)
+        .expect("missing cells map");
+      CellsUpdate::new(&mut txn, &cells_map).insert_cell(&field_id, initial_cell);
+    }
+
+    let inserted = loop {
+      let change = recv_with_timeout(&mut change_rx).await;
+      if matches!(change, RowChange::DidUpdateCell { .. }) {
+        break change;
+      }
+    };
+    match inserted {
+      RowChange::DidUpdateCell {
+        row_id: changed_row_id,
+        field_id: changed_field_id,
+        value,
+      } => {
+        assert_eq!(changed_row_id, row_id);
+        assert_eq!(changed_field_id, field_id);
+        assert_eq!(
+          value
+            .get("content")
+            .and_then(|v| v.clone().cast::<String>().ok()),
+          Some("v1".to_string())
+        );
+      },
+      other => panic!("unexpected row change: {:?}", other),
+    }
+
+    drain(&mut change_rx);
+    {
+      let mut txn = doc.transact_mut();
+      let cells_map: MapRef = row_data_map
+        .get_with_txn(&txn, ROW_CELLS)
+        .expect("missing cells map");
+      CellsUpdate::new(&mut txn, &cells_map).insert(
+        &field_id,
+        HashMap::from([("content".into(), Any::from("v2"))]),
+      );
+    }
+
+    let updated = loop {
+      let change = recv_with_timeout(&mut change_rx).await;
+      if matches!(change, RowChange::DidUpdateCell { .. }) {
+        break change;
+      }
+    };
+    match updated {
+      RowChange::DidUpdateCell {
+        row_id: changed_row_id,
+        field_id: changed_field_id,
+        value,
+      } => {
+        assert_eq!(changed_row_id, row_id);
+        assert_eq!(changed_field_id, field_id);
+        assert_eq!(
+          value
+            .get("content")
+            .and_then(|v| v.clone().cast::<String>().ok()),
+          Some("v2".to_string())
+        );
+      },
+      other => panic!("unexpected row change: {:?}", other),
+    }
+
+    drain(&mut change_rx);
+    {
+      let mut txn = doc.transact_mut();
+      let cells_map: MapRef = row_data_map
+        .get_with_txn(&txn, ROW_CELLS)
+        .expect("missing cells map");
+      CellsUpdate::new(&mut txn, &cells_map).clear(&field_id);
+    }
+
+    let cleared = loop {
+      let change = recv_with_timeout(&mut change_rx).await;
+      if matches!(change, RowChange::DidUpdateCell { .. }) {
+        break change;
+      }
+    };
+    match cleared {
+      RowChange::DidUpdateCell {
+        row_id: changed_row_id,
+        field_id: changed_field_id,
+        value,
+      } => {
+        assert_eq!(changed_row_id, row_id);
+        assert_eq!(changed_field_id, field_id);
+        assert!(value.is_empty());
+      },
+      other => panic!("unexpected row change: {:?}", other),
+    }
+
+    drain(&mut change_rx);
+    {
+      let mut txn = doc.transact_mut();
+      row_data_map.insert(&mut txn, ROW_HEIGHT, Any::BigInt(60));
+      row_data_map.insert(&mut txn, ROW_VISIBILITY, true);
+    }
+
+    drain(&mut change_rx);
+    {
+      let mut txn = doc.transact_mut();
+      row_data_map.insert(&mut txn, ROW_HEIGHT, Any::BigInt(120));
+    }
+
+    let height_change = loop {
+      let change = recv_with_timeout(&mut change_rx).await;
+      if matches!(change, RowChange::DidUpdateHeight { .. }) {
+        break change;
+      }
+    };
+    match height_change {
+      RowChange::DidUpdateHeight {
+        row_id: changed_row_id,
+        value,
+      } => {
+        assert_eq!(changed_row_id, row_id);
+        assert_eq!(value, 120);
+      },
+      other => panic!("unexpected row change: {:?}", other),
+    }
+
+    drain(&mut change_rx);
+    {
+      let mut txn = doc.transact_mut();
+      row_data_map.insert(&mut txn, ROW_VISIBILITY, false);
+    }
+
+    let visibility_change = loop {
+      let change = recv_with_timeout(&mut change_rx).await;
+      if matches!(change, RowChange::DidUpdateVisibility { .. }) {
+        break change;
+      }
+    };
+    match visibility_change {
+      RowChange::DidUpdateVisibility {
+        row_id: changed_row_id,
+        value,
+      } => {
+        assert_eq!(changed_row_id, row_id);
+        assert!(!value);
+      },
+      other => panic!("unexpected row change: {:?}", other),
+    }
+  }
+}

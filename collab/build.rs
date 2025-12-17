@@ -21,24 +21,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed={}", proto_file);
   }
 
+  let out_dir = std::env::var("OUT_DIR")?;
   prost_build::Config::new()
-    .out_dir("src/entity/proto/")
+    .out_dir(out_dir)
     .compile_protos(&proto_files, &["proto/entity/"])?;
 
-  // Run rustfmt on the generated files.
-  let files = std::fs::read_dir("src/entity/proto/")?
-    .filter_map(Result::ok)
-    .filter(|entry| {
-      entry
-        .path()
-        .extension()
-        .map(|ext| ext == "rs")
-        .unwrap_or(false)
-    })
-    .map(|entry| entry.path().display().to_string());
-
-  for file in files {
-    Command::new("rustfmt").arg(file).status()?;
-  }
+  // Optional: keep generated sources formatted when building locally.
+  // Ignore errors to avoid failing builds when `rustfmt` isn't available.
+  let _ = Command::new("rustfmt")
+    .arg(format!("{}/collab.rs", std::env::var("OUT_DIR")?))
+    .status();
   Ok(())
 }
