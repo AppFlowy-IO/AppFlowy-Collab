@@ -645,6 +645,7 @@ async fn observe_database_view_layout_test() {
     DatabaseViewChange::LayoutSettingChanged {
       view_id,
       layout_type,
+      is_local_change: _,
     } => &update_view_id == view_id && layout_type == &DatabaseLayout::Calendar,
     _ => false,
   })
@@ -675,9 +676,11 @@ async fn observe_database_view_filter_create_delete_test() {
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidCreateFilters { view_id, filters } => {
-      filters.len() == 1 && &update_view_id == view_id
-    },
+    DatabaseViewChange::DidCreateFilters {
+      view_id,
+      filters,
+      is_local_change: _,
+    } => filters.len() == 1 && &update_view_id == view_id,
     _ => false,
   })
   .await
@@ -701,7 +704,10 @@ async fn observe_database_view_filter_create_delete_test() {
     .subscribe_view_change()
     .unwrap();
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidUpdateFilter { view_id } => &update_view_id == view_id,
+    DatabaseViewChange::DidUpdateFilter {
+      view_id,
+      is_local_change: _,
+    } => &update_view_id == view_id,
     _ => false,
   })
   .await
@@ -734,9 +740,11 @@ async fn observe_database_view_sort_create_delete_test() {
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidCreateSorts { view_id, sorts } => {
-      sorts.len() == 1 && &update_view_id == view_id
-    },
+    DatabaseViewChange::DidCreateSorts {
+      view_id,
+      sorts,
+      is_local_change: _,
+    } => sorts.len() == 1 && &update_view_id == view_id,
     _ => false,
   })
   .await
@@ -760,7 +768,10 @@ async fn observe_database_view_sort_create_delete_test() {
     .subscribe_view_change()
     .unwrap();
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidUpdateSort { view_id } => &update_view_id == view_id,
+    DatabaseViewChange::DidUpdateSort {
+      view_id,
+      is_local_change: _,
+    } => &update_view_id == view_id,
     _ => false,
   })
   .await
@@ -793,9 +804,11 @@ async fn observe_database_view_group_create_delete_test() {
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidCreateGroupSettings { view_id, groups } => {
-      groups.len() == 1 && &update_view_id == view_id
-    },
+    DatabaseViewChange::DidCreateGroupSettings {
+      view_id,
+      groups,
+      is_local_change: _,
+    } => groups.len() == 1 && &update_view_id == view_id,
     _ => false,
   })
   .await
@@ -819,7 +832,10 @@ async fn observe_database_view_group_create_delete_test() {
     .subscribe_view_change()
     .unwrap();
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidUpdateGroupSetting { view_id } => &update_view_id == view_id,
+    DatabaseViewChange::DidUpdateGroupSetting {
+      view_id,
+      is_local_change: _,
+    } => &update_view_id == view_id,
     _ => false,
   })
   .await

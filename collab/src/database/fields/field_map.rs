@@ -1,3 +1,4 @@
+use crate::core::origin::CollabOrigin;
 use crate::preclude::{Map, MapExt, MapRef, ReadTxn, Subscription, TransactionMut};
 
 use crate::database::database::timestamp;
@@ -15,8 +16,12 @@ pub struct FieldMap {
 }
 
 impl FieldMap {
-  pub fn new(mut container: MapRef, field_change_tx: Option<FieldChangeSender>) -> Self {
-    let subscription = field_change_tx.map(|tx| subscribe_field_change(&mut container, tx));
+  pub fn new(
+    origin: CollabOrigin,
+    mut container: MapRef,
+    field_change_tx: Option<FieldChangeSender>,
+  ) -> Self {
+    let subscription = field_change_tx.map(|tx| subscribe_field_change(origin, &mut container, tx));
     Self {
       container,
       subscription,
