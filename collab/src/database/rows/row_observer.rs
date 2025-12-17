@@ -237,8 +237,7 @@ mod tests {
 
     {
       let mut txn = doc.transact_mut();
-      let cells_map: MapRef = row_data_map.get_or_init(&mut txn, ROW_CELLS);
-      drop(cells_map);
+      let _cells_map: MapRef = row_data_map.get_or_init(&mut txn, ROW_CELLS);
     }
 
     {
