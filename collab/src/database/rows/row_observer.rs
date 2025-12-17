@@ -1,3 +1,4 @@
+use crate::core::origin::CollabOrigin;
 use crate::database::rows::{Cell, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY, Row};
 use crate::entity::uuid_validation::RowId;
 
@@ -18,33 +19,47 @@ pub enum RowChange {
   DidUpdateVisibility {
     row_id: RowId,
     value: bool,
+    is_local_change: bool,
   },
   DidUpdateHeight {
     row_id: RowId,
     value: i32,
+    is_local_change: bool,
   },
   DidUpdateCell {
     row_id: RowId,
     field_id: String,
     value: Cell,
+    is_local_change: bool,
   },
   DidUpdateRowComment {
     row: Row,
+    is_local_change: bool,
   },
 }
 
 pub(crate) fn subscribe_row_data_change(
+  origin: CollabOrigin,
   row_id: RowId,
   row_data_map: &MapRef,
   change_tx: RowChangeSender,
 ) {
   row_data_map.observe_deep_with("change", move |txn, events| {
+    let txn_origin = CollabOrigin::from(txn);
+    let is_local_change = txn_origin == origin;
     for event in events.iter() {
       match event {
         Event::Text(_) => {},
         Event::Array(_) => {},
         Event::Map(map_event) => {
-          handle_map_event(&row_id, &change_tx, txn, event, map_event);
+          handle_map_event(
+            &row_id,
+            &change_tx,
+            is_local_change,
+            txn,
+            event,
+            map_event,
+          );
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
@@ -58,6 +73,7 @@ pub(crate) fn subscribe_row_data_change(
 fn handle_map_event(
   row_id: &RowId,
   change_tx: &RowChangeSender,
+  is_local_change: bool,
   txn: &TransactionMut,
   event: &Event,
   map_event: &MapEvent,
@@ -80,6 +96,7 @@ fn handle_map_event(
                 let _ = change_tx.send(RowChange::DidUpdateHeight {
                   row_id: *row_id,
                   value: value as i32,
+                  is_local_change,
                 });
               }
             },
@@ -88,6 +105,7 @@ fn handle_map_event(
                 let _ = change_tx.send(RowChange::DidUpdateVisibility {
                   row_id: *row_id,
                   value,
+                  is_local_change,
                 });
               }
             },
@@ -109,6 +127,7 @@ fn handle_map_event(
                 row_id: *row_id,
                 field_id,
                 value: cell,
+                is_local_change,
               });
             }
           },
@@ -127,6 +146,7 @@ fn handle_map_event(
                   row_id: *row_id,
                   field_id,
                   value: cell,
+                  is_local_change,
                 });
               }
             }
@@ -139,6 +159,7 @@ fn handle_map_event(
                 row_id: *row_id,
                 field_id,
                 value: Cell::default(),
+                is_local_change,
               });
             }
           },
@@ -192,6 +213,7 @@ impl From<&str> for RowChangeValue {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::core::origin::{CollabClient, CollabOrigin};
   use crate::database::rows::{CellBuilder, CellsUpdate};
   use crate::preclude::{Any, Doc, Map, MapExt, Transact};
   use std::collections::HashMap;
@@ -220,14 +242,21 @@ mod tests {
     }
   }
 
+  fn local_and_remote_origins() -> (CollabOrigin, CollabOrigin) {
+    let local = CollabOrigin::Client(CollabClient::new(0xdeadbeef, "local-device"));
+    let remote = CollabOrigin::Client(CollabClient::new(0xfeedface, "remote-device"));
+    (local, remote)
+  }
+
   #[tokio::test]
   async fn row_observer_emits_cell_height_and_visibility_changes() {
     let doc = Doc::new();
     let row_data_map: MapRef = doc.get_or_insert_map("row_data");
     let row_id = Uuid::new_v4();
+    let (origin, _) = local_and_remote_origins();
 
     let (change_tx, mut change_rx) = broadcast::channel(256);
-    subscribe_row_data_change(row_id, &row_data_map, change_tx);
+    subscribe_row_data_change(origin.clone(), row_id, &row_data_map, change_tx);
 
     let field_id = Uuid::new_v4().to_string();
     let initial_cell: CellBuilder = HashMap::from([
@@ -236,12 +265,12 @@ mod tests {
     ]);
 
     {
-      let mut txn = doc.transact_mut();
+      let mut txn = doc.transact_mut_with(origin.clone());
       let _cells_map: MapRef = row_data_map.get_or_init(&mut txn, ROW_CELLS);
     }
 
     {
-      let mut txn = doc.transact_mut();
+      let mut txn = doc.transact_mut_with(origin.clone());
       let cells_map: MapRef = row_data_map
         .get_with_txn(&txn, ROW_CELLS)
         .expect("missing cells map");
@@ -259,9 +288,11 @@ mod tests {
         row_id: changed_row_id,
         field_id: changed_field_id,
         value,
+        is_local_change,
       } => {
         assert_eq!(changed_row_id, row_id);
         assert_eq!(changed_field_id, field_id);
+        assert!(is_local_change);
         assert_eq!(
           value
             .get("content")
@@ -274,7 +305,7 @@ mod tests {
 
     drain(&mut change_rx);
     {
-      let mut txn = doc.transact_mut();
+      let mut txn = doc.transact_mut_with(origin.clone());
       let cells_map: MapRef = row_data_map
         .get_with_txn(&txn, ROW_CELLS)
         .expect("missing cells map");
@@ -295,9 +326,11 @@ mod tests {
         row_id: changed_row_id,
         field_id: changed_field_id,
         value,
+        is_local_change,
       } => {
         assert_eq!(changed_row_id, row_id);
         assert_eq!(changed_field_id, field_id);
+        assert!(is_local_change);
         assert_eq!(
           value
             .get("content")
@@ -310,7 +343,7 @@ mod tests {
 
     drain(&mut change_rx);
     {
-      let mut txn = doc.transact_mut();
+      let mut txn = doc.transact_mut_with(origin.clone());
       let cells_map: MapRef = row_data_map
         .get_with_txn(&txn, ROW_CELLS)
         .expect("missing cells map");
@@ -328,9 +361,11 @@ mod tests {
         row_id: changed_row_id,
         field_id: changed_field_id,
         value,
+        is_local_change,
       } => {
         assert_eq!(changed_row_id, row_id);
         assert_eq!(changed_field_id, field_id);
+        assert!(is_local_change);
         assert!(value.is_empty());
       },
       other => panic!("unexpected row change: {:?}", other),
@@ -338,14 +373,14 @@ mod tests {
 
     drain(&mut change_rx);
     {
-      let mut txn = doc.transact_mut();
+      let mut txn = doc.transact_mut_with(origin.clone());
       row_data_map.insert(&mut txn, ROW_HEIGHT, Any::BigInt(60));
       row_data_map.insert(&mut txn, ROW_VISIBILITY, true);
     }
 
     drain(&mut change_rx);
     {
-      let mut txn = doc.transact_mut();
+      let mut txn = doc.transact_mut_with(origin.clone());
       row_data_map.insert(&mut txn, ROW_HEIGHT, Any::BigInt(120));
     }
 
@@ -359,16 +394,18 @@ mod tests {
       RowChange::DidUpdateHeight {
         row_id: changed_row_id,
         value,
+        is_local_change,
       } => {
         assert_eq!(changed_row_id, row_id);
         assert_eq!(value, 120);
+        assert!(is_local_change);
       },
       other => panic!("unexpected row change: {:?}", other),
     }
 
     drain(&mut change_rx);
     {
-      let mut txn = doc.transact_mut();
+      let mut txn = doc.transact_mut_with(origin.clone());
       row_data_map.insert(&mut txn, ROW_VISIBILITY, false);
     }
 
@@ -382,9 +419,67 @@ mod tests {
       RowChange::DidUpdateVisibility {
         row_id: changed_row_id,
         value,
+        is_local_change,
       } => {
         assert_eq!(changed_row_id, row_id);
         assert!(!value);
+        assert!(is_local_change);
+      },
+      other => panic!("unexpected row change: {:?}", other),
+    }
+  }
+
+  #[tokio::test]
+  async fn row_observer_marks_remote_changes_when_origin_differs() {
+    let doc = Doc::new();
+    let row_data_map: MapRef = doc.get_or_insert_map("row_data");
+    let row_id = Uuid::new_v4();
+    let (origin, remote_origin) = local_and_remote_origins();
+
+    let (change_tx, mut change_rx) = broadcast::channel(256);
+    subscribe_row_data_change(origin.clone(), row_id, &row_data_map, change_tx);
+
+    let field_id = Uuid::new_v4().to_string();
+
+    {
+      let mut txn = doc.transact_mut_with(origin.clone());
+      let _cells_map: MapRef = row_data_map.get_or_init(&mut txn, ROW_CELLS);
+    }
+
+    drain(&mut change_rx);
+    {
+      let mut txn = doc.transact_mut_with(remote_origin);
+      let cells_map: MapRef = row_data_map
+        .get_with_txn(&txn, ROW_CELLS)
+        .expect("missing cells map");
+      CellsUpdate::new(&mut txn, &cells_map).insert(
+        &field_id,
+        HashMap::from([("content".into(), Any::from("remote"))]),
+      );
+    }
+
+    let changed = loop {
+      let change = recv_with_timeout(&mut change_rx).await;
+      if matches!(change, RowChange::DidUpdateCell { .. }) {
+        break change;
+      }
+    };
+    match changed {
+      RowChange::DidUpdateCell {
+        row_id: changed_row_id,
+        field_id: changed_field_id,
+        value,
+        is_local_change,
+      } => {
+        assert_eq!(changed_row_id, row_id);
+        assert_eq!(changed_field_id, field_id);
+        assert!(!is_local_change);
+        assert_eq!(
+          value
+            .get("content")
+            .and_then(|v| v.clone().cast::<String>().ok()),
+          Some("remote".to_string())
+        );
       },
       other => panic!("unexpected row change: {:?}", other),
     }
