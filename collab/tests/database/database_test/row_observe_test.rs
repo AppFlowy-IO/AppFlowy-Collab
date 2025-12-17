@@ -79,6 +79,7 @@ async fn observer_row_cell_test() {
       row_id: _,
       field_id,
       value,
+      ..
     } => field_id == "f1" && value.get_as::<i64>("level") == Some(1),
     _ => false,
   })
@@ -114,6 +115,7 @@ async fn observer_row_cell_test() {
       row_id: _,
       field_id,
       value,
+      ..
     } => field_id == "f1" && value.get_as::<i64>("level") == Some(2),
     _ => false,
   })
@@ -145,7 +147,9 @@ async fn observer_update_row_test() {
   });
 
   wait_for_specific_event(row_change_rx, |event| match event {
-    RowChange::DidUpdateHeight { row_id: _, value } => *value == 1000i32,
+    RowChange::DidUpdateHeight {
+      row_id: _, value, ..
+    } => *value == 1000i32,
     _ => false,
   })
   .await

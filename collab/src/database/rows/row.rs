@@ -82,7 +82,8 @@ impl DatabaseRow {
   ) -> Result<Self, CollabError> {
     let body = DatabaseRowBody::open(row_id, &mut collab)?;
     if let Some(change_tx) = change_tx {
-      subscribe_row_data_change(row_id, &body.data, change_tx);
+      let origin = collab.origin().clone();
+      subscribe_row_data_change(origin, row_id, &body.data, change_tx);
     }
     Ok(Self {
       row_id,
@@ -99,7 +100,8 @@ impl DatabaseRow {
   ) -> Self {
     let body = DatabaseRowBody::create(row_id, &mut collab, row);
     if let Some(change_tx) = change_tx {
-      subscribe_row_data_change(row_id, &body.data, change_tx);
+      let origin = collab.origin().clone();
+      subscribe_row_data_change(origin, row_id, &body.data, change_tx);
     }
     Self {
       row_id,
