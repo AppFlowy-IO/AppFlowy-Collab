@@ -575,6 +575,7 @@ impl Database {
     self.body.block.init_database_row(row_id, ret)
   }
 
+  #[instrument(level = "debug", skip_all)]
   pub fn init_database_rows<'a, T: Into<RowId> + Send + 'a>(
     &'a self,
     row_ids: Vec<T>,
@@ -2090,6 +2091,7 @@ impl DatabaseBody {
   }
 
   /// Return list of [RowCell] for the given view and field.
+  #[instrument(level = "debug", skip_all)]
   pub async fn get_cells_for_field<T: ReadTxn>(
     &self,
     txn: &T,

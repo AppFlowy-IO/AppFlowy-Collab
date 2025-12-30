@@ -19,6 +19,7 @@ use rayon::prelude::*;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::instrument;
 use yrs::block::ClientID;
 
 // Database holder tracks initialization status and holds the database reference
@@ -263,6 +264,7 @@ where
     Ok(arc_row)
   }
 
+  #[instrument(level = "debug", skip_all)]
   async fn batch_build_arc_database_row(
     &self,
     row_ids: &[RowId],

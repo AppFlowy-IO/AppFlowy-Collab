@@ -53,6 +53,7 @@ impl Block {
     self.notifier.subscribe()
   }
 
+  #[instrument(level = "debug", skip_all)]
   pub async fn batch_load_rows(&self, row_ids: Vec<RowId>) -> Result<(), CollabError> {
     let cloned_notifier = self.notifier.clone();
     let mut row_on_disk_details = vec![];
@@ -192,6 +193,7 @@ impl Block {
   }
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
+  #[instrument(level = "debug", skip_all)]
   pub fn init_database_row(&self, row_id: &RowId, ret: Option<InitRowChan>) {
     let row_id = *row_id;
     let row_change_tx = self.row_change_tx.clone();
@@ -217,6 +219,7 @@ impl Block {
       .map_err(|e| CollabError::Internal(anyhow::anyhow!(e)))?
   }
 
+  #[instrument(level = "debug", skip_all)]
   pub async fn init_database_rows(
     &self,
     row_ids: Vec<RowId>,
