@@ -12,6 +12,7 @@ use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 
 use crate::database::database_trait::{DatabaseRowCollabService, DatabaseRowDataVariant};
+use dashmap::DashMap;
 use tracing::{instrument, trace};
 use yrs::block::ClientID;
 
@@ -32,6 +33,7 @@ pub struct Block {
   collab_service: Arc<dyn DatabaseRowCollabService>,
   pub notifier: Arc<Sender<BlockEvent>>,
   row_change_tx: Option<RowChangeSender>,
+  inflight_row_init: Arc<DashMap<RowId, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 impl Block {
@@ -46,6 +48,7 @@ impl Block {
       collab_service,
       notifier: Arc::new(notifier),
       row_change_tx,
+      inflight_row_init: Arc::new(DashMap::new()),
     }
   }
 
@@ -127,6 +130,15 @@ impl Block {
     Ok(row_order)
   }
 
+  #[instrument(level = "debug", skip_all)]
+  pub fn get_cached_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    let cache = self.collab_service.database_row_cache()?;
+    cache.get(row_id).map(|row| row.clone())
+  }
+
+  /// Return the [DatabaseRow], initializing it on demand if needed.
+  /// Use [Self::get_cached_database_row] for cache-only access.
+  #[instrument(level = "debug", skip_all)]
   pub async fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
     self.get_or_init_database_row(row_id).await.ok()
   }
@@ -173,6 +185,7 @@ impl Block {
     rows
   }
 
+  #[instrument(level = "debug", skip_all)]
   pub async fn update_row<F>(&mut self, row_id: RowId, f: F)
   where
     F: FnOnce(RowUpdate),
@@ -183,6 +196,7 @@ impl Block {
     }
   }
 
+  #[instrument(level = "debug", skip_all)]
   pub async fn update_row_meta<F>(&mut self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowMetaUpdate),
@@ -192,31 +206,53 @@ impl Block {
     }
   }
 
-  /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
+  /// Initialize the [DatabaseRow] in the background and optionally return it via channel.
   #[instrument(level = "debug", skip_all)]
   pub fn init_database_row(&self, row_id: &RowId, ret: Option<InitRowChan>) {
+    let block = self.clone();
     let row_id = *row_id;
-    let row_change_tx = self.row_change_tx.clone();
-    let collab_service = self.collab_service.clone();
     tokio::task::spawn(async move {
-      let row = collab_service
-        .build_arc_database_row(&row_id, None, row_change_tx)
-        .await;
-
+      let row = block.get_or_init_database_row(&row_id).await;
       if let Some(ret) = ret {
         let _ = ret.send(row);
       }
     });
   }
 
+  #[instrument(level = "debug", skip_all)]
   pub async fn get_or_init_database_row(
     &self,
     row_id: &RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, CollabError> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    self.init_database_row(row_id, Some(tx));
-    rx.await
-      .map_err(|e| CollabError::Internal(anyhow::anyhow!(e)))?
+    if let Some(row) = self.get_cached_database_row(row_id) {
+      return Ok(row);
+    }
+
+    let init_lock = {
+      // Drop DashMap guard before awaiting the per-row mutex.
+      let entry = self
+        .inflight_row_init
+        .entry(*row_id)
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())));
+      entry.clone()
+    };
+
+    let _guard = init_lock.lock().await;
+    if let Some(row) = self.get_cached_database_row(row_id) {
+      drop(_guard);
+      self.inflight_row_init.remove(row_id);
+      return Ok(row);
+    }
+
+    let result = self
+      .collab_service
+      .build_arc_database_row(row_id, None, self.row_change_tx.clone())
+      .await;
+
+    drop(_guard);
+    self.inflight_row_init.remove(row_id);
+
+    result
   }
 
   #[instrument(level = "debug", skip_all)]

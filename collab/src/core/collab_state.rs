@@ -150,7 +150,7 @@ impl State {
       SyncState::try_from(self.sync_state.swap(new_state as u32, Ordering::AcqRel)).unwrap();
 
     if old_state != new_state {
-      tracing::debug!(
+      tracing::trace!(
         "{} sync state {:?} => {:?}",
         self.object_id,
         old_state,

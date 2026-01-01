@@ -177,7 +177,7 @@ impl DatabaseCollabReader for TestUserDatabaseServiceImpl {
     }))
   }
 
-  fn database_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>> {
+  fn reader_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>> {
     Some(self.cache.clone())
   }
 }
