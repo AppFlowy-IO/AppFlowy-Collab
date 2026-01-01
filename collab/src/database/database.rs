@@ -259,6 +259,7 @@ impl Database {
     Ok(database)
   }
 
+  #[instrument(level = "debug", skip_all)]
   pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, CollabError> {
     let database_id = *self.collab.object_id();
     let encoded_database_collab = EncodedCollabInfo {
@@ -619,8 +620,12 @@ impl Database {
       .boxed()
   }
 
-  /// Return None if the row is not initialized.
-  /// Use [Self::get_or_init_database_row] to initialize the row.
+  /// Return the cached [DatabaseRow] if it is already initialized.
+  pub fn get_cached_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.get_cached_database_row(row_id)
+  }
+
+  /// Return the [DatabaseRow], initializing it on demand if needed.
   pub async fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
     self.body.block.get_database_row(row_id).await
   }
