@@ -11,6 +11,7 @@ pub mod helper;
 mod layout_test;
 // mod restore_test;
 mod rollup_type_option_test;
+mod row_init_test;
 mod row_observe_test;
 mod row_test;
 mod sort_test;

@@ -106,6 +106,10 @@ pub trait DatabaseRowCollabService: Send + Sync + 'static {
     sender: Option<RowChangeSender>,
     auto_fetch: bool,
   ) -> Result<HashMap<RowId, Arc<RwLock<DatabaseRow>>>, CollabError>;
+
+  fn database_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>> {
+    None
+  }
 }
 
 #[async_trait]
@@ -128,7 +132,9 @@ pub trait DatabaseCollabReader: Send + Sync + 'static {
     None
   }
 
-  fn database_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>>;
+  fn reader_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>> {
+    None
+  }
 }
 
 #[async_trait]
@@ -323,6 +329,156 @@ where
 
     Ok(result)
   }
+
+  fn database_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>> {
+    DatabaseCollabReader::reader_row_cache(self)
+  }
+}
+
+/// Adapter to provide a dedicated row cache for a DatabaseCollabReader-backed service.
+#[derive(Clone)]
+pub struct DatabaseRowCollabServiceAdapter<R> {
+  reader: Arc<R>,
+  row_cache: Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>>,
+}
+
+impl<R> DatabaseRowCollabServiceAdapter<R> {
+  pub fn new(reader: Arc<R>) -> Self {
+    Self {
+      reader,
+      row_cache: None,
+    }
+  }
+
+  pub fn new_with_cache(
+    reader: Arc<R>,
+    row_cache: Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>,
+  ) -> Self {
+    Self {
+      reader,
+      row_cache: Some(row_cache),
+    }
+  }
+}
+
+#[async_trait]
+impl<R> DatabaseRowCollabService for DatabaseRowCollabServiceAdapter<R>
+where
+  R: DatabaseCollabReader + Send + Sync + 'static,
+{
+  async fn database_row_client_id(&self) -> ClientID {
+    self.reader.reader_client_id().await
+  }
+
+  fn database_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>> {
+    self.row_cache.clone()
+  }
+
+  async fn create_arc_database_row(
+    &self,
+    row_id: &RowId,
+    data: DatabaseRowDataVariant,
+    sender: Option<RowChangeSender>,
+  ) -> Result<Arc<RwLock<DatabaseRow>>, CollabError> {
+    let client_id = self.reader.reader_client_id().await;
+    let collab_type = CollabType::DatabaseRow;
+    let data = data.into_encode_collab(client_id);
+    if let Some(persistence) = self.reader.reader_persistence() {
+      persistence.upsert_collab(row_id, data.clone())?;
+    }
+
+    let collab = build_collab(client_id, row_id, collab_type, data).await?;
+    let database_row = DatabaseRow::open(*row_id, collab, sender)?;
+    let arc_row = Arc::new(RwLock::new(database_row));
+    if let Some(cache) = self.database_row_cache() {
+      cache.insert(*row_id, arc_row.clone());
+    }
+    Ok(arc_row)
+  }
+
+  async fn build_arc_database_row(
+    &self,
+    row_id: &RowId,
+    data: Option<DatabaseRowDataVariant>,
+    sender: Option<RowChangeSender>,
+  ) -> Result<Arc<RwLock<DatabaseRow>>, CollabError> {
+    if let Some(cache) = self.database_row_cache() {
+      if let Some(cached_row) = cache.get(row_id) {
+        return Ok(cached_row.clone());
+      }
+    }
+
+    let client_id = self.reader.reader_client_id().await;
+    let collab_type = CollabType::DatabaseRow;
+    let data = match data {
+      None => self.reader.reader_get_collab(row_id, collab_type).await?,
+      Some(data) => data.into_encode_collab(client_id),
+    };
+    let collab = build_collab(client_id, row_id, collab_type, data).await?;
+    let database_row = DatabaseRow::open(*row_id, collab, sender)?;
+    let arc_row = Arc::new(RwLock::new(database_row));
+
+    if let Some(cache) = self.database_row_cache() {
+      cache.insert(*row_id, arc_row.clone());
+    }
+    Ok(arc_row)
+  }
+
+  #[tracing::instrument(level = "debug", skip_all)]
+  async fn batch_build_arc_database_row(
+    &self,
+    row_ids: &[RowId],
+    sender: Option<RowChangeSender>,
+    _auto_fetch: bool,
+  ) -> Result<HashMap<RowId, Arc<RwLock<DatabaseRow>>>, CollabError> {
+    let mut result = HashMap::new();
+    let mut uncached_row_ids = Vec::new();
+
+    if let Some(cache) = self.database_row_cache() {
+      for row_id in row_ids {
+        if let Some(cached_row) = cache.get(row_id) {
+          result.insert(*row_id, cached_row.clone());
+        } else {
+          uncached_row_ids.push(*row_id);
+        }
+      }
+    } else {
+      uncached_row_ids = row_ids.to_vec();
+    }
+
+    if !uncached_row_ids.is_empty() {
+      let encoded_collab_by_id = self
+        .reader
+        .reader_batch_get_collabs(uncached_row_ids, CollabType::DatabaseRow)
+        .await?;
+
+      let sender_clone = sender.clone();
+      let futures = encoded_collab_by_id
+        .into_iter()
+        .map(|(row_id, encoded_collab)| {
+          let sender = sender_clone.clone();
+          async move {
+            let database_row = self
+              .build_arc_database_row(
+                &row_id,
+                Some(DatabaseRowDataVariant::EncodedCollab(encoded_collab)),
+                sender,
+              )
+              .await?;
+            Ok::<_, CollabError>((row_id, database_row))
+          }
+        });
+
+      let uncached_rows: HashMap<RowId, Arc<RwLock<DatabaseRow>>> = join_all(futures)
+        .await
+        .into_iter()
+        .collect::<Result<HashMap<_, _>, _>>()?;
+
+      result.extend(uncached_rows);
+    }
+
+    Ok(result)
+  }
 }
 async fn build_collab(
   client_id: ClientID,
@@ -405,7 +561,7 @@ impl DatabaseCollabReader for NoPersistenceDatabaseCollabService {
     Ok(map)
   }
 
-  fn database_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>> {
+  fn reader_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>> {
     Some(self.cache.clone())
   }
 }

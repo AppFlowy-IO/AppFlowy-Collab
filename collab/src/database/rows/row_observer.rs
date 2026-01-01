@@ -52,14 +52,7 @@ pub(crate) fn subscribe_row_data_change(
         Event::Text(_) => {},
         Event::Array(_) => {},
         Event::Map(map_event) => {
-          handle_map_event(
-            &row_id,
-            &change_tx,
-            is_local_change,
-            txn,
-            event,
-            map_event,
-          );
+          handle_map_event(&row_id, &change_tx, is_local_change, txn, event, map_event);
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
