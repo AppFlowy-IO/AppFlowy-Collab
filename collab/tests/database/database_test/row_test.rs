@@ -341,6 +341,7 @@ async fn update_row_meta_test() {
     data: "cover 123".to_string(),
     upload_type: FileUploadType::LocalFile,
     cover_type: CoverType::FileCover,
+    offset: 0.0,
   };
 
   database_test
