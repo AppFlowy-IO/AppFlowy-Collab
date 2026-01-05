@@ -39,6 +39,7 @@ pub enum BlockType {
   AiMeetingSummary,
   AiMeetingNotes,
   AiMeetingTranscription,
+  Speaker,
   Custom(String),
 
   // Legacy types
@@ -82,6 +83,7 @@ impl BlockType {
       BlockType::AiMeetingSummary => "ai_meeting_summary",
       BlockType::AiMeetingNotes => "ai_meeting_notes",
       BlockType::AiMeetingTranscription => "ai_meeting_transcription",
+      BlockType::Speaker => "speaker",
       BlockType::Table => "table",
       BlockType::TableCell => "table/cell",
       BlockType::Custom(s) => s,
@@ -123,6 +125,7 @@ impl BlockType {
       "ai_meeting_summary" => BlockType::AiMeetingSummary,
       "ai_meeting_notes" => BlockType::AiMeetingNotes,
       "ai_meeting_transcription" => BlockType::AiMeetingTranscription,
+      "speaker" => BlockType::Speaker,
       "table" => BlockType::Table,
       "table/cell" => BlockType::TableCell,
       _ => BlockType::Custom(s.to_string()),
