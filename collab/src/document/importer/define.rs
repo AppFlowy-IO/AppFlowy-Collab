@@ -52,6 +52,6 @@ pub const TIMESTAMP_FIELD: &str = "timestamp";
 pub const END_TIMESTAMP_FIELD: &str = "end_timestamp";
 
 // AI Meeting Keys
-pub const SPEAKER_INFO_MAP_FIELD: &str = "speakerInfoMap";
+pub const SPEAKER_INFO_MAP_FIELD: &str = "speaker_info_map";
 
 pub const ALIGN_FIELD: &str = "align";
