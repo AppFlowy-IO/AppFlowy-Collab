@@ -45,12 +45,10 @@ impl BlockParser for SpeakerParser {
 
     let prefix = if let Some(name) = speaker_name {
       format!("{}: ", name)
+    } else if let Some(speaker_id) = block.data.get(SPEAKER_ID_FIELD).and_then(|v| v.as_str()) {
+      format!("Speaker {}: ", speaker_id)
     } else {
-      if let Some(speaker_id) = block.data.get(SPEAKER_ID_FIELD).and_then(|v| v.as_str()) {
-        format!("Speaker {}: ", speaker_id)
-      } else {
-        "Unknown Speaker: ".to_string()
-      }
+      "Unknown Speaker: ".to_string()
     };
 
     let children_content = self.parse_children(block, context);
