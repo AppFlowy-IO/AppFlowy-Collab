@@ -46,4 +46,12 @@ pub const COL_POSITION_FIELD: &str = "colPosition";
 pub const CHECKED_FIELD: &str = "checked";
 pub const START_NUMBER_FIELD: &str = "number";
 
+// Speaker Keys
+pub const SPEAKER_ID_FIELD: &str = "speaker_id";
+pub const TIMESTAMP_FIELD: &str = "timestamp";
+pub const END_TIMESTAMP_FIELD: &str = "end_timestamp";
+
+// AI Meeting Keys
+pub const SPEAKER_INFO_MAP_FIELD: &str = "speaker_info_map";
+
 pub const ALIGN_FIELD: &str = "align";
