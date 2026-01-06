@@ -15,6 +15,7 @@ mod parser_test;
 mod quote_list_test;
 mod simple_columns_test;
 mod simple_table_test;
+mod speaker_test;
 mod subpage_test;
 mod text_utils_test;
 mod todo_list_test;

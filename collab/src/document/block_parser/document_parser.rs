@@ -4,8 +4,8 @@ use super::{
   DocumentParserDelegate, FileBlockParser, HeadingParser, ImageParser, LinkPreviewParser,
   MathEquationParser, NumberedListParser, OutputFormat, PageParser, ParagraphParser, ParseContext,
   PlainTextResolver, QuoteListParser, SimpleColumnParser, SimpleColumnsParser,
-  SimpleTableCellParser, SimpleTableParser, SimpleTableRowParser, SubpageParser, TodoListParser,
-  ToggleListParser,
+  SimpleTableCellParser, SimpleTableParser, SimpleTableRowParser, SpeakerParser, SubpageParser,
+  TodoListParser, ToggleListParser,
 };
 use crate::document::blocks::{Block, DocumentData};
 use crate::error::CollabError;
@@ -87,7 +87,8 @@ impl DocumentParser {
       .register(Arc::new(AiMeetingParser))
       .register(Arc::new(AiMeetingSummaryParser))
       .register(Arc::new(AiMeetingNotesParser))
-      .register(Arc::new(AiMeetingTranscriptionParser));
+      .register(Arc::new(AiMeetingTranscriptionParser))
+      .register(Arc::new(SpeakerParser));
 
     parser
   }
