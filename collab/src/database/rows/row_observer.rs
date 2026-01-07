@@ -1,6 +1,6 @@
 use crate::core::origin::CollabOrigin;
 use crate::database::rows::{
-  meta_id_from_row_id, Cell, Row, RowMetaKey, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY,
+  Cell, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY, Row, RowMetaKey, meta_id_from_row_id,
 };
 use crate::entity::uuid_validation::RowId;
 

@@ -18,8 +18,8 @@ use crate::util::AnyExt;
 use crate::database::database::timestamp;
 
 use crate::database::rows::{
-  subscribe_row_data_change, subscribe_row_meta_change, Cell, Cells, CellsUpdate, RowChangeSender,
-  RowMeta, RowMetaUpdate,
+  Cell, Cells, CellsUpdate, RowChangeSender, RowMeta, RowMetaUpdate, subscribe_row_data_change,
+  subscribe_row_meta_change,
 };
 use crate::error::CollabError;
 
