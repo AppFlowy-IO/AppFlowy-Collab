@@ -96,6 +96,8 @@ pub struct RowCover {
   pub data: String,
   pub upload_type: FileUploadType,
   pub cover_type: CoverType,
+  #[serde(default)]
+  pub offset: f64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
