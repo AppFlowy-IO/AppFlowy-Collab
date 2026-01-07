@@ -18,7 +18,8 @@ use crate::util::AnyExt;
 use crate::database::database::timestamp;
 
 use crate::database::rows::{
-  Cell, Cells, CellsUpdate, RowChangeSender, RowMeta, RowMetaUpdate, subscribe_row_data_change,
+  subscribe_row_data_change, subscribe_row_meta_change, Cell, Cells, CellsUpdate, RowChangeSender,
+  RowMeta, RowMetaUpdate,
 };
 use crate::error::CollabError;
 
@@ -83,7 +84,9 @@ impl DatabaseRow {
     let body = DatabaseRowBody::open(row_id, &mut collab)?;
     if let Some(change_tx) = change_tx {
       let origin = collab.origin().clone();
-      subscribe_row_data_change(origin, row_id, &body.data, change_tx);
+      let meta_change_tx = change_tx.clone();
+      subscribe_row_data_change(origin.clone(), row_id, &body.data, change_tx);
+      subscribe_row_meta_change(origin, row_id, &body.meta, meta_change_tx);
     }
     Ok(Self {
       row_id,
@@ -101,7 +104,9 @@ impl DatabaseRow {
     let body = DatabaseRowBody::create(row_id, &mut collab, row);
     if let Some(change_tx) = change_tx {
       let origin = collab.origin().clone();
-      subscribe_row_data_change(origin, row_id, &body.data, change_tx);
+      let meta_change_tx = change_tx.clone();
+      subscribe_row_data_change(origin.clone(), row_id, &body.data, change_tx);
+      subscribe_row_meta_change(origin, row_id, &body.meta, meta_change_tx);
     }
     Self {
       row_id,
