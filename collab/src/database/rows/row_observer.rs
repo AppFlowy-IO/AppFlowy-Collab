@@ -1,5 +1,7 @@
 use crate::core::origin::CollabOrigin;
-use crate::database::rows::{Cell, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY, Row};
+use crate::database::rows::{
+  Cell, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY, Row, RowMetaKey, meta_id_from_row_id,
+};
 use crate::entity::uuid_validation::RowId;
 
 use crate::preclude::{DeepObservable, EntryChange, Event, MapRef, TransactionMut};
@@ -32,6 +34,10 @@ pub enum RowChange {
     value: Cell,
     is_local_change: bool,
   },
+  DidUpdateRowMeta {
+    row_id: RowId,
+    is_local_change: bool,
+  },
   DidUpdateRowComment {
     row: Row,
     is_local_change: bool,
@@ -58,6 +64,38 @@ pub(crate) fn subscribe_row_data_change(
         Event::XmlText(_) => {},
         #[allow(unreachable_patterns)]
         _ => {},
+      }
+    }
+  });
+}
+
+pub(crate) fn subscribe_row_meta_change(
+  origin: CollabOrigin,
+  row_id: RowId,
+  row_meta_map: &MapRef,
+  change_tx: RowChangeSender,
+) {
+  let is_document_empty_key = meta_id_from_row_id(&row_id, RowMetaKey::IsDocumentEmpty);
+  row_meta_map.observe_deep_with("meta-change", move |txn, events| {
+    let txn_origin = CollabOrigin::from(txn);
+    let is_local_change = txn_origin == origin;
+    for event in events.iter() {
+      if let Event::Map(map_event) = event {
+        for (key, entry_change) in map_event.keys(txn).iter() {
+          if key.deref() != is_document_empty_key {
+            continue;
+          }
+          if matches!(
+            entry_change,
+            EntryChange::Inserted(_) | EntryChange::Updated(_, _) | EntryChange::Removed(_)
+          ) {
+            let _ = change_tx.send(RowChange::DidUpdateRowMeta {
+              row_id,
+              is_local_change,
+            });
+            break;
+          }
+        }
       }
     }
   });
@@ -473,6 +511,40 @@ mod tests {
             .and_then(|v| v.clone().cast::<String>().ok()),
           Some("remote".to_string())
         );
+      },
+      other => panic!("unexpected row change: {:?}", other),
+    }
+  }
+
+  #[tokio::test]
+  async fn row_observer_emits_row_meta_changes() {
+    let doc = Doc::new();
+    let row_meta_map: MapRef = doc.get_or_insert_map("row_meta");
+    let row_id = Uuid::new_v4();
+    let (origin, _) = local_and_remote_origins();
+
+    let (change_tx, mut change_rx) = broadcast::channel(256);
+    subscribe_row_meta_change(origin.clone(), row_id, &row_meta_map, change_tx);
+
+    let is_document_empty_key = meta_id_from_row_id(&row_id, RowMetaKey::IsDocumentEmpty);
+    {
+      let mut txn = doc.transact_mut_with(origin.clone());
+      row_meta_map.insert(&mut txn, is_document_empty_key, false);
+    }
+
+    let change = loop {
+      let change = recv_with_timeout(&mut change_rx).await;
+      if matches!(change, RowChange::DidUpdateRowMeta { .. }) {
+        break change;
+      }
+    };
+    match change {
+      RowChange::DidUpdateRowMeta {
+        row_id: changed_row_id,
+        is_local_change,
+      } => {
+        assert_eq!(changed_row_id, row_id);
+        assert!(is_local_change);
       },
       other => panic!("unexpected row change: {:?}", other),
     }
