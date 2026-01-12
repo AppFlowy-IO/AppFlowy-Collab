@@ -125,3 +125,108 @@ impl From<BoardLayoutSetting> for LayoutSetting {
     ])
   }
 }
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ChartLayoutSetting {
+  #[serde(default)]
+  pub chart_type: ChartType,
+  #[serde(default)]
+  pub x_field_id: String,
+  #[serde(default)]
+  pub show_empty_values: bool,
+  #[serde(default)]
+  pub aggregation_type: ChartAggregationType,
+  #[serde(default)]
+  pub y_field_id: String,
+}
+
+impl ChartLayoutSetting {
+  pub fn new() -> Self {
+    Self {
+      chart_type: ChartType::Bar,
+      x_field_id: String::new(),
+      show_empty_values: false,
+      aggregation_type: ChartAggregationType::Count,
+      y_field_id: String::new(),
+    }
+  }
+}
+
+impl From<LayoutSetting> for ChartLayoutSetting {
+  fn from(setting: LayoutSetting) -> Self {
+    from_any(&Any::from(setting)).unwrap_or_default()
+  }
+}
+
+impl From<ChartLayoutSetting> for LayoutSetting {
+  fn from(setting: ChartLayoutSetting) -> Self {
+    LayoutSetting::from([
+      ("chart_type".into(), Any::BigInt(setting.chart_type.value())),
+      ("x_field_id".into(), setting.x_field_id.into()),
+      ("show_empty_values".into(), setting.show_empty_values.into()),
+      (
+        "aggregation_type".into(),
+        Any::BigInt(setting.aggregation_type.value()),
+      ),
+      ("y_field_id".into(), setting.y_field_id.into()),
+    ])
+  }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum ChartType {
+  #[default]
+  Bar = 0,
+  Line = 1,
+  HorizontalBar = 2,
+  Donut = 3,
+}
+
+impl From<i64> for ChartType {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => ChartType::Bar,
+      1 => ChartType::Line,
+      2 => ChartType::HorizontalBar,
+      3 => ChartType::Donut,
+      _ => ChartType::Bar,
+    }
+  }
+}
+
+impl ChartType {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum ChartAggregationType {
+  #[default]
+  Count = 0,
+  Sum = 1,
+  Average = 2,
+  Min = 3,
+  Max = 4,
+}
+
+impl From<i64> for ChartAggregationType {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => ChartAggregationType::Count,
+      1 => ChartAggregationType::Sum,
+      2 => ChartAggregationType::Average,
+      3 => ChartAggregationType::Min,
+      4 => ChartAggregationType::Max,
+      _ => ChartAggregationType::Count,
+    }
+  }
+}
+
+impl ChartAggregationType {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+}
