@@ -7,6 +7,8 @@ pub struct MetaMap {
   container: MapRef,
 }
 
+pub const DATABASE_ROW_TEMPLATES: &str = "row_templates";
+
 impl MetaMap {
   pub fn new(container: MapRef) -> Self {
     Self { container }
@@ -34,6 +36,20 @@ impl MetaMap {
       },
     }
   }
+  pub fn set_row_templates_json(&self, txn: &mut TransactionMut, json: &str) {
+    self
+      .container
+      .insert(txn, DATABASE_ROW_TEMPLATES, Any::String(json.into()));
+  }
+
+  pub fn get_row_templates_json<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+    self
+      .container
+      .get(txn, DATABASE_ROW_TEMPLATES)?
+      .cast::<String>()
+      .ok()
+  }
+
 }
 
 impl Deref for MetaMap {

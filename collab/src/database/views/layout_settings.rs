@@ -230,3 +230,190 @@ impl ChartAggregationType {
     *self as i64
   }
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum GalleryCardSize {
+  Small = 0,
+  #[default]
+  Medium = 1,
+  Large = 2,
+}
+
+impl From<i64> for GalleryCardSize {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => GalleryCardSize::Small,
+      1 => GalleryCardSize::Medium,
+      2 => GalleryCardSize::Large,
+      _ => GalleryCardSize::Medium,
+    }
+  }
+}
+
+impl GalleryCardSize {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+}
+
+/// Layout settings for Gallery view.
+///
+/// These settings are intentionally small and UI-focused. “Properties shown on
+/// card” behavior is primarily driven by per-view `FieldVisibility` settings.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct GalleryLayoutSetting {
+  /// Whether to show cover images on cards.
+  #[serde(default = "default_true")]
+  pub show_cover: bool,
+
+  /// Whether to fit the entire image in the card preview area (no cropping).
+  /// When false, images are cropped to fill the preview.
+  #[serde(default)]
+  pub fit_image: bool,
+
+  /// Card size (affects card width and cover height in the UI).
+  #[serde(default)]
+  pub card_size: GalleryCardSize,
+
+  /// Card width in pixels (0 = auto).
+  #[serde(default)]
+  pub card_width: i32,
+}
+
+impl GalleryLayoutSetting {
+  pub fn new() -> Self {
+    Self {
+      show_cover: true,
+      fit_image: false,
+      card_size: GalleryCardSize::Medium,
+      card_width: 0,
+    }
+  }
+}
+
+impl From<LayoutSetting> for GalleryLayoutSetting {
+  fn from(setting: LayoutSetting) -> Self {
+    from_any(&Any::from(setting)).unwrap_or_default()
+  }
+}
+
+impl From<GalleryLayoutSetting> for LayoutSetting {
+  fn from(setting: GalleryLayoutSetting) -> Self {
+    LayoutSetting::from([
+      ("show_cover".into(), setting.show_cover.into()),
+      ("fit_image".into(), setting.fit_image.into()),
+      ("card_size".into(), Any::BigInt(setting.card_size.value())),
+      ("card_width".into(), Any::BigInt(setting.card_width as i64)),
+    ])
+  }
+}
+
+/// Layout settings for List view.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ListLayoutSetting {
+  /// Display mode for list cards
+  #[serde(default)]
+  pub display_mode: ListDisplayMode,
+  /// Field IDs to show on cards (excluding primary field which is always shown)
+  #[serde(default)]
+  pub visible_field_ids: Vec<String>,
+  /// Whether to show cover images on cards
+  #[serde(default = "default_true")]
+  pub show_cover: bool,
+  /// Whether to show row icons on cards
+  #[serde(default = "default_true")]
+  pub show_icon: bool,
+  /// Card width in pixels (0 = auto)
+  #[serde(default)]
+  pub card_width: i32,
+  /// Optional field ID to group rows by
+  #[serde(default)]
+  pub group_field_id: Option<String>,
+  /// Whether to show field names on cards
+  #[serde(default = "default_true")]
+  pub show_field_names: bool,
+}
+
+fn default_true() -> bool {
+  true
+}
+
+impl ListLayoutSetting {
+  pub fn new() -> Self {
+    Self {
+      display_mode: ListDisplayMode::Standard,
+      visible_field_ids: vec![],
+      show_cover: true,
+      show_icon: true,
+      card_width: 0,
+      group_field_id: None,
+      show_field_names: true,
+    }
+  }
+}
+
+impl From<LayoutSetting> for ListLayoutSetting {
+  fn from(setting: LayoutSetting) -> Self {
+    from_any(&Any::from(setting)).unwrap_or_default()
+  }
+}
+
+impl From<ListLayoutSetting> for LayoutSetting {
+  fn from(setting: ListLayoutSetting) -> Self {
+    let mut result = LayoutSetting::from([
+      (
+        "display_mode".into(),
+        Any::BigInt(setting.display_mode.value()),
+      ),
+      ("show_cover".into(), setting.show_cover.into()),
+      ("show_icon".into(), setting.show_icon.into()),
+      ("card_width".into(), Any::BigInt(setting.card_width as i64)),
+      ("show_field_names".into(), setting.show_field_names.into()),
+    ]);
+
+    // Add visible_field_ids as array
+    let field_ids: Vec<Any> = setting
+      .visible_field_ids
+      .into_iter()
+      .map(|s| Any::String(s.into()))
+      .collect();
+    result.insert("visible_field_ids".to_string(), Any::Array(field_ids.into()));
+
+    if let Some(group_field_id) = setting.group_field_id {
+      result.insert("group_field_id".to_string(), group_field_id.into());
+    }
+
+    result
+  }
+}
+
+/// Display mode for list view cards
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum ListDisplayMode {
+  /// Single-line cards with title only
+  Compact = 0,
+  /// Cards with title and 2-3 fields
+  #[default]
+  Standard = 1,
+  /// Large cards with cover image and more fields
+  Expanded = 2,
+}
+
+impl From<i64> for ListDisplayMode {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => ListDisplayMode::Compact,
+      1 => ListDisplayMode::Standard,
+      2 => ListDisplayMode::Expanded,
+      _ => ListDisplayMode::Standard,
+    }
+  }
+}
+
+impl ListDisplayMode {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+}
