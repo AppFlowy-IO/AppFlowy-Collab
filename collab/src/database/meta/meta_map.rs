@@ -49,7 +49,6 @@ impl MetaMap {
       .cast::<String>()
       .ok()
   }
-
 }
 
 impl Deref for MetaMap {

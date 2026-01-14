@@ -378,7 +378,10 @@ impl From<ListLayoutSetting> for LayoutSetting {
       .into_iter()
       .map(|s| Any::String(s.into()))
       .collect();
-    result.insert("visible_field_ids".to_string(), Any::Array(field_ids.into()));
+    result.insert(
+      "visible_field_ids".to_string(),
+      Any::Array(field_ids.into()),
+    );
 
     if let Some(group_field_id) = setting.group_field_id {
       result.insert("group_field_id".to_string(), group_field_id.into());
