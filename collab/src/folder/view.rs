@@ -969,6 +969,8 @@ pub enum ViewLayout {
   Calendar = 3,
   Chat = 4,
   Chart = 5,
+  List = 6,
+  Gallery = 7,
 }
 
 impl ViewLayout {
@@ -979,7 +981,12 @@ impl ViewLayout {
   pub fn is_database(&self) -> bool {
     matches!(
       self,
-      ViewLayout::Grid | ViewLayout::Board | ViewLayout::Calendar | ViewLayout::Chart
+      ViewLayout::Grid
+        | ViewLayout::Board
+        | ViewLayout::Calendar
+        | ViewLayout::Chart
+        | ViewLayout::List
+        | ViewLayout::Gallery
     )
   }
 }
@@ -995,6 +1002,8 @@ impl TryFrom<i64> for ViewLayout {
       3 => Ok(ViewLayout::Calendar),
       4 => Ok(ViewLayout::Chat),
       5 => Ok(ViewLayout::Chart),
+      6 => Ok(ViewLayout::List),
+      7 => Ok(ViewLayout::Gallery),
       _ => bail!("Unknown layout {}", value),
     }
   }
