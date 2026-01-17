@@ -317,6 +317,7 @@ pub enum NumberFormat {
   ArgentinePeso = 34,
   UruguayanPeso = 35,
   Percent = 36,
+  NumWithCommas = 37,
 }
 
 impl NumberFormat {
@@ -364,6 +365,7 @@ impl From<i64> for NumberFormat {
       34 => NumberFormat::ArgentinePeso,
       35 => NumberFormat::UruguayanPeso,
       36 => NumberFormat::Percent,
+      37 => NumberFormat::NumWithCommas,
       _ => NumberFormat::Num,
     }
   }
@@ -387,6 +389,15 @@ define_currency_set!(
             minor_units: 1,
             name: "percent",
             symbol: "%",
+            symbol_first: false,
+        },
+        NUM_WITH_COMMAS : {
+            code: "",
+            exponent: 0,
+            locale: EnUs,
+            minor_units: 1,
+            name: "number with comma separator",
+            symbol: "",
             symbol_first: false,
         },
         USD : {
@@ -755,6 +766,7 @@ impl NumberFormat {
       NumberFormat::ArgentinePeso => number_currency::ARS,
       NumberFormat::UruguayanPeso => number_currency::UYU,
       NumberFormat::Percent => number_currency::PERCENT,
+      NumberFormat::NumWithCommas => number_currency::NUM_WITH_COMMAS,
     }
   }
 
@@ -831,6 +843,32 @@ mod tests {
     assert_number(&type_option, "0.2", "€0,2");
     assert_number(&type_option, "1000", "€1.000");
     assert_number(&type_option, "1234.56", "€1.234,56");
+  }
+
+  #[test]
+  fn num_with_commas_type_option_test() {
+    let mut type_option = NumberTypeOption::new();
+    type_option.format = NumberFormat::NumWithCommas;
+
+    assert_number(&type_option, "", "");
+    assert_number(&type_option, "123", "123");
+    assert_number(&type_option, "1234", "1,234");
+    assert_number(&type_option, "1234567", "1,234,567");
+    assert_number(&type_option, "99999999999", "99,999,999,999");
+    assert_number(&type_option, "-1234567", "-1,234,567");
+  }
+
+  #[test]
+  fn percent_type_option_test() {
+    let mut type_option = NumberTypeOption::new();
+    type_option.format = NumberFormat::Percent;
+
+    assert_number(&type_option, "", "");
+    assert_number(&type_option, "50", "50%");
+    assert_number(&type_option, "100", "100%");
+    assert_number(&type_option, "0.5", "0.5%");
+    assert_number(&type_option, "75.5", "75.5%");
+    assert_number(&type_option, "-25", "-25%");
   }
 
   fn assert_number(type_option: &NumberTypeOption, input_str: &str, expected_str: &str) {
