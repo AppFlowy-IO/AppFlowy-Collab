@@ -39,6 +39,7 @@ const META: &str = "meta";
 const COMMENT: &str = "comment";
 pub const LAST_MODIFIED: &str = "last_modified";
 pub const CREATED_AT: &str = "created_at";
+pub const CREATED_BY: &str = "created_by";
 
 pub struct DatabaseRow {
   pub row_id: RowId,
@@ -244,6 +245,7 @@ impl DatabaseRowBody {
             .set_visibility(row.visibility)
             .set_created_at(row.created_at)
             .set_last_modified(row.modified_at)
+            .set_created_by_if_not_none(row.created_by)
             .set_cells(row.cells);
         })
         .done();
@@ -373,6 +375,9 @@ pub struct Row {
   pub created_at: i64,
   #[serde(alias = "last_modified", deserialize_with = "deserialize_i64")]
   pub modified_at: i64,
+  /// The user ID who created this row
+  #[serde(default, deserialize_with = "deserialize_option_i64")]
+  pub created_by: Option<i64>,
 }
 
 fn deserialize_i64<'de, D>(deserializer: D) -> Result<i64, D::Error>
@@ -393,6 +398,29 @@ where
     other => Err(de::Error::invalid_type(
       Unexpected::Other(&format!("{:?}", other)),
       &"a number or a string that can be parsed into i64",
+    )),
+  }
+}
+
+fn deserialize_option_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+  D: serde::Deserializer<'de>,
+{
+  use serde::de::{self, Unexpected};
+  match serde_json::Value::deserialize(deserializer)? {
+    serde_json::Value::Null => Ok(None),
+    serde_json::Value::Number(num) => num.as_i64().map(Some).ok_or_else(|| {
+      de::Error::invalid_type(
+        Unexpected::Other(&format!("{:?}", num)),
+        &"a valid i64 number or null",
+      )
+    }),
+    serde_json::Value::String(s) => s.parse::<i64>().map(Some).map_err(|_| {
+      de::Error::invalid_type(Unexpected::Str(&s), &"a string that can be parsed into i64 or null")
+    }),
+    other => Err(de::Error::invalid_type(
+      Unexpected::Other(&format!("{:?}", other)),
+      &"a number, a string that can be parsed into i64, or null",
     )),
   }
 }
@@ -438,6 +466,22 @@ impl Row {
       visibility: true,
       created_at: timestamp,
       modified_at: timestamp,
+      created_by: None,
+    }
+  }
+
+  /// Creates a new instance of [Row] with the creator's user ID
+  pub fn new_with_creator(id: RowId, database_id: DatabaseId, uid: i64) -> Self {
+    let timestamp = timestamp();
+    Row {
+      id,
+      database_id,
+      cells: HashMap::new(),
+      height: DEFAULT_ROW_HEIGHT,
+      visibility: true,
+      created_at: timestamp,
+      modified_at: timestamp,
+      created_by: Some(uid),
     }
   }
 
@@ -450,6 +494,7 @@ impl Row {
       visibility: true,
       created_at: 0,
       modified_at: 0,
+      created_by: None,
     }
   }
 
@@ -576,6 +621,22 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
       self
         .map_ref
         .insert(self.txn, LAST_MODIFIED, Any::BigInt(value));
+    }
+    self
+  }
+
+  pub fn set_created_by(self, value: i64) -> Self {
+    self
+      .map_ref
+      .insert(self.txn, CREATED_BY, Any::BigInt(value));
+    self
+  }
+
+  pub fn set_created_by_if_not_none(self, value: Option<i64>) -> Self {
+    if let Some(value) = value {
+      self
+        .map_ref
+        .insert(self.txn, CREATED_BY, Any::BigInt(value));
     }
     self
   }
@@ -710,6 +771,9 @@ pub struct CreateRowParams {
   #[serde(rename = "last_modified")]
   pub modified_at: i64,
   pub row_meta: Option<RowMeta>,
+  /// The user ID who created this row
+  #[serde(default)]
+  pub created_by: Option<i64>,
 }
 
 pub(crate) struct CreateRowParamsValidator;
@@ -743,6 +807,24 @@ impl CreateRowParams {
       created_at: timestamp,
       modified_at: timestamp,
       row_meta: None,
+      created_by: None,
+    }
+  }
+
+  /// Creates a new instance of [CreateRowParams] with the creator's user ID
+  pub fn new_with_creator(id: RowId, database_id: DatabaseId, uid: i64) -> Self {
+    let timestamp = timestamp();
+    Self {
+      id,
+      database_id,
+      cells: Default::default(),
+      height: 60,
+      visibility: true,
+      row_position: OrderObjectPosition::default(),
+      created_at: timestamp,
+      modified_at: timestamp,
+      row_meta: None,
+      created_by: Some(uid),
     }
   }
 
@@ -769,6 +851,11 @@ impl CreateRowParams {
     self.row_meta = row_meta;
     self
   }
+
+  pub fn with_created_by(mut self, created_by: Option<i64>) -> Self {
+    self.created_by = created_by;
+    self
+  }
 }
 
 impl From<CreateRowParams> for Row {
@@ -781,6 +868,7 @@ impl From<CreateRowParams> for Row {
       visibility: params.visibility,
       created_at: params.created_at,
       modified_at: params.modified_at,
+      created_by: params.created_by,
     }
   }
 }
