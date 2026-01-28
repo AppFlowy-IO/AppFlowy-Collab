@@ -63,6 +63,7 @@ pub(crate) fn create_database_params_from_template(
       created_at: timestamp,
       modified_at: timestamp,
       row_meta: None,
+      created_by: None,
     });
   }
 

@@ -1453,6 +1453,7 @@ impl Database {
       created_at: timestamp,
       modified_at: timestamp,
       row_meta: None,
+      created_by: row.created_by,
     }))
   }
 

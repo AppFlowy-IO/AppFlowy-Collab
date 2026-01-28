@@ -144,6 +144,7 @@ impl DatabaseCollabRemapper {
           visibility: row.visibility,
           row_position: OrderObjectPosition::End,
           row_meta,
+          created_by: row.created_by,
         }
       })
       .collect();
@@ -194,6 +195,7 @@ impl DatabaseCollabRemapper {
           visibility: row.visibility,
           row_position: OrderObjectPosition::End,
           row_meta,
+          created_by: row.created_by,
         }
       })
       .collect();
