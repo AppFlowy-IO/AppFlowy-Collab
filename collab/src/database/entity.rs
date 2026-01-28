@@ -187,6 +187,11 @@ impl CreateViewParams {
     self.field_settings = field_settings_map;
     self
   }
+
+  pub fn with_sorts(mut self, sorts: Vec<SortMap>) -> Self {
+    self.sorts = sorts;
+    self
+  }
 }
 
 impl From<DatabaseView> for CreateViewParams {

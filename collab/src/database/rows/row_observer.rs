@@ -1,6 +1,7 @@
 use crate::core::origin::CollabOrigin;
+use crate::database::rows::comment::RowComment;
 use crate::database::rows::{
-  Cell, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY, Row, RowMetaKey, meta_id_from_row_id,
+  Cell, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY, RowMetaKey, meta_id_from_row_id,
 };
 use crate::entity::uuid_validation::RowId;
 
@@ -15,6 +16,9 @@ use tracing::trace;
 
 pub type RowChangeSender = broadcast::Sender<RowChange>;
 pub type RowChangeReceiver = broadcast::Receiver<RowChange>;
+
+/// Key constant for the comments map in the row document
+pub const ROW_COMMENTS: &str = "comment";
 
 #[derive(Debug, Clone)]
 pub enum RowChange {
@@ -38,8 +42,22 @@ pub enum RowChange {
     row_id: RowId,
     is_local_change: bool,
   },
-  DidUpdateRowComment {
-    row: Row,
+  /// A comment was added to the row
+  DidAddComment {
+    row_id: RowId,
+    comment: RowComment,
+    is_local_change: bool,
+  },
+  /// A comment was updated
+  DidUpdateComment {
+    row_id: RowId,
+    comment: RowComment,
+    is_local_change: bool,
+  },
+  /// A comment was deleted
+  DidDeleteComment {
+    row_id: RowId,
+    comment_id: String,
     is_local_change: bool,
   },
 }
@@ -94,6 +112,61 @@ pub(crate) fn subscribe_row_meta_change(
               is_local_change,
             });
             break;
+          }
+        }
+      }
+    }
+  });
+}
+
+/// Subscribe to comment changes in a row.
+/// Emits RowChange events for comment additions, updates, and deletions.
+pub fn subscribe_row_comment_change(
+  origin: CollabOrigin,
+  row_id: RowId,
+  comments_map: &MapRef,
+  change_tx: RowChangeSender,
+) {
+  comments_map.observe_deep_with("comment-change", move |txn, events| {
+    let txn_origin = CollabOrigin::from(txn);
+    let is_local_change = txn_origin == origin;
+    for event in events.iter() {
+      if let Event::Map(map_event) = event {
+        for (key, entry_change) in map_event.keys(txn).iter() {
+          let comment_id = key.deref().to_string();
+          match entry_change {
+            EntryChange::Inserted(value) => {
+              // A new comment was added
+              if let Ok(comment_map) = value.clone().cast::<MapRef>() {
+                if let Some(comment) = RowComment::from_map_ref(&comment_map, txn) {
+                  let _ = change_tx.send(RowChange::DidAddComment {
+                    row_id,
+                    comment,
+                    is_local_change,
+                  });
+                }
+              }
+            },
+            EntryChange::Updated(_, value) => {
+              // A comment was updated
+              if let Ok(comment_map) = value.clone().cast::<MapRef>() {
+                if let Some(comment) = RowComment::from_map_ref(&comment_map, txn) {
+                  let _ = change_tx.send(RowChange::DidUpdateComment {
+                    row_id,
+                    comment,
+                    is_local_change,
+                  });
+                }
+              }
+            },
+            EntryChange::Removed(_) => {
+              // A comment was deleted
+              let _ = change_tx.send(RowChange::DidDeleteComment {
+                row_id,
+                comment_id,
+                is_local_change,
+              });
+            },
           }
         }
       }
@@ -196,6 +269,12 @@ fn handle_map_event(
           },
         }
       },
+      RowChangePath::Comments => {
+        // Comment changes are handled by subscribe_row_comment_change
+        // This path is here for completeness but actual handling is done
+        // via the dedicated comment observer
+        trace!("row observe comment change: {}", key);
+      },
     }
   }
 }
@@ -203,6 +282,7 @@ fn handle_map_event(
 enum RowChangePath {
   Unknown(String),
   Cells,
+  Comments,
 }
 
 impl From<&Event> for RowChangePath {
@@ -221,6 +301,7 @@ impl From<&str> for RowChangePath {
   fn from(s: &str) -> Self {
     match s {
       ROW_CELLS => Self::Cells,
+      ROW_COMMENTS => Self::Comments,
       s => Self::Unknown(s.to_string()),
     }
   }

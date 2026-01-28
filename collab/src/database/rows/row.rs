@@ -1,5 +1,9 @@
+use crate::database::rows::comment::{
+  COMMENT_CONTENT, COMMENT_IS_RESOLVED, COMMENT_REACTIONS, COMMENT_RESOLVED_AT,
+  COMMENT_RESOLVED_BY, COMMENT_UPDATED_AT, RowComment,
+};
 use crate::preclude::{
-  Any, ArrayRef, Collab, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue,
+  Any, Collab, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue,
 };
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
@@ -17,6 +21,7 @@ use crate::util::AnyExt;
 
 use crate::database::database::timestamp;
 
+use super::row_observer::subscribe_row_comment_change;
 use crate::database::rows::{
   Cell, Cells, CellsUpdate, RowChangeSender, RowMeta, RowMetaUpdate, subscribe_row_data_change,
   subscribe_row_meta_change,
@@ -37,6 +42,7 @@ pub type BlockId = i64;
 
 const META: &str = "meta";
 const COMMENT: &str = "comment";
+const ROW_REACTIONS: &str = "row_reactions";
 pub const LAST_MODIFIED: &str = "last_modified";
 pub const CREATED_AT: &str = "created_at";
 pub const CREATED_BY: &str = "created_by";
@@ -86,8 +92,10 @@ impl DatabaseRow {
     if let Some(change_tx) = change_tx {
       let origin = collab.origin().clone();
       let meta_change_tx = change_tx.clone();
+      let comment_change_tx = change_tx.clone();
       subscribe_row_data_change(origin.clone(), row_id, &body.data, change_tx);
-      subscribe_row_meta_change(origin, row_id, &body.meta, meta_change_tx);
+      subscribe_row_meta_change(origin.clone(), row_id, &body.meta, meta_change_tx);
+      subscribe_row_comment_change(origin, row_id, &body.comments, comment_change_tx);
     }
     Ok(Self {
       row_id,
@@ -106,8 +114,10 @@ impl DatabaseRow {
     if let Some(change_tx) = change_tx {
       let origin = collab.origin().clone();
       let meta_change_tx = change_tx.clone();
+      let comment_change_tx = change_tx.clone();
       subscribe_row_data_change(origin.clone(), row_id, &body.data, change_tx);
-      subscribe_row_meta_change(origin, row_id, &body.meta, meta_change_tx);
+      subscribe_row_meta_change(origin.clone(), row_id, &body.meta, meta_change_tx);
+      subscribe_row_comment_change(origin, row_id, &body.comments, comment_change_tx);
     }
     Self {
       row_id,
@@ -182,6 +192,99 @@ impl DatabaseRow {
     let update = RowMetaUpdate::new(&mut txn, meta, row_id);
     f(update)
   }
+
+  // ==================== Comment Methods ====================
+
+  /// Get all comments for this row
+  pub fn get_comments(&self) -> Vec<RowComment> {
+    let txn = self.collab.transact();
+    self.body.get_all_comments(&txn)
+  }
+
+  /// Get a specific comment by ID
+  pub fn get_comment(&self, comment_id: &str) -> Option<RowComment> {
+    let txn = self.collab.transact();
+    self.body.get_comment(&txn, comment_id)
+  }
+
+  /// Add a new comment
+  pub fn add_comment(&mut self, comment: RowComment) -> String {
+    let mut txn = self.collab.transact_mut();
+    self.body.add_comment(&mut txn, comment)
+  }
+
+  /// Update comment content
+  pub fn update_comment_content(&mut self, comment_id: &str, content: String) -> bool {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .update_comment_content(&mut txn, comment_id, content)
+  }
+
+  /// Delete a comment
+  pub fn delete_comment(&mut self, comment_id: &str) -> bool {
+    let mut txn = self.collab.transact_mut();
+    self.body.delete_comment(&mut txn, comment_id)
+  }
+
+  /// Set the resolved status of a comment
+  pub fn set_comment_resolved(
+    &mut self,
+    comment_id: &str,
+    is_resolved: bool,
+    resolved_by: Option<String>,
+  ) -> bool {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .set_comment_resolved(&mut txn, comment_id, is_resolved, resolved_by)
+  }
+
+  /// Add a reaction to a comment
+  pub fn add_comment_reaction(&mut self, comment_id: &str, emoji: &str, user_id: i64) -> bool {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .add_comment_reaction(&mut txn, comment_id, emoji, user_id)
+  }
+
+  /// Remove a reaction from a comment
+  pub fn remove_comment_reaction(&mut self, comment_id: &str, emoji: &str, user_id: i64) -> bool {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .remove_comment_reaction(&mut txn, comment_id, emoji, user_id)
+  }
+
+  /// Get comment count
+  pub fn get_comment_count(&self) -> usize {
+    let txn = self.collab.transact();
+    self.body.get_comment_count(&txn)
+  }
+
+  /// Get replies to a specific comment
+  pub fn get_comment_replies(&self, parent_comment_id: &str) -> Vec<RowComment> {
+    let txn = self.collab.transact();
+    self.body.get_comment_replies(&txn, parent_comment_id)
+  }
+
+  /// Add a reaction to the row
+  pub fn add_row_reaction(&mut self, emoji: &str, user_id: i64) {
+    let mut txn = self.collab.transact_mut();
+    self.body.add_row_reaction(&mut txn, emoji, user_id);
+  }
+
+  /// Remove a reaction from the row
+  pub fn remove_row_reaction(&mut self, emoji: &str, user_id: i64) {
+    let mut txn = self.collab.transact_mut();
+    self.body.remove_row_reaction(&mut txn, emoji, user_id);
+  }
+
+  /// Get all reactions for this row
+  pub fn get_row_reactions(&self) -> HashMap<String, Vec<i64>> {
+    let txn = self.collab.transact();
+    self.body.get_row_reactions(&txn)
+  }
 }
 
 impl Deref for DatabaseRow {
@@ -214,10 +317,9 @@ impl BorrowMut<Collab> for DatabaseRow {
 pub struct DatabaseRowBody {
   row_id: RowId,
   data: MapRef,
-  #[allow(dead_code)]
   meta: MapRef,
-  #[allow(dead_code)]
-  comments: ArrayRef,
+  /// Comments stored as MapRef keyed by comment_id for O(1) lookup
+  comments: MapRef,
 }
 
 impl DatabaseRowBody {
@@ -234,7 +336,8 @@ impl DatabaseRowBody {
     let mut txn = collab.context.transact_mut();
     let data: MapRef = collab.data.get_or_init(&mut txn, DATABASE_ROW_DATA);
     let meta: MapRef = collab.data.get_or_init(&mut txn, META);
-    let comments: ArrayRef = collab.data.get_or_init(&mut txn, COMMENT);
+    // Initialize comments as MapRef for O(1) lookup by comment_id
+    let comments: MapRef = collab.data.get_or_init(&mut txn, COMMENT);
     if let Some(row) = row {
       RowBuilder::new(&mut txn, data.clone(), meta.clone())
         .update(|update| {
@@ -322,6 +425,245 @@ impl DatabaseRowBody {
 
   pub fn get_meta(&self) -> &MapRef {
     &self.meta
+  }
+
+  pub fn get_comments(&self) -> &MapRef {
+    &self.comments
+  }
+
+  // ==================== Comment CRUD Methods ====================
+
+  /// Get all comments for this row
+  pub fn get_all_comments<T: ReadTxn>(&self, txn: &T) -> Vec<RowComment> {
+    let mut comments = Vec::new();
+    for (_key, value) in self.comments.iter(txn) {
+      if let Ok(comment_map) = value.cast::<MapRef>() {
+        if let Some(comment) = RowComment::from_map_ref(&comment_map, txn) {
+          comments.push(comment);
+        }
+      }
+    }
+    // Sort by created_at in ascending order
+    comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    comments
+  }
+
+  /// Get a specific comment by ID
+  pub fn get_comment<T: ReadTxn>(&self, txn: &T, comment_id: &str) -> Option<RowComment> {
+    let comment_map: MapRef = self.comments.get_with_txn(txn, comment_id)?;
+    RowComment::from_map_ref(&comment_map, txn)
+  }
+
+  /// Add a new comment and return its ID
+  pub fn add_comment(&self, txn: &mut TransactionMut, comment: RowComment) -> String {
+    let comment_id = comment.id.clone();
+    let comment_map: MapRef = self.comments.get_or_init(txn, comment_id.as_str());
+    comment.fill_map_ref(txn, &comment_map);
+    comment_id
+  }
+
+  /// Update the content of an existing comment
+  pub fn update_comment_content(
+    &self,
+    txn: &mut TransactionMut,
+    comment_id: &str,
+    content: String,
+  ) -> bool {
+    if let Some(comment_map) = self
+      .comments
+      .get(txn, comment_id)
+      .and_then(|v| v.cast::<MapRef>().ok())
+    {
+      comment_map.insert(txn, COMMENT_CONTENT, content);
+      comment_map.insert(txn, COMMENT_UPDATED_AT, Any::BigInt(timestamp()));
+      true
+    } else {
+      false
+    }
+  }
+
+  /// Delete a comment by ID
+  pub fn delete_comment(&self, txn: &mut TransactionMut, comment_id: &str) -> bool {
+    self.comments.remove(txn, comment_id).is_some()
+  }
+
+  /// Set the resolved status of a comment
+  pub fn set_comment_resolved(
+    &self,
+    txn: &mut TransactionMut,
+    comment_id: &str,
+    is_resolved: bool,
+    resolved_by: Option<String>,
+  ) -> bool {
+    if let Some(comment_map) = self
+      .comments
+      .get(txn, comment_id)
+      .and_then(|v| v.cast::<MapRef>().ok())
+    {
+      comment_map.insert(txn, COMMENT_IS_RESOLVED, is_resolved);
+      let now = timestamp();
+      comment_map.insert(txn, COMMENT_UPDATED_AT, Any::BigInt(now));
+
+      if is_resolved {
+        if let Some(resolved_by) = resolved_by {
+          comment_map.insert(txn, COMMENT_RESOLVED_BY, resolved_by);
+        }
+        comment_map.insert(txn, COMMENT_RESOLVED_AT, Any::BigInt(now));
+      } else {
+        // Clear resolved fields if unresolving
+        comment_map.remove(txn, COMMENT_RESOLVED_BY);
+        comment_map.remove(txn, COMMENT_RESOLVED_AT);
+      }
+      true
+    } else {
+      false
+    }
+  }
+
+  /// Add a reaction to a comment
+  pub fn add_comment_reaction(
+    &self,
+    txn: &mut TransactionMut,
+    comment_id: &str,
+    emoji: &str,
+    user_id: i64,
+  ) -> bool {
+    if let Some(comment_map) = self
+      .comments
+      .get(txn, comment_id)
+      .and_then(|v| v.cast::<MapRef>().ok())
+    {
+      // Get current reactions
+      let reactions_str: Option<String> = comment_map.get_with_txn(txn, COMMENT_REACTIONS);
+      let mut reactions: std::collections::HashMap<String, Vec<i64>> = reactions_str
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+
+      // Add user to the emoji's user list if not already present
+      let user_list = reactions.entry(emoji.to_string()).or_default();
+      if !user_list.contains(&user_id) {
+        user_list.push(user_id);
+      }
+
+      // Save back to the map
+      if let Ok(reactions_json) = serde_json::to_string(&reactions) {
+        comment_map.insert(txn, COMMENT_REACTIONS, reactions_json);
+      }
+      comment_map.insert(txn, COMMENT_UPDATED_AT, Any::BigInt(timestamp()));
+      true
+    } else {
+      false
+    }
+  }
+
+  /// Remove a reaction from a comment
+  pub fn remove_comment_reaction(
+    &self,
+    txn: &mut TransactionMut,
+    comment_id: &str,
+    emoji: &str,
+    user_id: i64,
+  ) -> bool {
+    if let Some(comment_map) = self
+      .comments
+      .get(txn, comment_id)
+      .and_then(|v| v.cast::<MapRef>().ok())
+    {
+      // Get current reactions
+      let reactions_str: Option<String> = comment_map.get_with_txn(txn, COMMENT_REACTIONS);
+      let mut reactions: std::collections::HashMap<String, Vec<i64>> = reactions_str
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+
+      // Remove user from the emoji's user list
+      if let Some(user_list) = reactions.get_mut(emoji) {
+        user_list.retain(|&id| id != user_id);
+        // Remove the emoji entry if no users left
+        if user_list.is_empty() {
+          reactions.remove(emoji);
+        }
+      }
+
+      // Save back to the map
+      if let Ok(reactions_json) = serde_json::to_string(&reactions) {
+        comment_map.insert(txn, COMMENT_REACTIONS, reactions_json);
+      }
+      comment_map.insert(txn, COMMENT_UPDATED_AT, Any::BigInt(timestamp()));
+      true
+    } else {
+      false
+    }
+  }
+
+  /// Get the count of comments for this row
+  pub fn get_comment_count<T: ReadTxn>(&self, txn: &T) -> usize {
+    self.comments.len(txn) as usize
+  }
+
+  /// Get replies to a specific comment
+  pub fn get_comment_replies<T: ReadTxn>(
+    &self,
+    txn: &T,
+    parent_comment_id: &str,
+  ) -> Vec<RowComment> {
+    self
+      .get_all_comments(txn)
+      .into_iter()
+      .filter(|c| c.parent_comment_id.as_deref() == Some(parent_comment_id))
+      .collect()
+  }
+
+  // ==================== Row Reaction Methods ====================
+
+  /// Add a reaction to the row
+  pub fn add_row_reaction(&self, txn: &mut TransactionMut, emoji: &str, user_id: i64) {
+    // Get current reactions from meta
+    let reactions_str: Option<String> = self.meta.get_with_txn(txn, ROW_REACTIONS);
+    let mut reactions: HashMap<String, Vec<i64>> = reactions_str
+      .and_then(|s| serde_json::from_str(&s).ok())
+      .unwrap_or_default();
+
+    // Add user to the emoji's user list if not already present
+    let user_list = reactions.entry(emoji.to_string()).or_default();
+    if !user_list.contains(&user_id) {
+      user_list.push(user_id);
+    }
+
+    // Save back to the meta map
+    if let Ok(reactions_json) = serde_json::to_string(&reactions) {
+      self.meta.insert(txn, ROW_REACTIONS, reactions_json);
+    }
+  }
+
+  /// Remove a reaction from the row
+  pub fn remove_row_reaction(&self, txn: &mut TransactionMut, emoji: &str, user_id: i64) {
+    // Get current reactions from meta
+    let reactions_str: Option<String> = self.meta.get_with_txn(txn, ROW_REACTIONS);
+    let mut reactions: HashMap<String, Vec<i64>> = reactions_str
+      .and_then(|s| serde_json::from_str(&s).ok())
+      .unwrap_or_default();
+
+    // Remove user from the emoji's user list
+    if let Some(user_list) = reactions.get_mut(emoji) {
+      user_list.retain(|&id| id != user_id);
+      // Remove the emoji entry if no users left
+      if user_list.is_empty() {
+        reactions.remove(emoji);
+      }
+    }
+
+    // Save back to the meta map
+    if let Ok(reactions_json) = serde_json::to_string(&reactions) {
+      self.meta.insert(txn, ROW_REACTIONS, reactions_json);
+    }
+  }
+
+  /// Get all reactions for this row
+  pub fn get_row_reactions<T: ReadTxn>(&self, txn: &T) -> HashMap<String, Vec<i64>> {
+    let reactions_str: Option<String> = self.meta.get_with_txn(txn, ROW_REACTIONS);
+    reactions_str
+      .and_then(|s| serde_json::from_str(&s).ok())
+      .unwrap_or_default()
   }
 }
 
@@ -752,7 +1094,7 @@ pub fn row_id_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowI
 /// Return a [Row] from a [MapRef]
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
   let any = map_ref.to_json(txn);
-  match from_any(&any) {
+  match from_any::<Row>(&any) {
     Ok(row) => Some(row),
     Err(e) => {
       error!("Failed to convert to Row: {}, value:{:#?}", e, any);
@@ -922,5 +1264,167 @@ mod tests {
     let row: Row = serde_json::from_value(input_with_string)
       .expect("Failed to deserialize row with string as i64");
     assert_eq!(row.created_at, 1678901234);
+  }
+
+  #[test]
+  fn test_row_created_by_serialization() {
+    use crate::preclude::encoding::serde::from_any;
+
+    let row_id = "550e8400-e29b-41d4-a716-446655440000";
+    let database_id = "650e8400-e29b-41d4-a716-446655440001";
+
+    // Test with created_by as number
+    let input_with_created_by = json!({
+      "id": row_id,
+      "database_id": database_id,
+      "cells": {},
+      "height": 100,
+      "visibility": true,
+      "created_at": 1678901234,
+      "modified_at": 1678901234,
+      "created_by": 12345
+    });
+    let row: Row = serde_json::from_value(input_with_created_by)
+      .expect("Failed to deserialize row with created_by");
+    assert_eq!(row.created_by, Some(12345));
+
+    // Test without created_by (should default to None)
+    let input_without_created_by = json!({
+      "id": row_id,
+      "database_id": database_id,
+      "cells": {},
+      "height": 100,
+      "visibility": true,
+      "created_at": 1678901234,
+      "modified_at": 1678901234
+    });
+    let row: Row = serde_json::from_value(input_without_created_by)
+      .expect("Failed to deserialize row without created_by");
+    assert_eq!(row.created_by, None);
+
+    // Test deserialization from yrs Any type (simulating how it's stored in collab)
+    let any_value = Any::Map(std::sync::Arc::new(
+      [
+        ("id".into(), Any::String(row_id.into())),
+        ("database_id".into(), Any::String(database_id.into())),
+        ("cells".into(), Any::Map(std::sync::Arc::new([].into()))),
+        ("height".into(), Any::BigInt(100)),
+        ("visibility".into(), Any::Bool(true)),
+        ("created_at".into(), Any::BigInt(1678901234)),
+        ("last_modified".into(), Any::BigInt(1678901234)),
+        ("created_by".into(), Any::BigInt(12345)),
+      ]
+      .into(),
+    ));
+
+    let row: Row = from_any(&any_value).expect("Failed to deserialize row from Any");
+    println!("Row created_by from Any: {:?}", row.created_by);
+    assert_eq!(
+      row.created_by,
+      Some(12345),
+      "created_by should be Some(12345) when deserialized from Any::BigInt"
+    );
+  }
+
+  #[test]
+  fn test_row_created_by_collab_roundtrip() {
+    use crate::core::collab::CollabOptions;
+    use crate::core::origin::CollabOrigin;
+    use uuid::Uuid;
+
+    let row_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+    let database_id = Uuid::parse_str("650e8400-e29b-41d4-a716-446655440001").unwrap();
+    let user_id: i64 = 12345;
+
+    // Create a row with created_by set
+    let row = Row::new_with_creator(row_id, database_id, user_id);
+    assert_eq!(row.created_by, Some(user_id));
+
+    // Create a collab and store the row
+    let options = CollabOptions::new(row_id, 1);
+    let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+    let database_row = DatabaseRow::create(row_id, collab, None, row.clone());
+
+    // Read the row back from the collab
+    let retrieved_row = database_row.get_row();
+    assert!(
+      retrieved_row.is_some(),
+      "Should be able to retrieve row from collab"
+    );
+
+    let retrieved_row = retrieved_row.unwrap();
+    println!("Original row created_by: {:?}", row.created_by);
+    println!("Retrieved row created_by: {:?}", retrieved_row.created_by);
+
+    assert_eq!(
+      retrieved_row.created_by,
+      Some(user_id),
+      "created_by should persist after storing and retrieving from collab"
+    );
+  }
+
+  #[test]
+  fn test_row_created_by_encoded_collab_roundtrip() {
+    use crate::core::collab::CollabOptions;
+    use crate::core::origin::CollabOrigin;
+    use uuid::Uuid;
+    use yrs::updates::decoder::Decode;
+
+    let row_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+    let database_id = Uuid::parse_str("650e8400-e29b-41d4-a716-446655440001").unwrap();
+    let user_id: i64 = 12345;
+    let client_id: yrs::block::ClientID = 1;
+
+    // Create a row with created_by set
+    let row = Row::new_with_creator(row_id, database_id, user_id);
+    assert_eq!(row.created_by, Some(user_id));
+
+    // Convert row to EncodedCollab (simulates storage)
+    let encoded_collab = default_database_row_from_row(row.clone(), client_id);
+    println!(
+      "Encoded collab state_vector len: {}",
+      encoded_collab.state_vector.len()
+    );
+    println!(
+      "Encoded collab doc_state len: {}",
+      encoded_collab.doc_state.len()
+    );
+
+    // Decode the collab (simulates loading from storage)
+    // Use CollabOptions with the same client_id for consistency
+    let options = CollabOptions::new(row_id, client_id);
+    let mut collab =
+      Collab::new_with_options(CollabOrigin::Empty, options).expect("Failed to create new collab");
+
+    // Apply the encoded state to the new collab
+    let update =
+      yrs::Update::decode_v1(&encoded_collab.doc_state).expect("Failed to decode doc_state");
+    {
+      let mut txn = collab.transact_mut();
+      txn.apply_update(update).expect("Failed to apply update");
+    }
+
+    // Open as DatabaseRow
+    let database_row = DatabaseRow::open(row_id, collab, None).expect("Failed to open DatabaseRow");
+
+    // Read the row back
+    let retrieved_row = database_row.get_row();
+    assert!(
+      retrieved_row.is_some(),
+      "Should be able to retrieve row from decoded collab"
+    );
+
+    let retrieved_row = retrieved_row.unwrap();
+    println!("Original row created_by: {:?}", row.created_by);
+    println!(
+      "Retrieved row (after encode/decode) created_by: {:?}",
+      retrieved_row.created_by
+    );
+
+    assert_eq!(
+      retrieved_row.created_by,
+      Some(user_id),
+      "created_by should persist after encode/decode cycle (simulating storage)"
+    );
   }
 }

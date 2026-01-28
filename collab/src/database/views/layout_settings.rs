@@ -420,3 +420,160 @@ impl ListDisplayMode {
     *self as i64
   }
 }
+
+/// Layout settings for Feed view.
+/// Feed view displays database rows as vertically stacked cards with inline document preview.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct FeedLayoutSetting {
+  /// Expand mode for feed cards
+  #[serde(default)]
+  pub expand_mode: FeedExpandMode,
+  /// Maximum lines to show in preview
+  #[serde(default = "default_preview_lines")]
+  pub max_preview_lines: i32,
+  /// Whether to show author on cards
+  #[serde(default = "default_true")]
+  pub show_author: bool,
+  /// Whether to show timestamp on cards
+  #[serde(default = "default_true")]
+  pub show_timestamp: bool,
+  /// Whether to show comments section
+  #[serde(default = "default_true")]
+  pub show_comments: bool,
+  /// Whether to show reactions
+  #[serde(default = "default_true")]
+  pub show_reactions: bool,
+  /// Whether to show cover images on cards
+  #[serde(default = "default_true")]
+  pub show_cover: bool,
+  /// Whether to show row icons on cards
+  #[serde(default = "default_true")]
+  pub show_icon: bool,
+  /// Field IDs to show on cards (excluding primary field which is always shown)
+  #[serde(default)]
+  pub visible_field_ids: Vec<String>,
+  /// Default sort order for feed
+  #[serde(default)]
+  pub sort_order: FeedSortOrder,
+}
+
+fn default_preview_lines() -> i32 {
+  5
+}
+
+impl FeedLayoutSetting {
+  pub fn new() -> Self {
+    Self {
+      expand_mode: FeedExpandMode::Standard,
+      max_preview_lines: 5,
+      show_author: true,
+      show_timestamp: true,
+      show_comments: true,
+      show_reactions: true,
+      show_cover: true,
+      show_icon: true,
+      visible_field_ids: vec![],
+      sort_order: FeedSortOrder::NewestFirst,
+    }
+  }
+}
+
+impl From<LayoutSetting> for FeedLayoutSetting {
+  fn from(setting: LayoutSetting) -> Self {
+    from_any(&Any::from(setting)).unwrap_or_default()
+  }
+}
+
+impl From<FeedLayoutSetting> for LayoutSetting {
+  fn from(setting: FeedLayoutSetting) -> Self {
+    let mut result = LayoutSetting::from([
+      (
+        "expand_mode".into(),
+        Any::BigInt(setting.expand_mode.value()),
+      ),
+      (
+        "max_preview_lines".into(),
+        Any::BigInt(setting.max_preview_lines as i64),
+      ),
+      ("show_author".into(), setting.show_author.into()),
+      ("show_timestamp".into(), setting.show_timestamp.into()),
+      ("show_comments".into(), setting.show_comments.into()),
+      ("show_reactions".into(), setting.show_reactions.into()),
+      ("show_cover".into(), setting.show_cover.into()),
+      ("show_icon".into(), setting.show_icon.into()),
+      ("sort_order".into(), Any::BigInt(setting.sort_order.value())),
+    ]);
+
+    // Add visible_field_ids as array
+    let field_ids: Vec<Any> = setting
+      .visible_field_ids
+      .into_iter()
+      .map(|s| Any::String(s.into()))
+      .collect();
+    result.insert(
+      "visible_field_ids".to_string(),
+      Any::Array(field_ids.into()),
+    );
+
+    result
+  }
+}
+
+/// Expand mode for feed view cards
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum FeedExpandMode {
+  /// Minimal preview (title + few lines)
+  Collapsed = 0,
+  /// Moderate preview (default)
+  #[default]
+  Standard = 1,
+  /// Full content visible
+  Expanded = 2,
+}
+
+impl From<i64> for FeedExpandMode {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => FeedExpandMode::Collapsed,
+      1 => FeedExpandMode::Standard,
+      2 => FeedExpandMode::Expanded,
+      _ => FeedExpandMode::Standard,
+    }
+  }
+}
+
+impl FeedExpandMode {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+}
+
+/// Default sort order for feed
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum FeedSortOrder {
+  #[default]
+  NewestFirst = 0,
+  OldestFirst = 1,
+  LastModified = 2,
+  Alphabetical = 3,
+}
+
+impl From<i64> for FeedSortOrder {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => FeedSortOrder::NewestFirst,
+      1 => FeedSortOrder::OldestFirst,
+      2 => FeedSortOrder::LastModified,
+      3 => FeedSortOrder::Alphabetical,
+      _ => FeedSortOrder::NewestFirst,
+    }
+  }
+}
+
+impl FeedSortOrder {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+}

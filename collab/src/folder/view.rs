@@ -981,6 +981,7 @@ pub enum ViewLayout {
   Chart = 5,
   List = 6,
   Gallery = 7,
+  Feed = 8,
 }
 
 impl ViewLayout {
@@ -997,6 +998,7 @@ impl ViewLayout {
         | ViewLayout::Chart
         | ViewLayout::List
         | ViewLayout::Gallery
+        | ViewLayout::Feed
     )
   }
 }
@@ -1014,6 +1016,7 @@ impl TryFrom<i64> for ViewLayout {
       5 => Ok(ViewLayout::Chart),
       6 => Ok(ViewLayout::List),
       7 => Ok(ViewLayout::Gallery),
+      8 => Ok(ViewLayout::Feed),
       _ => bail!("Unknown layout {}", value),
     }
   }
