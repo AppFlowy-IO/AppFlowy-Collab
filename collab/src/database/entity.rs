@@ -251,6 +251,7 @@ impl CreateDatabaseParams {
           visibility: row.visibility,
           row_position: OrderObjectPosition::End,
           row_meta,
+          created_by: row.created_by,
         }
       })
       .collect();
