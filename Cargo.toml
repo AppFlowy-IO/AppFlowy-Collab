@@ -1,36 +1,22 @@
 [workspace]
-members = [
-  "collab",
-  "collab-database",
-  "collab-user",
-  "collab-entity",
-  "collab-document",
-  "collab-folder",
-  "collab-plugins",
-  "collab-importer",
-]
+members = ["collab"]
 resolver = "2"
 
 [workspace.dependencies]
-collab = { path = "collab" }
-collab-database = { path = "collab-database" }
-collab-plugins = { path = "collab-plugins" }
-collab-user = { path = "collab-user" }
-collab-entity = { path = "collab-entity" }
-collab-document = { path = "collab-document" }
-collab-folder = { path = "collab-folder" }
-collab-importer = { path = "collab-importer" }
-yrs = { version = "0.21.3", features = ["sync"] }
+yrs = { version = "0.25", features = ["sync"] }
 anyhow = "1.0.94"
 thiserror = "1.0.39"
 serde = { version = "1.0.157", features = ["derive"] }
 serde_json = "1.0.108"
-tokio = { version = "1.38", features = ["sync"] }
-bytes = "1.5.0"
-tracing = "0.1.22"
+tokio = { version = "1.48", features = ["sync"] }
+bytes = "1.10.1"
+tracing = "0.1.41"
 chrono = { version = "0.4.38", default-features = false, features = ["clock"] }
 async-trait = "0.1"
 arc-swap = { version = "1.7" }
+uuid = { version = "1.17.0", features = ["v4", "v5", "v7", "serde"] }
+futures-lite = { version = "2.6.0", features = ["futures-io"] }
+blake3 = "1.8"
 
 [patch.crates-io]
 # We're using a specific commit here because rust-rocksdb doesn't publish the latest version that includes the memory alignment fix.

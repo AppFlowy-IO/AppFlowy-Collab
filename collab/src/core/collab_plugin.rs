@@ -3,14 +3,13 @@ use crate::core::awareness::{AwarenessUpdate, Event};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 
-use std::sync::Arc;
-use tracing::trace;
-use yrs::{Doc, TransactionMut};
-
+use crate::core::collab::{CollabContext, CollabVersion};
 use crate::core::origin::CollabOrigin;
-use crate::entity::EncodedCollab;
 use crate::error::CollabError;
 use crate::preclude::Collab;
+use std::sync::Arc;
+use tracing::trace;
+use yrs::TransactionMut;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum CollabPluginType {
@@ -22,11 +21,6 @@ pub enum CollabPluginType {
 }
 pub trait CollabPersistence: Send + Sync + 'static {
   fn load_collab_from_disk(&self, collab: &mut Collab) -> Result<(), CollabError>;
-  fn save_collab_to_disk(
-    &self,
-    object_id: &str,
-    encoded_collab: EncodedCollab,
-  ) -> Result<(), CollabError>;
 }
 
 impl<T> CollabPersistence for Box<T>
@@ -36,28 +30,27 @@ where
   fn load_collab_from_disk(&self, collab: &mut Collab) -> Result<(), CollabError> {
     (**self).load_collab_from_disk(collab)
   }
-
-  fn save_collab_to_disk(
-    &self,
-    object_id: &str,
-    encoded_collab: EncodedCollab,
-  ) -> Result<(), CollabError> {
-    (**self).save_collab_to_disk(object_id, encoded_collab)
-  }
 }
 
 pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
   /// The will apply the updates to the current [TransactionMut] which will restore the state of
   /// the document.
-  fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &Doc) {}
+  fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &mut CollabContext) {}
 
   /// Called when the plugin is initialized.
   fn did_init(&self, _collab: &Collab, _object_id: &str) {}
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
   /// the Yrs document.
-  fn receive_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
+  fn receive_update(
+    &self,
+    _object_id: &str,
+    _txn: &TransactionMut,
+    _update: &[u8],
+    _collab_version: Option<&CollabVersion>,
+  ) {
+  }
 
   /// Called when the plugin receives a local update.
   /// We use the [CollabOrigin] to know if the update comes from the local user or from a remote
@@ -96,16 +89,22 @@ impl<T> CollabPlugin for Box<T>
 where
   T: CollabPlugin,
 {
-  fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
-    (**self).init(object_id, origin, doc);
+  fn init(&self, object_id: &str, origin: &CollabOrigin, ctx: &mut CollabContext) {
+    (**self).init(object_id, origin, ctx);
   }
 
   fn did_init(&self, collab: &Collab, _object_id: &str) {
     (**self).did_init(collab, _object_id)
   }
 
-  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
-    (**self).receive_update(object_id, txn, update)
+  fn receive_update(
+    &self,
+    object_id: &str,
+    txn: &TransactionMut,
+    update: &[u8],
+    collab_version: Option<&CollabVersion>,
+  ) {
+    (**self).receive_update(object_id, txn, update, collab_version)
   }
 
   fn receive_local_update(&self, origin: &CollabOrigin, object_id: &str, update: &[u8]) {

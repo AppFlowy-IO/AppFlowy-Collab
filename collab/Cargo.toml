@@ -9,38 +9,98 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 yrs.workspace = true
+uuid.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 serde = { workspace = true, features = ["rc"] }
 serde_json.workspace = true
 bytes = { workspace = true, features = ["serde"] }
 tracing.workspace = true
-tokio = { workspace = true, features = ["sync", "rt"] }
+tokio = { workspace = true, features = ["sync", "rt", "macros", "fs", "io-util"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 async-trait.workspace = true
 arc-swap.workspace = true
 bincode = "1.3.3"
 serde_repr = "0.1"
 chrono = "0.4.22"
-unicode-segmentation = "1.10.1"
 lazy_static = "1.4.0"
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3" }
-js-sys = "0.3"
+fastrand = "2.1.0"
+parking_lot = "0.12"
+prost = "0.13.3"
+futures = "0.3"
+futures-lite.workspace = true
+rand = { version = "0.8", optional = true }
+smallvec = { version = "1.10", features = ["write", "union", "const_generics", "const_new"], optional = true }
+nanoid = "0.4.0"
+markdown = "1.0.0"
+dashmap = "7.0.0-rc2"
+strum = "0.25"
+strum_macros = "0.25"
+rayon = "1.10.0"
+csv = "1.4.0"
+tokio-util = "0.7"
+rusty-money = { version = "0.4.1", features = ["iso"] }
+fancy-regex = "0.13.0"
+rust_decimal = "1.36.0"
+chrono-tz = "0.10.0"
+percent-encoding = "2.3.1"
+sha2 = "0.10.8"
+base64 = "0.22.1"
+iana-time-zone = "0.1.61"
+walkdir = "2.5.0"
+async_zip = { version = "0.0.17", features = ["full"] }
+async-recursion = "1.1"
+sanitize-filename = "0.5.0"
+indexmap = { version = "2.3", features = ["serde"] }
+zip = "0.6.6"
+rocksdb = { version = "0.22.0", default-features = false, features = ["zstd"], optional = true }
+blake3.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "sync", "rt"] }
 tempfile = "3.8.0"
-collab = { path = "", features = ["default"] }
-nanoid = "0.4.0"
+collab = { path = "", features = ["plugins"] }
 chrono.workspace = true
 assert-json-diff = "2.0.2"
-tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 assert_matches2 = "0.1.2"
+fs_extra = "1.2.0"
+rand = "0.8.4"
+tokio-test = "0.4"
 
 [features]
 default = []
+plugins = ["dep:rocksdb", "dep:smallvec"]
 verbose_log = []
 trace_transact = []
 lock_timeout = []
+rwlock_reason = []
+import_csv = []
+
+[[test]]
+name = "database"
+path = "tests/database/main.rs"
+
+[[test]]
+name = "document"
+path = "tests/document/main.rs"
+
+[[test]]
+name = "folder"
+path = "tests/folder/main.rs"
+
+[[test]]
+name = "importer"
+path = "tests/importer/main.rs"
+
+[[test]]
+name = "user"
+path = "tests/user/main.rs"
+
+[[test]]
+name = "plugins"
+path = "tests/plugins/main.rs"
+
+[build-dependencies]
+prost-build = "0.12"
+protoc-bin-vendored = "3.0.0"

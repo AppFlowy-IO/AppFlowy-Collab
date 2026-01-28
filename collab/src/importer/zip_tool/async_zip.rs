@@ -1,0 +1,266 @@
+use anyhow::{Context, Result, anyhow};
+use async_recursion::async_recursion;
+use async_zip::base::read::stream::{Ready, ZipFileReader};
+use async_zip::{StringEncoding, ZipString};
+use futures::AsyncReadExt as FuturesAsyncReadExt;
+use futures::io::AsyncBufRead;
+use futures_lite::io;
+use std::ffi::OsString;
+use std::str;
+
+use std::path::{Path, PathBuf};
+use tokio::fs;
+use tokio::fs::File;
+use tokio::io::{AsyncWriteExt, BufReader};
+
+use async_zip::base::read::seek::ZipFileReader as SeekZipFileReader;
+
+use tokio::fs::{OpenOptions, create_dir_all};
+use tokio_util::compat::TokioAsyncReadCompatExt;
+use tokio_util::compat::TokioAsyncWriteCompatExt;
+
+use crate::error::CollabError;
+use crate::importer::zip_tool::util::{
+  has_multi_part_extension, has_multi_part_suffix, is_multi_part_zip_signature, remove_part_suffix,
+  sanitize_file_path,
+};
+use tracing::{error, trace, warn};
+
+pub struct UnzipFile {
+  pub file_name: String,
+  pub unzip_dir_path: PathBuf,
+  pub parts: Vec<PathBuf>,
+}
+
+#[async_recursion(?Send)]
+pub async fn async_unzip<R>(
+  mut zip_reader: ZipFileReader<Ready<R>>,
+  out_dir: PathBuf,
+  default_file_name: Option<String>,
+) -> Result<UnzipFile, CollabError>
+where
+  R: AsyncBufRead + Unpin,
+{
+  let mut root_dir = None;
+  let mut parts = vec![];
+  #[allow(irrefutable_let_patterns)]
+  while let result = zip_reader.next_with_entry().await {
+    match result {
+      Ok(Some(mut next_reader)) => {
+        let entry_reader = next_reader.reader_mut();
+        let filename = get_filename_from_zip_string(entry_reader.entry().filename())
+          .with_context(|| "Failed to extract filename from entry".to_string())?;
+
+        if root_dir.is_none() && entry_reader.entry().dir().unwrap_or(false) {
+          root_dir = Some(filename.split('/').next().unwrap_or(&filename).to_string());
+        }
+
+        let output_path = out_dir.join(&filename);
+        if filename.ends_with('/') {
+          fs::create_dir_all(&output_path)
+            .await
+            .with_context(|| format!("Failed to create directory: {}", output_path.display()))?;
+        } else {
+          // Ensure parent directories exist
+          if let Some(parent) = output_path.parent() {
+            if !parent.exists() {
+              fs::create_dir_all(parent).await.with_context(|| {
+                format!("Failed to create parent directory: {}", parent.display())
+              })?;
+            }
+          }
+
+          // Write file contents
+          if let Ok(mut outfile) = File::create(&output_path).await {
+            let mut buffer = vec![];
+            match entry_reader.read_to_end(&mut buffer).await {
+              Ok(_) => {
+                if buffer.len() >= 4 {
+                  if let Ok(four_bytes) = buffer[..4].try_into() {
+                    if is_multi_part_zip_signature(four_bytes) {
+                      let is_multipart_candidate = filename.contains('/')
+                        || has_multi_part_extension(&filename)
+                        || has_multi_part_suffix(&filename);
+
+                      if root_dir.is_none() && is_multipart_candidate {
+                        if let Some(file_name) =
+                          Path::new(&filename).file_stem().and_then(|s| s.to_str())
+                        {
+                          root_dir = Some(remove_part_suffix(file_name));
+                        }
+                      }
+                      if is_multipart_candidate {
+                        parts.push(output_path.clone());
+                      }
+                    }
+                  }
+                }
+
+                outfile.write_all(&buffer).await.with_context(|| {
+                  format!("Failed to write data to file: {}", output_path.display())
+                })?;
+              },
+              Err(err) => {
+                error!(
+                  "Failed to read entry: {:?}. Error: {:?}",
+                  entry_reader.entry(),
+                  err,
+                );
+                return Err(CollabError::Internal(anyhow!(
+                  "Unexpected EOF while reading: {}",
+                  filename
+                )));
+              },
+            }
+          }
+        }
+
+        // Move to the next file in the zip
+        zip_reader = next_reader
+          .done()
+          .await
+          .with_context(|| "Failed to move to the next entry")?;
+      },
+      Ok(None) => break,
+      Err(zip_error) => {
+        error!("Error reading zip file: {:?}", zip_error);
+        break;
+      },
+    }
+  }
+
+  if !parts.is_empty() {
+    for part in &parts {
+      let part_file = File::open(part).await?;
+      let _ = unzip_single_file(part_file, &out_dir, root_dir.clone()).await?;
+      let _ = fs::remove_file(part).await;
+    }
+  }
+
+  // move all unzip file content into parent
+  match root_dir {
+    None => match default_file_name {
+      None => Err(CollabError::ImporterFileNotFound),
+      Some(default_file_name) => {
+        if fs::metadata(&out_dir).await.is_err() {
+          fs::create_dir_all(&out_dir)
+            .await
+            .with_context(|| format!("Failed to create output directory: {}", out_dir.display()))?;
+        }
+        Ok(UnzipFile {
+          file_name: default_file_name.clone(),
+          unzip_dir_path: out_dir,
+          parts,
+        })
+      },
+    },
+    Some(file_name) => {
+      let target_dir = out_dir.join(&file_name);
+      if fs::metadata(&target_dir).await.is_err() {
+        warn!(
+          "Root directory {:?} missing after unzip; falling back to {:?}",
+          target_dir, out_dir
+        );
+        return Ok(UnzipFile {
+          file_name,
+          unzip_dir_path: out_dir,
+          parts,
+        });
+      }
+
+      Ok(UnzipFile {
+        file_name: file_name.clone(),
+        unzip_dir_path: target_dir,
+        parts,
+      })
+    },
+  }
+}
+
+pub fn get_filename_from_zip_string(zip_string: &ZipString) -> Result<String, anyhow::Error> {
+  match zip_string.encoding() {
+    StringEncoding::Utf8 => match zip_string.as_str() {
+      Ok(valid_str) => Ok(valid_str.to_string()),
+      Err(err) => Err(err.into()),
+    },
+
+    StringEncoding::Raw => {
+      let raw_bytes = zip_string.as_bytes();
+      let utf8_str = str::from_utf8(raw_bytes)?;
+      let os_string = OsString::from(utf8_str);
+      Ok(os_string.to_string_lossy().into_owned())
+    },
+  }
+}
+
+/// Extracts everything from the ZIP archive to the output directory
+pub async fn unzip_single_file(
+  archive: File,
+  out_dir: &Path,
+  mut root_dir: Option<String>,
+) -> Result<UnzipFile, CollabError> {
+  let archive = BufReader::new(archive).compat();
+  let mut reader = SeekZipFileReader::new(archive)
+    .await
+    .map_err(|err| CollabError::Internal(err.into()))?;
+
+  for index in 0..reader.file().entries().len() {
+    let entry = reader.file().entries().get(index).unwrap();
+    let file_name = entry
+      .filename()
+      .as_str()
+      .map_err(|err| CollabError::Internal(err.into()))?;
+    if root_dir.is_none() && file_name.ends_with('/') {
+      root_dir = Some(file_name.split('/').next().unwrap_or(file_name).to_string());
+    }
+
+    let path = out_dir.join(sanitize_file_path(file_name));
+    // If the filename of the entry ends with '/', it is treated as a directory.
+    // This is implemented by previous versions of this crate and the Python Standard Library.
+    // https://docs.rs/async_zip/0.0.8/src/async_zip/read/mod.rs.html#63-65
+    // https://github.com/python/cpython/blob/820ef62833bd2d84a141adedd9a05998595d6b6d/Lib/zipfile.py#L528
+    let entry_is_dir = entry
+      .dir()
+      .map_err(|err| CollabError::Internal(err.into()))?;
+    let mut entry_reader = reader
+      .reader_without_entry(index)
+      .await
+      .map_err(|err| CollabError::Internal(err.into()))?;
+
+    if entry_is_dir {
+      if !path.exists() {
+        create_dir_all(&path).await?;
+      }
+    } else {
+      // Creates parent directories. They may not exist if iteration is out of order
+      // or the archive does not contain directory entries.
+      if let Some(parent) = path.parent() {
+        if !parent.is_dir() {
+          create_dir_all(parent).await?;
+        }
+      }
+      if path.exists() {
+        trace!(
+          "File {:?} already exists when extracting multipart entry (async); overwriting",
+          path
+        );
+      }
+
+      let writer = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&path)
+        .await?;
+      io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
+    }
+  }
+  match root_dir {
+    None => Err(CollabError::ImporterFileNotFound),
+    Some(root_dir) => Ok(UnzipFile {
+      file_name: root_dir.clone(),
+      unzip_dir_path: out_dir.join(root_dir),
+      parts: vec![],
+    }),
+  }
+}

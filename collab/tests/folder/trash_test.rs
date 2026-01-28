@@ -1,0 +1,141 @@
+use collab::entity::uuid_validation::view_id_from_any_string;
+use collab::folder::{SectionChange, SectionChangeReceiver, TrashSectionChange, UserId};
+use std::future::Future;
+use std::time::Duration;
+
+use crate::util::{create_folder_with_workspace, make_test_view};
+
+#[test]
+fn create_trash_test() {
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), view_id_from_any_string("w1"));
+  let view_1 = make_test_view("v1", view_id_from_any_string("w1"), vec![]);
+  let view_2 = make_test_view("v2", view_id_from_any_string("w1"), vec![]);
+  let view_3 = make_test_view("v3", view_id_from_any_string("w1"), vec![]);
+  let view_1_id = view_1.id.to_string();
+  let view_2_id = view_2.id.to_string();
+  let view_3_id = view_3.id.to_string();
+
+  let mut folder = folder_test.folder;
+
+  folder.insert_view(view_1, Some(0), uid.as_i64());
+  folder.insert_view(view_2, Some(0), uid.as_i64());
+  folder.insert_view(view_3, Some(0), uid.as_i64());
+
+  folder.add_trash_view_ids(vec![view_1_id, view_2_id, view_3_id], uid.as_i64());
+
+  let trash = folder.get_my_trash_sections(Some(uid.as_i64()));
+  assert_eq!(trash.len(), 3);
+  assert_eq!(
+    trash[0].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string()
+  );
+  assert_eq!(
+    trash[1].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
+  );
+  assert_eq!(
+    trash[2].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v3".as_bytes()).to_string()
+  );
+}
+
+#[test]
+fn delete_trash_view_ids_test() {
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), view_id_from_any_string("w1"));
+
+  let mut folder = folder_test.folder;
+
+  let view_1 = make_test_view("v1", view_id_from_any_string("w1"), vec![]);
+  let view_2 = make_test_view("v2", view_id_from_any_string("w1"), vec![]);
+  let view_1_id = view_1.id.to_string();
+  let view_2_id = view_2.id.to_string();
+  folder.insert_view(view_1, Some(0), uid.as_i64());
+  folder.insert_view(view_2, Some(0), uid.as_i64());
+
+  folder.add_trash_view_ids(vec![view_1_id.clone(), view_2_id], uid.as_i64());
+
+  let trash = folder.get_my_trash_sections(Some(uid.as_i64()));
+  assert_eq!(
+    trash[0].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v1".as_bytes()).to_string()
+  );
+  assert_eq!(
+    trash[1].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
+  );
+
+  folder.delete_trash_view_ids(vec![view_1_id], uid.as_i64());
+  let trash = folder.get_my_trash_sections(Some(uid.as_i64()));
+  assert_eq!(
+    trash[0].id.to_string(),
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, "v2".as_bytes()).to_string()
+  );
+}
+
+#[tokio::test]
+async fn create_trash_callback_test() {
+  let uid = UserId::from(1);
+  let mut folder_test = create_folder_with_workspace(uid.clone(), view_id_from_any_string("w1"));
+
+  let section_rx = folder_test.section_rx.take().unwrap();
+
+  tokio::spawn(async move {
+    folder_test.add_trash_view_ids(vec!["1".to_string(), "2".to_string()], uid.as_i64());
+  });
+
+  timeout(poll_tx(section_rx, |change| match change {
+    SectionChange::Trash(change) => match change {
+      TrashSectionChange::TrashItemAdded { ids } => {
+        assert_eq!(
+          ids,
+          vec![crate::util::test_uuid("1"), crate::util::test_uuid("2")]
+        );
+      },
+      TrashSectionChange::TrashItemRemoved { .. } => {},
+    },
+  }))
+  .await;
+}
+
+#[tokio::test]
+async fn delete_trash_view_ids_callback_test() {
+  let uid = UserId::from(1);
+  let mut folder_test = create_folder_with_workspace(uid.clone(), view_id_from_any_string("w1"));
+  let trash_rx = folder_test.section_rx.take().unwrap();
+  tokio::spawn(async move {
+    folder_test.add_trash_view_ids(vec!["1".to_string(), "2".to_string()], uid.as_i64());
+    folder_test.delete_trash_view_ids(vec!["1".to_string(), "2".to_string()], uid.as_i64());
+  });
+
+  timeout(poll_tx(trash_rx, |change| match change {
+    SectionChange::Trash(change) => match change {
+      TrashSectionChange::TrashItemAdded { ids } => {
+        assert_eq!(
+          ids,
+          vec![crate::util::test_uuid("1"), crate::util::test_uuid("2")]
+        );
+      },
+      TrashSectionChange::TrashItemRemoved { ids } => {
+        assert_eq!(
+          ids,
+          vec![crate::util::test_uuid("1"), crate::util::test_uuid("2")]
+        );
+      },
+    },
+  }))
+  .await;
+}
+
+async fn poll_tx(mut rx: SectionChangeReceiver, callback: impl Fn(SectionChange)) {
+  while let Ok(change) = rx.recv().await {
+    callback(change)
+  }
+}
+
+async fn timeout<F: Future>(f: F) {
+  tokio::time::timeout(Duration::from_secs(2), f)
+    .await
+    .unwrap();
+}

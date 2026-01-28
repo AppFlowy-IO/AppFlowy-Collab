@@ -276,6 +276,30 @@ pub fn any_to_json_value(any: Any) -> Result<JsonValue> {
 create_deserialize_numeric!(i32, I32Visitor, deserialize_i32_from_numeric);
 create_deserialize_numeric!(i64, I64Visitor, deserialize_i64_from_numeric);
 
+pub mod serde_option_uuid {
+  use serde::{self, Deserialize, Deserializer, Serializer};
+  use uuid::Uuid;
+
+  pub fn serialize<S>(value: &Option<Uuid>, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let str = value.map(|uuid| uuid.to_string()).unwrap_or_default();
+    serializer.serialize_str(&str)
+  }
+
+  pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Uuid>, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    let opt = Option::<String>::deserialize(deserializer)?;
+    match opt {
+      Some(s) => Ok(Uuid::parse_str(&s).ok()),
+      None => Ok(None),
+    }
+  }
+}
+
 pub trait ArrayExt: Array {
   fn clear(&self, txn: &mut TransactionMut) {
     let len = self.len(txn);
@@ -404,10 +428,12 @@ pub fn is_change_since_sv(collab: &Collab, state_vector: &StateVector) -> bool {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::core::collab::default_client_id;
+  use uuid::Uuid;
 
   #[tokio::test]
   async fn test_no_changes_after_initialization() {
-    let collab = Collab::new(1, "1", "1", vec![], false);
+    let collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
     let sv_1 = collab.transact().state_vector();
     assert!(
       !is_change_since_sv(&collab, &sv_1),
@@ -417,7 +443,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_insert_triggers_change() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
     let sv_1 = collab.transact().state_vector();
 
     collab.insert("text", "hello world");
@@ -429,7 +455,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_no_changes_after_state_vector_update() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
     collab.insert("text", "hello world");
     let sv_2 = collab.transact().state_vector();
 
@@ -442,7 +468,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_remove_triggers_change() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
     collab.insert("text", "hello world");
     let sv_1 = collab.transact().state_vector();
 
@@ -455,7 +481,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_multiple_operations_trigger_change() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
     let sv_1 = collab.transact().state_vector();
 
     collab.insert("text", "hello");
@@ -470,7 +496,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_empty_insert_and_remove_no_change() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
     let sv_1 = collab.transact().state_vector();
 
     // Perform empty insert and remove operations
@@ -482,7 +508,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_changes_after_sequence_of_operations() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
     let sv_1 = collab.transact().state_vector();
 
     collab.insert("text", "hello");
@@ -501,7 +527,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_changes_after_full_update() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
     collab.insert("text", "data");
     let sv_1 = collab.transact().state_vector();
 

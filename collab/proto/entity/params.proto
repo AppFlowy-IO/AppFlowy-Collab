@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+import "common.proto";
+
+package collab;
+
+// Types of embeddings content.
+enum EmbeddingContentType {
+    // Unknown content type.
+    EMBEDDING_CONTENT_TYPE_UNKNOWN = 0;
+    // Plain text
+    EMBEDDING_CONTENT_TYPE_PLAIN_TEXT = 1;
+}
+
+// Embeddings and the associated collab metadata.
+message CollabEmbeddingsParams {
+    // Fragment id.
+    string fragment_id = 1;
+    // Collab object id.
+    string object_id = 2;
+    // Collab type.
+    CollabType collab_type = 3;
+    // Embedding content type.
+    EmbeddingContentType content_type = 4;
+    // Embedding content as string.
+    string content = 5;
+    // Embedding as float array.
+    repeated float embedding = 6;
+}
+
+// Wrapper over a collection of embeddings, together with metadata associated on the collection level.
+message CollabEmbeddings {
+    // OpenAPI tokens consumed.
+    uint32 tokens_consumed = 1;
+    // List of embeddings.
+    repeated CollabEmbeddingsParams embeddings = 2;
+}
+
+// Payload for sending and receive collab over http.
+message CollabParams {
+    string object_id = 1;
+    // Serialized EncodedCollab object, which could either be in bincode or protobuf serialization format.
+    bytes encoded_collab = 2;
+    // Collab type.
+    CollabType collab_type = 3;
+    // Document embeddings.
+    optional CollabEmbeddings embeddings = 4;
+}
+
+// Payload for creating batch of collab over http.
+message BatchCreateCollabParams {
+    // Workspace id.
+    string workspace_id = 1;
+    // List of collab params.
+    repeated CollabParams params_list = 2;
+}
+
+// Payload for creating new collab or update existing collab over http.
+message CreateCollabParams {
+    // Workspace id.
+    string workspace_id = 1;
+    // Object id.
+    string object_id = 2;
+    // Serialized EncodedCollab object, which could either be in bincode or protobuf serialization format.
+    bytes encoded_collab = 3;
+    // Collab type.
+    CollabType collab_type = 4;
+}

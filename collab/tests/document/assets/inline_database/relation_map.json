@@ -1,0 +1,337 @@
+{
+  "workspace_id": "9cb3466e-4286-4226-a1de-9904dea7f9ad",
+  "export_timestamp": 1752241234,
+  "views": {
+    "d5db7722-8919-4e9b-ac2d-8d054015dcb2": {
+      "view_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "name": "To-dos",
+      "layout": 2,
+      "parent_id": "48f2c149-1b01-4969-b3bb-d855f88a6c94",
+      "children": [
+        "131c2815-b5c5-4cb2-97ef-5042f3cb8866"
+      ],
+      "collab_object_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "created_at": 1752218014,
+      "updated_at": 1752241226,
+      "extra": null,
+      "icon": {
+        "ty": 0,
+        "value": "✅"
+      }
+    },
+    "131c2815-b5c5-4cb2-97ef-5042f3cb8866": {
+      "view_id": "131c2815-b5c5-4cb2-97ef-5042f3cb8866",
+      "name": "View of To-dos",
+      "layout": 2,
+      "parent_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "children": [],
+      "collab_object_id": "131c2815-b5c5-4cb2-97ef-5042f3cb8866",
+      "created_at": 1752241226,
+      "updated_at": 1752241226,
+      "extra": null,
+      "icon": null
+    },
+    "48f2c149-1b01-4969-b3bb-d855f88a6c94": {
+      "view_id": "48f2c149-1b01-4969-b3bb-d855f88a6c94",
+      "name": "General",
+      "layout": 0,
+      "parent_id": "9cb3466e-4286-4226-a1de-9904dea7f9ad",
+      "children": [
+        "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+        "d5db7722-8919-4e9b-ac2d-8d054015dcb2"
+      ],
+      "collab_object_id": "48f2c149-1b01-4969-b3bb-d855f88a6c94",
+      "created_at": 1752218014,
+      "updated_at": 1752218014,
+      "extra": "{\"is_space\":true,\"space_icon\":\"interface_essential/home-3\",\"space_icon_color\":\"0xFFA34AFD\",\"space_permission\":0,\"space_created_at\":1752218014}",
+      "icon": null
+    },
+    "03db700a-c4bf-4df8-adfa-f56a4ea7de35": {
+      "view_id": "03db700a-c4bf-4df8-adfa-f56a4ea7de35",
+      "name": "Untitled",
+      "layout": 1,
+      "parent_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "children": [],
+      "collab_object_id": "03db700a-c4bf-4df8-adfa-f56a4ea7de35",
+      "created_at": 1752241202,
+      "updated_at": 1752241202,
+      "extra": null,
+      "icon": null
+    },
+    "96843890-5ca5-470f-80c9-83369e362d3c": {
+      "view_id": "96843890-5ca5-470f-80c9-83369e362d3c",
+      "name": "Shared",
+      "layout": 0,
+      "parent_id": "9cb3466e-4286-4226-a1de-9904dea7f9ad",
+      "children": [],
+      "collab_object_id": "96843890-5ca5-470f-80c9-83369e362d3c",
+      "created_at": 1752218014,
+      "updated_at": 1752218014,
+      "extra": "{\"is_space\":true,\"space_icon\":\"interface_essential/star-2\",\"space_icon_color\":\"0xFFFFBA00\",\"space_permission\":0,\"space_created_at\":1752218014}",
+      "icon": null
+    },
+    "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213": {
+      "view_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "name": "Getting started",
+      "layout": 0,
+      "parent_id": "48f2c149-1b01-4969-b3bb-d855f88a6c94",
+      "children": [
+        "aa3e167f-d36b-44cf-a8d2-0105a66f184c",
+        "c09342b5-5c92-4eda-9cc3-e84374cc87e9",
+        "faae358d-d4b0-4426-b634-350a62a25f26",
+        "03db700a-c4bf-4df8-adfa-f56a4ea7de35"
+      ],
+      "collab_object_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "created_at": 1752218014,
+      "updated_at": 1752241202,
+      "extra": "{\"font_layout\":\"normal\",\"line_height_layout\":\"normal\",\"cover\":{\"type\":\"gradient\",\"value\":\"appflowy_them_color_gradient4\"},\"font\":null}",
+      "icon": {
+        "ty": 0,
+        "value": "🌟"
+      }
+    },
+    "c09342b5-5c92-4eda-9cc3-e84374cc87e9": {
+      "view_id": "c09342b5-5c92-4eda-9cc3-e84374cc87e9",
+      "name": "Mobile guide",
+      "layout": 0,
+      "parent_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "children": [],
+      "collab_object_id": "c09342b5-5c92-4eda-9cc3-e84374cc87e9",
+      "created_at": 1752218014,
+      "updated_at": 1752218014,
+      "extra": null,
+      "icon": null
+    },
+    "faae358d-d4b0-4426-b634-350a62a25f26": {
+      "view_id": "faae358d-d4b0-4426-b634-350a62a25f26",
+      "name": "Web guide",
+      "layout": 0,
+      "parent_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "children": [],
+      "collab_object_id": "faae358d-d4b0-4426-b634-350a62a25f26",
+      "created_at": 1752218014,
+      "updated_at": 1752218014,
+      "extra": null,
+      "icon": null
+    },
+    "aa3e167f-d36b-44cf-a8d2-0105a66f184c": {
+      "view_id": "aa3e167f-d36b-44cf-a8d2-0105a66f184c",
+      "name": "Desktop guide",
+      "layout": 0,
+      "parent_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "children": [],
+      "collab_object_id": "aa3e167f-d36b-44cf-a8d2-0105a66f184c",
+      "created_at": 1752218014,
+      "updated_at": 1752218014,
+      "extra": null,
+      "icon": {
+        "ty": 0,
+        "value": "📎"
+      }
+    }
+  },
+  "collab_objects": {
+    "c09342b5-5c92-4eda-9cc3-e84374cc87e9": {
+      "object_id": "c09342b5-5c92-4eda-9cc3-e84374cc87e9",
+      "collab_type": 0,
+      "size_bytes": 10748
+    },
+    "b07d16e7-c6ab-5d91-8f79-6329e4b52a20": {
+      "object_id": "b07d16e7-c6ab-5d91-8f79-6329e4b52a20",
+      "collab_type": 0,
+      "size_bytes": 762
+    },
+    "d5db7722-8919-4e9b-ac2d-8d054015dcb2": {
+      "object_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "collab_type": 1,
+      "size_bytes": 6775
+    },
+    "3357c1ba-c044-413c-835e-da539b20c01b": {
+      "object_id": "3357c1ba-c044-413c-835e-da539b20c01b",
+      "collab_type": 4,
+      "size_bytes": 1120
+    },
+    "537c08eb-8099-4215-b9dc-8358fa614ee6": {
+      "object_id": "537c08eb-8099-4215-b9dc-8358fa614ee6",
+      "collab_type": 4,
+      "size_bytes": 651
+    },
+    "aa3e167f-d36b-44cf-a8d2-0105a66f184c": {
+      "object_id": "aa3e167f-d36b-44cf-a8d2-0105a66f184c",
+      "collab_type": 0,
+      "size_bytes": 13180
+    },
+    "f82c4e38-e01e-4b28-a8ea-97c458886440": {
+      "object_id": "f82c4e38-e01e-4b28-a8ea-97c458886440",
+      "collab_type": 4,
+      "size_bytes": 590
+    },
+    "1ff482c6-92c0-4172-a91f-41633b691341": {
+      "object_id": "1ff482c6-92c0-4172-a91f-41633b691341",
+      "collab_type": 4,
+      "size_bytes": 282
+    },
+    "96843890-5ca5-470f-80c9-83369e362d3c": {
+      "object_id": "96843890-5ca5-470f-80c9-83369e362d3c",
+      "collab_type": 0,
+      "size_bytes": 585
+    },
+    "48f2c149-1b01-4969-b3bb-d855f88a6c94": {
+      "object_id": "48f2c149-1b01-4969-b3bb-d855f88a6c94",
+      "collab_type": 0,
+      "size_bytes": 559
+    },
+    "faae358d-d4b0-4426-b634-350a62a25f26": {
+      "object_id": "faae358d-d4b0-4426-b634-350a62a25f26",
+      "collab_type": 0,
+      "size_bytes": 13713
+    },
+    "131c2815-b5c5-4cb2-97ef-5042f3cb8866": {
+      "object_id": "131c2815-b5c5-4cb2-97ef-5042f3cb8866",
+      "collab_type": 1,
+      "size_bytes": 6775
+    },
+    "9d223cb5-af69-4aa7-b0a2-a2ef8d34db11": {
+      "object_id": "9d223cb5-af69-4aa7-b0a2-a2ef8d34db11",
+      "collab_type": 4,
+      "size_bytes": 594
+    },
+    "54efad77-807c-4481-b5af-be7e126bd9f8": {
+      "object_id": "54efad77-807c-4481-b5af-be7e126bd9f8",
+      "collab_type": 4,
+      "size_bytes": 282
+    },
+    "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213": {
+      "object_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "collab_type": 0,
+      "size_bytes": 6013
+    },
+    "16d55063-f0bd-46be-8257-1337163eaa17": {
+      "object_id": "16d55063-f0bd-46be-8257-1337163eaa17",
+      "collab_type": 4,
+      "size_bytes": 282
+    },
+    "4f35b03b-e99a-46ab-8a1c-aca4091a8fdd": {
+      "object_id": "4f35b03b-e99a-46ab-8a1c-aca4091a8fdd",
+      "collab_type": 4,
+      "size_bytes": 596
+    },
+    "03db700a-c4bf-4df8-adfa-f56a4ea7de35": {
+      "object_id": "03db700a-c4bf-4df8-adfa-f56a4ea7de35",
+      "collab_type": 1,
+      "size_bytes": 2363
+    }
+  },
+  "dependencies": [
+    {
+      "source_view_id": "48f2c149-1b01-4969-b3bb-d855f88a6c94",
+      "target_view_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "dependency_type": "DocumentReference"
+    },
+    {
+      "source_view_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "target_view_id": "aa3e167f-d36b-44cf-a8d2-0105a66f184c",
+      "dependency_type": "DocumentReference"
+    },
+    {
+      "source_view_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "target_view_id": "c09342b5-5c92-4eda-9cc3-e84374cc87e9",
+      "dependency_type": "DocumentReference"
+    },
+    {
+      "source_view_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "target_view_id": "faae358d-d4b0-4426-b634-350a62a25f26",
+      "dependency_type": "DocumentReference"
+    },
+    {
+      "source_view_id": "b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213",
+      "target_view_id": "03db700a-c4bf-4df8-adfa-f56a4ea7de35",
+      "dependency_type": "DocumentReference"
+    },
+    {
+      "source_view_id": "48f2c149-1b01-4969-b3bb-d855f88a6c94",
+      "target_view_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "dependency_type": "DocumentReference"
+    },
+    {
+      "source_view_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "target_view_id": "131c2815-b5c5-4cb2-97ef-5042f3cb8866",
+      "dependency_type": "DocumentReference"
+    },
+    {
+      "source_view_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "target_view_id": "3357c1ba-c044-413c-835e-da539b20c01b",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "target_view_id": "537c08eb-8099-4215-b9dc-8358fa614ee6",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "target_view_id": "4f35b03b-e99a-46ab-8a1c-aca4091a8fdd",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "target_view_id": "f82c4e38-e01e-4b28-a8ea-97c458886440",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "d5db7722-8919-4e9b-ac2d-8d054015dcb2",
+      "target_view_id": "9d223cb5-af69-4aa7-b0a2-a2ef8d34db11",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "537c08eb-8099-4215-b9dc-8358fa614ee6",
+      "target_view_id": "b07d16e7-c6ab-5d91-8f79-6329e4b52a20",
+      "dependency_type": "DatabaseRowDocument"
+    },
+    {
+      "source_view_id": "131c2815-b5c5-4cb2-97ef-5042f3cb8866",
+      "target_view_id": "3357c1ba-c044-413c-835e-da539b20c01b",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "131c2815-b5c5-4cb2-97ef-5042f3cb8866",
+      "target_view_id": "9d223cb5-af69-4aa7-b0a2-a2ef8d34db11",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "131c2815-b5c5-4cb2-97ef-5042f3cb8866",
+      "target_view_id": "4f35b03b-e99a-46ab-8a1c-aca4091a8fdd",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "131c2815-b5c5-4cb2-97ef-5042f3cb8866",
+      "target_view_id": "f82c4e38-e01e-4b28-a8ea-97c458886440",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "131c2815-b5c5-4cb2-97ef-5042f3cb8866",
+      "target_view_id": "537c08eb-8099-4215-b9dc-8358fa614ee6",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "537c08eb-8099-4215-b9dc-8358fa614ee6",
+      "target_view_id": "b07d16e7-c6ab-5d91-8f79-6329e4b52a20",
+      "dependency_type": "DatabaseRowDocument"
+    },
+    {
+      "source_view_id": "03db700a-c4bf-4df8-adfa-f56a4ea7de35",
+      "target_view_id": "1ff482c6-92c0-4172-a91f-41633b691341",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "03db700a-c4bf-4df8-adfa-f56a4ea7de35",
+      "target_view_id": "16d55063-f0bd-46be-8257-1337163eaa17",
+      "dependency_type": "DatabaseRow"
+    },
+    {
+      "source_view_id": "03db700a-c4bf-4df8-adfa-f56a4ea7de35",
+      "target_view_id": "54efad77-807c-4481-b5af-be7e126bd9f8",
+      "dependency_type": "DatabaseRow"
+    }
+  ]
+}

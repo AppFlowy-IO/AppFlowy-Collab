@@ -6,4 +6,5 @@ pub mod collab_state;
 pub mod fill;
 pub mod origin;
 pub mod transaction;
+pub mod user_data;
 pub mod value;

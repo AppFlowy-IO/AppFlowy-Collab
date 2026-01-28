@@ -1,13 +1,15 @@
+use collab::core::collab::default_client_id;
 use collab::preclude::Collab;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 use tokio::time::sleep;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn awareness_insert_test() {
-  let mut collab = Collab::new(1, "1", "1", vec![], true);
+  let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
   collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
   let _update = collab.get_awareness().on_update(move |_, event, _| {
@@ -29,9 +31,9 @@ async fn awareness_insert_test() {
 
 #[tokio::test]
 async fn awareness_updates() {
-  let mut c1 = Collab::new(1, "1", "1", vec![], true);
+  let mut c1 = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
   c1.emit_awareness_state();
-  let mut c2 = Collab::new(2, "1", "1", vec![], true);
+  let mut c2 = Collab::new(2, Uuid::new_v4(), "1", default_client_id());
   c2.emit_awareness_state();
 
   let sync = Arc::new(Mutex::new(None));
@@ -64,7 +66,7 @@ async fn awareness_updates() {
 
 #[tokio::test]
 async fn initial_awareness_test() {
-  let mut collab = Collab::new(1, "1", "1", vec![], true);
+  let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
   collab.emit_awareness_state();
   // by default, the awareness state contains the uid
   let state: serde_json::Value = collab.get_awareness().local_state().unwrap();
@@ -73,7 +75,7 @@ async fn initial_awareness_test() {
 
 #[tokio::test]
 async fn clean_awareness_state_test() {
-  let mut collab = Collab::new(1, "1", "1", vec![], true);
+  let mut collab = Collab::new(1, Uuid::new_v4(), "1", default_client_id());
   collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
   let _update = collab.get_awareness().on_update(move |_, event, _| {
@@ -94,7 +96,7 @@ async fn clean_awareness_state_test() {
 #[tokio::test]
 async fn clean_awareness_state_sync_test() {
   let mut doc_id_map_uid = HashMap::new();
-  let mut collab_1 = Collab::new(0, "1", "1", vec![], true);
+  let mut collab_1 = Collab::new(0, Uuid::new_v4(), "1", default_client_id());
   collab_1.emit_awareness_state();
   doc_id_map_uid.insert(collab_1.client_id(), 0.to_string());
   let (tx, rx) = mpsc::sync_channel(1);
@@ -107,7 +109,7 @@ async fn clean_awareness_state_sync_test() {
 
   // apply the awareness state from collab_a to collab_b
   let awareness_update = rx.recv().unwrap();
-  let mut collab_2 = Collab::new(1, "1", "2", vec![], true);
+  let mut collab_2 = Collab::new(1, Uuid::new_v4(), "2", default_client_id());
   collab_2.emit_awareness_state();
   doc_id_map_uid.insert(collab_2.client_id(), 1.to_string());
   collab_2
