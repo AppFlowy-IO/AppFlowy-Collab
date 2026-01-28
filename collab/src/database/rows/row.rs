@@ -416,7 +416,10 @@ where
       )
     }),
     serde_json::Value::String(s) => s.parse::<i64>().map(Some).map_err(|_| {
-      de::Error::invalid_type(Unexpected::Str(&s), &"a string that can be parsed into i64 or null")
+      de::Error::invalid_type(
+        Unexpected::Str(&s),
+        &"a string that can be parsed into i64 or null",
+      )
     }),
     other => Err(de::Error::invalid_type(
       Unexpected::Other(&format!("{:?}", other)),
