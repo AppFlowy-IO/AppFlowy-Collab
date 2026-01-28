@@ -13,7 +13,7 @@ use tokio::sync::broadcast::Sender;
 
 use crate::database::database_trait::{DatabaseRowCollabService, DatabaseRowDataVariant};
 use dashmap::DashMap;
-use tracing::{debug, instrument, trace};
+use tracing::{instrument, trace};
 use yrs::block::ClientID;
 
 #[derive(Clone, Debug)]
@@ -206,39 +206,12 @@ impl Block {
   }
 
   /// Initialize the [DatabaseRow] in the background and optionally return it via channel.
-  /// Also sends a [BlockEvent::DidFetchRow] notification so Flutter can update row metadata.
   #[instrument(level = "debug", skip_all)]
   pub fn init_database_row(&self, row_id: &RowId, ret: Option<InitRowChan>) {
     let block = self.clone();
     let row_id = *row_id;
-    let notifier = self.notifier.clone();
     tokio::task::spawn(async move {
       let row = block.get_or_init_database_row(&row_id).await;
-
-      // Send DidFetchRow notification on successful load so Flutter can update
-      // row metadata (e.g., created_by) that isn't included in lightweight RowOrder.
-      if let Ok(ref row_lock) = row {
-        let guard = row_lock.read().await;
-        if let Some(row_detail) = RowDetail::from_collab(&guard) {
-          debug!(
-            "[init_database_row] row_id={}, created_by={:?}",
-            row_id, row_detail.row.created_by
-          );
-          drop(guard);
-          let _ = notifier.send(BlockEvent::DidFetchRow(vec![row_detail]));
-        } else {
-          debug!(
-            "[init_database_row] row_id={}, RowDetail::from_collab returned None",
-            row_id
-          );
-        }
-      } else {
-        debug!(
-          "[init_database_row] row_id={}, get_or_init_database_row failed",
-          row_id
-        );
-      }
-
       if let Some(ret) = ret {
         let _ = ret.send(row);
       }
