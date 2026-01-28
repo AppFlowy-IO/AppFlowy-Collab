@@ -73,6 +73,7 @@ pub(crate) fn create_database_params_from_template(
       row_position: Default::default(),
       created_at: timestamp,
       modified_at: timestamp,
+      created_by: None,
     });
   }
 

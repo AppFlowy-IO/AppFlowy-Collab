@@ -1302,6 +1302,7 @@ impl Database {
       row_position: OrderObjectPosition::After(row.id.into()),
       created_at: timestamp,
       modified_at: timestamp,
+      created_by: row.created_by,
     })
   }
 
