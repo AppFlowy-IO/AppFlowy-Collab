@@ -102,6 +102,7 @@ pub fn default_field_visibility(layout_type: DatabaseLayout) -> FieldVisibility 
     DatabaseLayout::Chart => FieldVisibility::AlwaysShown,
     DatabaseLayout::List => FieldVisibility::AlwaysShown,
     DatabaseLayout::Gallery => FieldVisibility::AlwaysShown,
+    DatabaseLayout::Feed => FieldVisibility::AlwaysShown,
   }
 }
 

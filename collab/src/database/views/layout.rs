@@ -20,6 +20,7 @@ pub enum DatabaseLayout {
   Chart = 3,
   List = 4,
   Gallery = 5,
+  Feed = 6,
 }
 
 impl DatabaseLayout {
@@ -34,6 +35,10 @@ impl DatabaseLayout {
   pub fn is_gallery(&self) -> bool {
     matches!(self, DatabaseLayout::Gallery)
   }
+
+  pub fn is_feed(&self) -> bool {
+    matches!(self, DatabaseLayout::Feed)
+  }
 }
 
 impl AsRef<str> for DatabaseLayout {
@@ -45,6 +50,7 @@ impl AsRef<str> for DatabaseLayout {
       DatabaseLayout::Chart => "3",
       DatabaseLayout::List => "4",
       DatabaseLayout::Gallery => "5",
+      DatabaseLayout::Feed => "6",
     }
   }
 }
@@ -60,6 +66,7 @@ impl FromStr for DatabaseLayout {
       "3" => Ok(DatabaseLayout::Chart),
       "4" => Ok(DatabaseLayout::List),
       "5" => Ok(DatabaseLayout::Gallery),
+      "6" => Ok(DatabaseLayout::Feed),
       _ => bail!("Invalid layout type"),
     }
   }
@@ -80,6 +87,7 @@ impl From<i64> for DatabaseLayout {
       3 => DatabaseLayout::Chart,
       4 => DatabaseLayout::List,
       5 => DatabaseLayout::Gallery,
+      6 => DatabaseLayout::Feed,
       _ => Self::default(),
     }
   }
