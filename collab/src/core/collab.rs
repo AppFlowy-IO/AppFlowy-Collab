@@ -180,7 +180,7 @@ impl CollabContext {
     }
   }
 
-  pub fn transact_mut(&mut self) -> TransactionMut {
+  pub fn transact_mut(&mut self) -> TransactionMut<'_> {
     self.doc().transact_mut_with(self.origin.clone())
   }
 
@@ -220,7 +220,7 @@ impl CollabContext {
     self.doc().client_id()
   }
 
-  pub fn transact(&self) -> Transaction {
+  pub fn transact(&self) -> Transaction<'_> {
     self.doc().transact()
   }
 
