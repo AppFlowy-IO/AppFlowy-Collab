@@ -420,4 +420,3 @@ impl ListDisplayMode {
     *self as i64
   }
 }
-
