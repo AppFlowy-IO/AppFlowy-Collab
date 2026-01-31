@@ -2,13 +2,14 @@ use collab::core::collab::{CollabOptions, CollabVersion, DataSource, VersionedDa
 use collab::core::origin::CollabOrigin;
 use collab::document::document::Document;
 use collab::document::document_remapper::DocumentCollabRemapper;
+use collab::entity::CollabDocState;
 use collab::preclude::*;
 use std::collections::HashMap;
 use std::fs;
 use uuid::Uuid;
 
 fn doc_state_to_document(
-  doc_state: &[u8],
+  doc_state: &CollabDocState,
   doc_id: &str,
   user_id: &str,
   version: Option<&CollabVersion>,
@@ -31,7 +32,9 @@ fn doc_state_to_document(
 fn test_remap_collab_with_mentioned_page_ids() {
   let test_collab_path =
     "tests/document/assets/mention_page/b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213.collab";
-  let doc_state = fs::read(test_collab_path).expect("Failed to read test collab file");
+  let doc_state: CollabDocState = fs::read(test_collab_path)
+    .expect("Failed to read test collab file")
+    .into();
 
   let mut id_mapping: HashMap<String, String> = HashMap::new();
   // "aa3e167f-d36b-44cf-a8d2-0105a66f184c",
@@ -108,7 +111,9 @@ fn test_remap_collab_with_mentioned_page_ids() {
 fn test_remap_collab_with_inline_database() {
   let test_collab_path =
     "tests/document/assets/inline_database/b29ee07f-c7b2-4b24-a8c6-5cd6d8ba1213.collab";
-  let doc_state = fs::read(test_collab_path).expect("Failed to read test collab file");
+  let doc_state: CollabDocState = fs::read(test_collab_path)
+    .expect("Failed to read test collab file")
+    .into();
 
   let mut id_mapping: HashMap<String, String> = HashMap::new();
   id_mapping.insert(
