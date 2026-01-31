@@ -1,5 +1,6 @@
 use collab::database::database::DatabaseData;
 use collab::database::database_remapper::DatabaseCollabRemapper;
+use collab::entity::CollabDocState;
 use std::collections::HashMap;
 use std::fs;
 use uuid::Uuid;
@@ -8,7 +9,9 @@ use uuid::Uuid;
 async fn test_remap_database_with_database_id() {
   let test_db_path =
     "tests/database/assets/database_remapper/d5db7722-8919-4e9b-ac2d-8d054015dcb2.collab";
-  let db_state = fs::read(test_db_path).expect("Failed to read test database file");
+  let db_state: CollabDocState = fs::read(test_db_path)
+    .expect("Failed to read test database file")
+    .into();
 
   let mut id_mapping: HashMap<String, String> = HashMap::new();
   // database id

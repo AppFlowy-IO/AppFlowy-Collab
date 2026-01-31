@@ -15,8 +15,8 @@ use crate::database::entity::{CreateDatabaseParams, CreateViewParams, DatabaseVi
 use crate::database::rows::{CreateRowParams, Row, RowMeta};
 use crate::database::util::encoded_collab;
 use crate::database::views::{OrderObjectPosition, RowOrder};
-use crate::entity::CollabType;
 use crate::entity::uuid_validation::RowId;
+use crate::entity::{CollabDocState, CollabType};
 use crate::error::CollabError;
 
 pub struct DatabaseCollabRemapper {
@@ -48,9 +48,9 @@ impl DatabaseCollabRemapper {
     &self,
     database_id: &str,
     user_id: &str,
-    db_state: &[u8],
+    db_state: &CollabDocState,
     version: Option<&CollabVersion>,
-  ) -> Result<Vec<u8>, CollabError> {
+  ) -> Result<CollabDocState, CollabError> {
     let database_data = self
       .collab_bytes_to_database_data(database_id, user_id, db_state, version)
       .await?;
@@ -66,7 +66,7 @@ impl DatabaseCollabRemapper {
     &self,
     database_id: &str,
     user_id: &str,
-    db_state: &[u8],
+    db_state: &CollabDocState,
     version: Option<&CollabVersion>,
   ) -> Result<DatabaseData, CollabError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
@@ -96,7 +96,7 @@ impl DatabaseCollabRemapper {
     database_data: DatabaseData,
     _database_id: &str,
     user_id: &str,
-  ) -> Result<Vec<u8>, CollabError> {
+  ) -> Result<CollabDocState, CollabError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
 
     let remapped_database_id = database_data.database_id;
@@ -117,9 +117,7 @@ impl DatabaseCollabRemapper {
 
     let encoded_collab = encoded_collab(&collab, &CollabType::Database)?;
 
-    let bytes = encoded_collab.doc_state.to_vec();
-
-    Ok(bytes)
+    Ok(encoded_collab.doc_state)
   }
 
   pub fn create_database_params_from_remapped_data(

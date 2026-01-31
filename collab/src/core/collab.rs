@@ -180,7 +180,7 @@ impl CollabContext {
     }
   }
 
-  pub fn transact_mut(&mut self) -> TransactionMut {
+  pub fn transact_mut(&mut self) -> TransactionMut<'_> {
     self.doc().transact_mut_with(self.origin.clone())
   }
 
@@ -220,7 +220,7 @@ impl CollabContext {
     self.doc().client_id()
   }
 
-  pub fn transact(&self) -> Transaction {
+  pub fn transact(&self) -> Transaction<'_> {
     self.doc().transact()
   }
 
@@ -726,6 +726,15 @@ pub struct VersionedData {
   pub data: Bytes,
 }
 
+impl Display for VersionedData {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("VersionedData")
+      .field("version", &self.version)
+      .field("data_length", &self.data.len())
+      .finish()
+  }
+}
+
 impl Deref for VersionedData {
   type Target = [u8];
 
@@ -767,7 +776,7 @@ impl From<EncodedCollab> for DataSource {
   fn from(encoded: EncodedCollab) -> Self {
     let versioned = VersionedData {
       version: encoded.collab_version,
-      data: encoded.doc_state,
+      data: encoded.doc_state.into(),
     };
     match encoded.version {
       EncoderVersion::V1 => DataSource::DocStateV1(versioned),

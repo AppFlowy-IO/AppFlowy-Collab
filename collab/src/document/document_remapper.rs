@@ -1,6 +1,7 @@
 use crate::core::collab::DataSource;
 use crate::core::collab::{CollabOptions, VersionedData};
 use crate::core::origin::CollabOrigin;
+use crate::entity::CollabDocState;
 use crate::preclude::*;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -55,8 +56,8 @@ impl DocumentCollabRemapper {
     &self,
     doc_id: &str,
     user_id: &str,
-    doc_state: &[u8],
-  ) -> Result<Vec<u8>, CollabError> {
+    doc_state: &CollabDocState,
+  ) -> Result<CollabDocState, CollabError> {
     let client_id = user_id.parse::<u64>().unwrap_or(0);
     let doc_uuid = Uuid::parse_str(doc_id).unwrap_or_else(|_| Uuid::new_v4());
     let options = CollabOptions::new(doc_uuid, client_id)
@@ -66,7 +67,7 @@ impl DocumentCollabRemapper {
     let document = Document::open(collab)?;
     let new_document = self.remap_collab_doc(doc_id, user_id, document)?;
     let updated_state = new_document.encode_collab()?;
-    Ok(updated_state.doc_state.to_vec())
+    Ok(updated_state.doc_state)
   }
 
   fn remap_document_data(&self, document_data: DocumentData) -> Result<DocumentData, CollabError> {

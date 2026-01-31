@@ -85,8 +85,8 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
       &self.workspace_id,
       &object_id.to_string(),
       encoded_collab.collab_version.as_ref(),
-      encoded_collab.state_vector.to_vec(),
-      encoded_collab.doc_state.to_vec(),
+      encoded_collab.state_vector.clone(),
+      encoded_collab.doc_state.clone(),
     );
     db_write
       .commit_transaction()

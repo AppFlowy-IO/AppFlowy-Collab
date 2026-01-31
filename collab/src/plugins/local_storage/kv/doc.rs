@@ -1,13 +1,14 @@
 #![cfg(feature = "plugins")]
 
 use crate::core::collab::{CollabVersion, VersionedData};
+use crate::entity::{CollabDocState, CollabStateVector};
 use crate::error::CollabError;
 use crate::plugins::local_storage::kv::keys::*;
 use crate::plugins::local_storage::kv::snapshot::SnapshotAction;
 use crate::plugins::local_storage::kv::*;
 use smallvec::{SmallVec, smallvec};
 use std::collections::HashSet;
-use tracing::error;
+use tracing::{debug, error};
 use uuid::Uuid;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
@@ -27,7 +28,7 @@ where
     txn: &T,
   ) -> Result<(), CollabError> {
     if self.is_exist(uid, workspace_id, object_id) {
-      tracing::warn!("🟡{:?} already exist", object_id);
+      tracing::warn!("[Rocksdb] 🟡{:?} already exist", object_id);
       return Err(CollabError::PersistenceDocumentAlreadyExist);
     }
     let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
@@ -48,8 +49,8 @@ where
     workspace_id: &str,
     object_id: &str,
     collab_version: Option<&CollabVersion>,
-    state_vector: Vec<u8>,
-    doc_state: Vec<u8>,
+    state_vector: CollabStateVector,
+    doc_state: CollabDocState,
   ) -> Result<(), CollabError> {
     let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
     let start = make_doc_start_key(doc_id);
@@ -78,10 +79,17 @@ where
     workspace_id: &str,
     object_id: &str,
     collab_version: Option<&CollabVersion>,
-    state_vector: Vec<u8>,
-    doc_state: Vec<u8>,
+    state_vector: CollabStateVector,
+    doc_state: CollabDocState,
   ) -> Result<(), CollabError> {
     let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
+    tracing::debug!(
+      "[Rocksdb] flush_doc doc_id={} version_present={} doc_state_len={} state_vector_len={}",
+      doc_id,
+      collab_version.is_some(),
+      doc_state.len(),
+      state_vector.len()
+    );
 
     // Remove the updates
     let start = make_doc_start_key(doc_id);
@@ -103,10 +111,23 @@ where
   fn get_doc_state(&self, doc_id: DocID) -> Result<Option<VersionedData>, CollabError> {
     let doc_state_start = make_doc_start_key(doc_id);
     let doc_state_end = make_doc_end_key(doc_id);
+    tracing::debug!(
+      "[Rocksdb] get_doc_state doc_id={} start_key_len={} end_key_len={}",
+      doc_id,
+      doc_state_start.len(),
+      doc_state_end.len()
+    );
     let mut cursor = self.range(doc_state_start.clone()..doc_state_end)?;
     if let Some(entry) = cursor.next() {
       let key = entry.key();
       let value = entry.value();
+      tracing::debug!(
+        "[Rocksdb] get_doc_state doc_id={} candidate_key_len={} key_tail_byte={} value_len={}",
+        doc_id,
+        key.len(),
+        key.last().copied().unwrap_or_default(),
+        value.as_ref().len()
+      );
       if key.starts_with(doc_state_start.as_ref()) {
         let version = if key.len() > doc_state_start.len() {
           let collab_version: [u8; 16] =
@@ -121,7 +142,17 @@ where
           None
         };
         return Ok(Some(VersionedData::new(value, version)));
+      } else {
+        tracing::debug!(
+          "[Rocksdb] 🟡 get_doc_state doc_id={} first key does not match DOC_STATE prefix",
+          doc_id
+        );
       }
+    } else {
+      tracing::debug!(
+        "[Rocksdb] 🟡 get_doc_state doc_id={} no keys in range",
+        doc_id
+      );
     }
     Ok(None)
   }
@@ -143,13 +174,20 @@ where
 
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
       if let Some(versioned) = self.get_doc_state(doc_id)? {
+        debug!(
+          "[Rocksdb] 🟢{:?} load doc state success, versioned data: {}",
+          object_id, versioned
+        );
         // Load the doc state
         match Update::decode_v1(&versioned.data) {
           Ok(update) => {
             txn.try_apply_update(update)?;
           },
           Err(err) => {
-            error!("🔴{:?} decode doc state error: {}", object_id, err);
+            error!(
+              "[Rocksdb] 🔴{:?} decode doc state error: {}",
+              object_id, err
+            );
             return Err(CollabError::DecodeUpdate(err));
           },
         }
@@ -189,7 +227,7 @@ where
     } else {
       tracing::trace!("[Client] => {:?} not exist", object_id);
       Err(CollabError::PersistenceRecordNotFound(format!(
-        "doc with given object id: {:?} is not found",
+        "[Rocksdb] doc with given object id: {:?} is not found",
         object_id
       )))
     }
@@ -218,12 +256,12 @@ where
     match get_doc_id(uid, self, workspace_id, object_id) {
       None => {
         tracing::error!(
-          "🔴Insert update failed. Can't find the doc for {}-{:?}",
+          "[Rocksdb] 🔴Insert update failed. Can't find the doc for {}-{:?}",
           uid,
           object_id
         );
         Err(CollabError::PersistenceRecordNotFound(format!(
-          "doc with given object id: {:?} is not found",
+          "[Rocksdb] doc with given object id: {:?} is not found",
           object_id
         )))
       },
@@ -266,10 +304,17 @@ where
     workspace_id: &str,
     object_id: &str,
     version: Option<&CollabVersion>,
-    doc_state: &[u8],
-    sv: &[u8],
+    doc_state: &CollabDocState,
+    sv: &CollabStateVector,
   ) -> Result<(), CollabError> {
     let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
+    tracing::debug!(
+      "[Rocksdb] flush_doc_with doc_id={} version_present={} doc_state_len={} state_vector_len={}",
+      doc_id,
+      version.is_some(),
+      doc_state.len(),
+      sv.len()
+    );
     let start = make_doc_start_key(doc_id);
     let end = make_doc_end_key(doc_id);
     self.remove_range(start.as_ref(), end.as_ref())?;
@@ -278,8 +323,8 @@ where
     let sv_key = make_state_vector_key(doc_id);
 
     // Insert new doc state and state vector
-    self.insert(doc_state_key, doc_state)?;
-    self.insert(sv_key, sv)?;
+    self.insert(doc_state_key, doc_state.as_ref())?;
+    self.insert(sv_key, sv.as_ref())?;
     Ok(())
   }
 

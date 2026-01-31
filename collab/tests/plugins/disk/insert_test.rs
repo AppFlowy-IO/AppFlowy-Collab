@@ -76,8 +76,8 @@ async fn flush_test() {
       &test.workspace_id,
       &object_id_str,
       encode_collab.collab_version.as_ref(),
-      encode_collab.state_vector.to_vec(),
-      encode_collab.doc_state.to_vec(),
+      encode_collab.state_vector.clone(),
+      encode_collab.doc_state.clone(),
     )
     .unwrap();
   write_txn.commit_transaction().unwrap();
