@@ -13,7 +13,7 @@ use crate::util::AnyExt;
 use std::ops::Deref;
 use std::str::FromStr;
 use tokio::sync::broadcast;
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 
 #[derive(Debug, Clone)]
 pub enum DatabaseViewChange {
@@ -96,6 +96,7 @@ pub(crate) fn subscribe_view_map_change(
     let txn_origin = CollabOrigin::from(txn);
     let is_local = txn_origin == origin;
     for event in events.iter() {
+      debug!("database view observe map event: {:?}", event.path());
       match event {
         Event::Text(_) => {},
         Event::Array(array_event) => {
@@ -143,11 +144,11 @@ fn handle_array_event(
   let mut insert_row_orders: Vec<(RowOrder, u32)> = vec![];
   let mut delete_field_indexes: Vec<u32> = vec![];
   let mut insert_field_orders: Vec<(FieldOrder, u32)> = vec![];
+  let mut has_unhandled_change = false;
   if let Some(PathSegment::Key(view_id)) = array_event.path().front() {
     let database_view_id = view_id.to_string();
-    array_event.delta(txn).iter().for_each(|change| {
-      #[cfg(feature = "verbose_log")]
-      trace!("database view observe array event: {:?}:{:?}", key, change);
+    for change in array_event.delta(txn).iter() {
+      // debug!("database view observe array event: {:?}:{:?}", key, change);
 
       match change {
         Change::Added(values) => match &key {
@@ -213,8 +214,8 @@ fn handle_array_event(
               .collect::<Vec<_>>();
             insert_field_orders.extend(field_orders.clone());
           },
-          ArrayChangeKey::Unhandled(s) => {
-            trace!("database view observe unknown insert: {}", s);
+          ArrayChangeKey::Unhandled(_s) => {
+            has_unhandled_change = true;
           },
         },
         Change::Removed(len) => {
@@ -259,6 +260,7 @@ fn handle_array_event(
               offset += len;
             },
             ArrayChangeKey::Unhandled(_s) => {
+              has_unhandled_change = true;
               #[cfg(feature = "verbose_log")]
               trace!("database view observe unknown remove: {}", _s);
             },
@@ -266,11 +268,14 @@ fn handle_array_event(
         },
         Change::Retain(value) => {
           offset += value;
-          #[cfg(feature = "verbose_log")]
-          trace!("database view observe array retain: {}", value);
+          debug!("database view observe array retain: {}", value);
         },
       }
-    });
+    }
+
+    if has_unhandled_change {
+      handle_unhandled_array_event(change_tx, array_event, is_local_change);
+    }
 
     let has_row_order_change = !insert_row_orders.is_empty() || !delete_row_indexes.is_empty();
     let has_field_order_change =
@@ -306,6 +311,54 @@ fn handle_array_event(
       array_event.path()
     );
   }
+}
+
+fn handle_unhandled_array_event(
+  change_tx: &ViewChangeSender,
+  array_event: &ArrayEvent,
+  is_local_change: bool,
+) {
+  let Some(view_id) = view_id_from_array_event(array_event) else {
+    return;
+  };
+  let path = array_event.path();
+
+  if path.iter().any(
+    |segment| matches!(segment, PathSegment::Key(key) if key.as_ref() == DATABASE_VIEW_FILTERS),
+  ) {
+    let _ = change_tx.send(DatabaseViewChange::DidUpdateFilter {
+      view_id,
+      is_local_change,
+    });
+    return;
+  }
+
+  if path
+    .iter()
+    .any(|segment| matches!(segment, PathSegment::Key(key) if key.as_ref() == DATABASE_VIEW_SORTS))
+  {
+    let _ = change_tx.send(DatabaseViewChange::DidUpdateSort {
+      view_id,
+      is_local_change,
+    });
+    return;
+  }
+
+  if path
+    .iter()
+    .any(|segment| matches!(segment, PathSegment::Key(key) if key.as_ref() == DATABASE_VIEW_GROUPS))
+  {
+    let _ = change_tx.send(DatabaseViewChange::DidUpdateGroupSetting {
+      view_id,
+      is_local_change,
+    });
+  }
+
+  #[cfg(feature = "verbose_log")]
+  trace!(
+    "database view observe array event: unhandled path {:?}",
+    array_event.path()
+  );
 }
 
 fn handle_map_event(
