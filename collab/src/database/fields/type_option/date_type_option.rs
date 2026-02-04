@@ -1,5 +1,5 @@
 use crate::database::entity::FieldType;
-
+use crate::database::template::date_parse::cast_string_to_timestamp;
 use crate::error::CollabError;
 use chrono::{DateTime, Timelike};
 use chrono::{Datelike, Local, TimeZone};
@@ -184,8 +184,12 @@ impl TypeOptionCellWriter for DateTypeOption {
             // try to parse as json
             if let Ok(date_cell_data_obj) = serde_json::from_str::<Value>(&s) {
               serde_json::from_value::<DateCellData>(date_cell_data_obj).unwrap_or_default()
+            } else if let Some(timestamp) = cast_string_to_timestamp(&s) {
+              // try flexible date parsing (DD/MM/YYYY, MM/DD/YYYY, etc.)
+              DateCellData::from_timestamp(timestamp)
             } else {
-              DateCellData::from_timestamp(0)
+              // if all parsing fails, return empty cell instead of epoch 0
+              DateCellData::default()
             }
           }
         }
@@ -825,5 +829,53 @@ mod tests {
     assert!(date_cell.include_time);
     let str = date_type_option.stringify_cell(&Cell::from(&date_cell));
     assert_eq!(str, "Oct 12, 2019 07:20");
+  }
+
+  #[test]
+  fn date_serde_csv_formats() {
+    // Test CSV date format parsing (fixes GitHub issue #8467)
+    let date_type_option = DateTypeOption::default_utc();
+    let cell_writer: Box<dyn TypeOptionCellWriter> = Box::new(date_type_option);
+
+    // DD/MM/YYYY format (European)
+    {
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::String("17/04/2025".to_string()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      // Should parse as April 17, 2025, not default to epoch 0
+      assert!(!data.is_empty());
+      let timestamp: i64 = data.parse().unwrap();
+      assert!(timestamp > 0, "DD/MM/YYYY should not default to epoch 0");
+      // April 17, 2025 00:00:00 UTC = 1744848000
+      assert_eq!(timestamp, 1744848000);
+    }
+
+    // MM/DD/YYYY format (US)
+    {
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::String("04/17/2025".to_string()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      let timestamp: i64 = data.parse().unwrap();
+      assert!(timestamp > 0, "MM/DD/YYYY should not default to epoch 0");
+      assert_eq!(timestamp, 1744848000);
+    }
+
+    // YYYY-MM-DD format (ISO)
+    {
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::String("2025-04-17".to_string()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      let timestamp: i64 = data.parse().unwrap();
+      assert_eq!(timestamp, 1744848000);
+    }
+
+    // Invalid date should return empty, not epoch 0
+    {
+      let cell: Cell =
+        cell_writer.convert_json_to_cell(Value::String("not-a-valid-date".to_string()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap_or_default();
+      // Should be empty, not "0" (which would be epoch)
+      assert!(
+        data.is_empty(),
+        "Invalid date should return empty cell, not epoch 0"
+      );
+    }
   }
 }
