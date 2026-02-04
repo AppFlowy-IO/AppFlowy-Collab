@@ -5,7 +5,7 @@ use crate::preclude::{
 };
 use std::collections::{HashMap, HashSet};
 use tokio::sync::broadcast;
-use tracing::warn;
+use tracing::{debug, warn};
 
 pub type FieldChangeSender = broadcast::Sender<FieldChange>;
 pub type FieldChangeReceiver = broadcast::Receiver<FieldChange>;
@@ -40,9 +40,12 @@ pub(crate) fn subscribe_field_change(
     let mut updated_field_ids = HashSet::<String>::new();
 
     for deep_event in events.iter() {
+      debug!("field observer: deep event: {:?}", deep_event.path());
       match deep_event {
         Event::Text(_) => {},
-        Event::Array(_) => {},
+        Event::Array(array) => {
+          debug!("field observer: array event: {:?}", array.path());
+        },
         Event::Map(event) => {
           let path = event.path();
           if path.is_empty() {
