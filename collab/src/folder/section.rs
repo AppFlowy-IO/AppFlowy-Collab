@@ -169,6 +169,7 @@ impl AsRef<str> for Section {
 
 #[derive(Clone, Debug)]
 pub enum SectionChange {
+  Favorite(FavoriteSectionChange),
   Trash(TrashSectionChange),
 }
 
@@ -179,6 +180,12 @@ pub type SectionChangeReceiver = broadcast::Receiver<SectionChange>;
 pub enum TrashSectionChange {
   TrashItemAdded { ids: Vec<ViewId> },
   TrashItemRemoved { ids: Vec<ViewId> },
+}
+
+#[derive(Clone, Debug)]
+pub enum FavoriteSectionChange {
+  FavoriteItemAdded { ids: Vec<ViewId> },
+  FavoriteItemRemoved { ids: Vec<ViewId> },
 }
 
 pub type SectionsByUid = HashMap<UserId, Vec<SectionItem>>;
@@ -326,7 +333,16 @@ impl SectionOperation {
 
       if let Some(change_tx) = self.change_tx.as_ref() {
         match self.section {
-          Section::Favorite => {},
+          Section::Favorite => {
+            let _ = change_tx.send(SectionChange::Favorite(
+              FavoriteSectionChange::FavoriteItemRemoved {
+                ids: ids
+                  .into_iter()
+                  .filter_map(|id| Uuid::parse_str(id.as_ref()).ok())
+                  .collect(),
+              },
+            ));
+          },
           Section::Recent => {},
           Section::Trash => {
             let _ = change_tx.send(SectionChange::Trash(TrashSectionChange::TrashItemRemoved {
@@ -351,7 +367,11 @@ impl SectionOperation {
     self.add_sections_for_user_with_txn(txn, uid, items);
     if let Some(change_tx) = self.change_tx.as_ref() {
       match self.section {
-        Section::Favorite => {},
+        Section::Favorite => {
+          let _ = change_tx.send(SectionChange::Favorite(
+            FavoriteSectionChange::FavoriteItemAdded { ids: item_ids },
+          ));
+        },
         Section::Recent => {},
         Section::Trash => {
           let _ = change_tx.send(SectionChange::Trash(TrashSectionChange::TrashItemAdded {
