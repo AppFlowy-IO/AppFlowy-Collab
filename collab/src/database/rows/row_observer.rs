@@ -12,7 +12,7 @@ use std::ops::Deref;
 use crate::preclude::map::MapEvent;
 use crate::util::AnyExt;
 use tokio::sync::broadcast;
-use tracing::trace;
+use tracing::{debug, trace};
 
 pub type RowChangeSender = broadcast::Sender<RowChange>;
 pub type RowChangeReceiver = broadcast::Receiver<RowChange>;
@@ -127,9 +127,17 @@ pub fn subscribe_row_comment_change(
   comments_map: &MapRef,
   change_tx: RowChangeSender,
 ) {
+  debug!(
+    "[Row Comment Observer] Setting up comment observer for row: {}",
+    row_id
+  );
   comments_map.observe_deep_with("comment-change", move |txn, events| {
     let txn_origin = CollabOrigin::from(txn);
     let is_local_change = txn_origin == origin;
+    debug!(
+      "[Row Comment Observer] Comment change detected for row: {}, is_local: {}",
+      row_id, is_local_change,
+    );
     for event in events.iter() {
       if let Event::Map(map_event) = event {
         for (key, entry_change) in map_event.keys(txn).iter() {

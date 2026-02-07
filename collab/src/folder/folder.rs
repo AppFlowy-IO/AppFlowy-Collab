@@ -355,7 +355,11 @@ impl Folder {
   ///
   /// # Examples
   ///
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::{Folder, UserId};
+  /// # let folder: Folder = unimplemented!();
+  /// # let uid = 123_i64;
+  /// # let target_view_id = uuid::Uuid::nil();
   /// // Get favorites for a specific user
   /// let user_id = UserId::from(123);
   /// let favorites = folder.get_my_favorite_sections(Some(user_id.as_i64()));
@@ -431,7 +435,10 @@ impl Folder {
   /// # Use Cases
   ///
   /// ## Admin Dashboard - Popular Views
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::{Folder, ViewId};
+  /// # use std::collections::HashMap;
+  /// # let folder: Folder = unimplemented!();
   /// // Get all favorited views across all users
   /// let all_favorites = folder.get_all_favorites_sections(None);
   /// let view_counts: HashMap<ViewId, usize> = all_favorites
@@ -449,7 +456,10 @@ impl Folder {
   /// ```
   ///
   /// ## Check Specific User (Alternative to get_my_*)
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
+  /// # let uid = 1_i64;
   /// // These are equivalent:
   /// let favorites_a = folder.get_my_favorite_sections(Some(uid));
   /// let favorites_b = folder.get_all_favorites_sections(Some(uid));
@@ -563,15 +573,27 @@ impl Folder {
   /// # Common Use Cases
   ///
   /// ## Display Trash Bin
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
+  /// # let current_user_id = 1_i64;
   /// let trash_items = folder.get_my_trash_sections(Some(current_user_id));
   /// for item in trash_items {
-  ///     show_trashed_view(item.id, item.timestamp);
+  ///     let _ = (item.id, item.timestamp);
   /// }
   /// ```
   ///
   /// ## Auto-Delete Old Items
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # fn current_timestamp() -> i64 {
+  /// #     std::time::SystemTime::now()
+  /// #         .duration_since(std::time::UNIX_EPOCH)
+  /// #         .unwrap()
+  /// #         .as_millis() as i64
+  /// # }
+  /// # let mut folder: Folder = unimplemented!();
+  /// # let uid = 1_i64;
   /// let trash = folder.get_my_trash_sections(Some(uid));
   /// let thirty_days_ago = current_timestamp() - (30 * 24 * 60 * 60 * 1000);
   ///
@@ -587,7 +609,11 @@ impl Folder {
   /// ```
   ///
   /// ## Check if View is in Trash
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
+  /// # let uid = 1_i64;
+  /// # let target_view_id = uuid::Uuid::nil();
   /// let is_trashed = folder.get_my_trash_sections(Some(uid))
   ///     .iter()
   ///     .any(|item| item.id == target_view_id);
@@ -645,7 +671,15 @@ impl Folder {
   /// # Use Cases
   ///
   /// ## Global Cleanup - Delete Old Trash
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # fn current_timestamp() -> i64 {
+  /// #     std::time::SystemTime::now()
+  /// #         .duration_since(std::time::UNIX_EPOCH)
+  /// #         .unwrap()
+  /// #         .as_millis() as i64
+  /// # }
+  /// # let folder: Folder = unimplemented!();
   /// // Find all trash items older than 30 days across ALL users
   /// let all_trash = folder.get_all_trash_sections(None);
   /// let thirty_days_ago = current_timestamp() - (30 * 24 * 60 * 60 * 1000);
@@ -660,7 +694,9 @@ impl Folder {
   /// ```
   ///
   /// ## Admin Dashboard - Trash Statistics
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
   /// let all_trash = folder.get_all_trash_sections(None);
   /// println!("Total items in trash across all users: {}", all_trash.len());
   ///
@@ -782,7 +818,10 @@ impl Folder {
   /// # Common Use Cases
   ///
   /// ## Filter Out Other Users' Private Views
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
+  /// # let current_user_id = 1_i64;
   /// let all_views = folder.get_all_views(Some(current_user_id));
   /// let other_private_views = folder.get_all_private_sections(Some(current_user_id));
   ///
@@ -795,15 +834,22 @@ impl Folder {
   /// ```
   ///
   /// ## Show User's Personal Workspace
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
+  /// # let uid = 1_i64;
   /// let my_private = folder.get_my_private_sections(Some(uid));
   /// if !my_private.is_empty() {
-  ///     render_private_section_ui(&my_private);
+  ///     let _ = &my_private;
   /// }
   /// ```
   ///
   /// ## Check if View is Private
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
+  /// # let uid = 1_i64;
+  /// # let view_id = uuid::Uuid::nil();
   /// let is_private = folder.get_my_private_sections(Some(uid))
   ///     .iter()
   ///     .any(|item| item.id == view_id);
@@ -860,7 +906,10 @@ impl Folder {
   /// # Use Cases
   ///
   /// ## Filter Out Other Users' Private Views
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
+  /// # let current_user_id = 1_i64;
   /// // Get all views, then filter out views private to other users
   /// let all_views = folder.get_all_views(Some(current_user_id));
   /// let my_private_views = folder.get_my_private_sections(Some(current_user_id));
@@ -877,7 +926,9 @@ impl Folder {
   /// ```
   ///
   /// ## Admin Audit - Find All Private Content
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
   /// let all_private = folder.get_all_private_sections(None);
   /// println!("Total private views across workspace: {}", all_private.len());
   ///
@@ -885,10 +936,12 @@ impl Folder {
   /// ```
   ///
   /// ## Migration/Backup Operations
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
   /// // When migrating workspace, preserve all private view metadata
   /// let all_private = folder.get_all_private_sections(None);
-  /// save_to_backup("private_sections.json", &all_private);
+  /// let _ = all_private;
   /// ```
   ///
   /// # Related Methods
@@ -986,19 +1039,21 @@ impl Folder {
   /// # Common Use Cases
   ///
   /// ## Display Trash Bin UI
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let folder: Folder = unimplemented!();
+  /// # let current_user_id = 1_i64;
   /// let trash_info = folder.get_my_trash_info(Some(current_user_id));
   /// for item in trash_info {
-  ///     render_trash_item(
-  ///         item.id,
-  ///         &item.name,
-  ///         format_timestamp(item.created_at)
-  ///     );
+  ///     let _ = (item.id, &item.name, item.created_at);
   /// }
   /// ```
   ///
   /// ## Restore Deleted View by Name
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # let mut folder: Folder = unimplemented!();
+  /// # let uid = 1_i64;
   /// let trash = folder.get_my_trash_info(Some(uid));
   /// if let Some(item) = trash.iter().find(|t| t.name == "Important Doc") {
   ///     folder.delete_trash_view_ids(vec![item.id.to_string()], uid);
@@ -1007,7 +1062,16 @@ impl Folder {
   /// ```
   ///
   /// ## Show Time Since Deletion
-  /// ```rust,ignore
+  /// ```rust,no_run
+  /// # use collab::folder::Folder;
+  /// # fn current_timestamp() -> i64 {
+  /// #     std::time::SystemTime::now()
+  /// #         .duration_since(std::time::UNIX_EPOCH)
+  /// #         .unwrap()
+  /// #         .as_millis() as i64
+  /// # }
+  /// # let folder: Folder = unimplemented!();
+  /// # let uid = 1_i64;
   /// let trash = folder.get_my_trash_info(Some(uid));
   /// let now = current_timestamp();
   ///
