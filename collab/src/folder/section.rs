@@ -119,7 +119,7 @@ impl SectionMap {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use collab::folder::Section;
 ///
 /// // Predefined sections
@@ -426,7 +426,10 @@ impl SectionOperation {
 /// # Usage Patterns
 ///
 /// ## Favorite Sections
-/// ```rust,ignore
+/// ```rust,no_run
+/// # use collab::folder::Folder;
+/// # let folder: Folder = unimplemented!();
+/// # let uid = 1_i64;
 /// let favorites = folder.get_my_favorite_sections(Some(uid));
 /// for item in favorites {
 ///     println!("View {} favorited at {}", item.id, item.timestamp);
@@ -434,14 +437,33 @@ impl SectionOperation {
 /// ```
 ///
 /// ## Recent Sections (sorted by timestamp)
-/// ```rust,ignore
-/// let mut recent = folder.get_my_recent_sections(Some(uid));
+/// ```rust,no_run
+/// # use collab::folder::SectionItem;
+/// let mut recent = vec![
+///     SectionItem {
+///         id: uuid::Uuid::nil(),
+///         timestamp: 1704067200000,
+///     },
+///     SectionItem {
+///         id: uuid::Uuid::from_u128(1),
+///         timestamp: 1704068200000,
+///     },
+/// ];
 /// recent.sort_by_key(|item| std::cmp::Reverse(item.timestamp)); // newest first
 /// let most_recent = recent.first();
 /// ```
 ///
 /// ## Trash Sections (check deletion time)
-/// ```rust,ignore
+/// ```rust,no_run
+/// # use collab::folder::Folder;
+/// # fn current_timestamp() -> i64 {
+/// #     std::time::SystemTime::now()
+/// #         .duration_since(std::time::UNIX_EPOCH)
+/// #         .unwrap()
+/// #         .as_millis() as i64
+/// # }
+/// # let folder: Folder = unimplemented!();
+/// # let uid = 1_i64;
 /// let trash = folder.get_my_trash_sections(Some(uid));
 /// let thirty_days_ago = current_timestamp() - (30 * 24 * 60 * 60 * 1000);
 /// let permanently_delete = trash

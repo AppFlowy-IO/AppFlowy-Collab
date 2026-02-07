@@ -136,8 +136,7 @@ pub fn subscribe_row_comment_change(
     let is_local_change = txn_origin == origin;
     debug!(
       "[Row Comment Observer] Comment change detected for row: {}, is_local: {}",
-      row_id,
-      is_local_change,
+      row_id, is_local_change,
     );
     for event in events.iter() {
       if let Event::Map(map_event) = event {
