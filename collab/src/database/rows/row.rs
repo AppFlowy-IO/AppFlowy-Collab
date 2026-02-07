@@ -89,6 +89,11 @@ impl DatabaseRow {
     change_tx: Option<RowChangeSender>,
   ) -> Result<Self, CollabError> {
     let body = DatabaseRowBody::open(row_id, &mut collab)?;
+    tracing::debug!(
+      "[DatabaseRow] Opening row: {}, has_change_tx: {}",
+      row_id,
+      change_tx.is_some()
+    );
     if let Some(change_tx) = change_tx {
       let origin = collab.origin().clone();
       let meta_change_tx = change_tx.clone();
@@ -241,7 +246,7 @@ impl DatabaseRow {
   }
 
   /// Add a reaction to a comment
-  pub fn add_comment_reaction(&mut self, comment_id: &str, emoji: &str, user_id: i64) -> bool {
+  pub fn add_comment_reaction(&mut self, comment_id: &str, emoji: &str, user_id: &str) -> bool {
     let mut txn = self.collab.transact_mut();
     self
       .body
@@ -249,7 +254,7 @@ impl DatabaseRow {
   }
 
   /// Remove a reaction from a comment
-  pub fn remove_comment_reaction(&mut self, comment_id: &str, emoji: &str, user_id: i64) -> bool {
+  pub fn remove_comment_reaction(&mut self, comment_id: &str, emoji: &str, user_id: &str) -> bool {
     let mut txn = self.collab.transact_mut();
     self
       .body
@@ -526,7 +531,7 @@ impl DatabaseRowBody {
     txn: &mut TransactionMut,
     comment_id: &str,
     emoji: &str,
-    user_id: i64,
+    user_id: &str,
   ) -> bool {
     if let Some(comment_map) = self
       .comments
@@ -535,14 +540,15 @@ impl DatabaseRowBody {
     {
       // Get current reactions
       let reactions_str: Option<String> = comment_map.get_with_txn(txn, COMMENT_REACTIONS);
-      let mut reactions: std::collections::HashMap<String, Vec<i64>> = reactions_str
+      let mut reactions: std::collections::HashMap<String, Vec<String>> = reactions_str
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default();
 
       // Add user to the emoji's user list if not already present
       let user_list = reactions.entry(emoji.to_string()).or_default();
-      if !user_list.contains(&user_id) {
-        user_list.push(user_id);
+      let user_id_str = user_id.to_string();
+      if !user_list.contains(&user_id_str) {
+        user_list.push(user_id_str);
       }
 
       // Save back to the map
@@ -562,7 +568,7 @@ impl DatabaseRowBody {
     txn: &mut TransactionMut,
     comment_id: &str,
     emoji: &str,
-    user_id: i64,
+    user_id: &str,
   ) -> bool {
     if let Some(comment_map) = self
       .comments
@@ -571,13 +577,13 @@ impl DatabaseRowBody {
     {
       // Get current reactions
       let reactions_str: Option<String> = comment_map.get_with_txn(txn, COMMENT_REACTIONS);
-      let mut reactions: std::collections::HashMap<String, Vec<i64>> = reactions_str
+      let mut reactions: std::collections::HashMap<String, Vec<String>> = reactions_str
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default();
 
       // Remove user from the emoji's user list
       if let Some(user_list) = reactions.get_mut(emoji) {
-        user_list.retain(|&id| id != user_id);
+        user_list.retain(|id| id != user_id);
         // Remove the emoji entry if no users left
         if user_list.is_empty() {
           reactions.remove(emoji);

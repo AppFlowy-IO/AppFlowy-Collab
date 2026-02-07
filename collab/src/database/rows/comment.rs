@@ -61,9 +61,8 @@ pub struct RowComment {
   pub parent_comment_id: Option<String>,
   /// Rich text content as JSON string
   pub content: String,
-  /// User ID of the comment author
-  #[serde(deserialize_with = "deserialize_i64_from_numeric")]
-  pub author_id: i64,
+  /// UUID of the comment author (matches person_id in workspace members API)
+  pub author_id: String,
   /// Timestamp when comment was created
   #[serde(deserialize_with = "deserialize_i64_from_numeric")]
   pub created_at: i64,
@@ -79,9 +78,9 @@ pub struct RowComment {
   /// Timestamp when comment was resolved
   #[serde(skip_serializing_if = "Option::is_none")]
   pub resolved_at: Option<i64>,
-  /// Reactions on the comment: emoji -> list of user IDs
+  /// Reactions on the comment: emoji -> list of user UUIDs
   #[serde(default)]
-  pub reactions: HashMap<String, Vec<i64>>,
+  pub reactions: HashMap<String, Vec<String>>,
   /// Attachments on the comment
   #[serde(default)]
   pub attachments: Vec<CommentAttachment>,
@@ -89,7 +88,7 @@ pub struct RowComment {
 
 impl RowComment {
   /// Creates a new top-level comment
-  pub fn new(content: String, author_id: i64) -> Self {
+  pub fn new(content: String, author_id: String) -> Self {
     let now = timestamp();
     Self {
       id: Uuid::new_v4().to_string(),
@@ -109,7 +108,7 @@ impl RowComment {
   /// Creates a new top-level comment with attachments
   pub fn new_with_attachments(
     content: String,
-    author_id: i64,
+    author_id: String,
     attachments: Vec<CommentAttachment>,
   ) -> Self {
     let now = timestamp();
@@ -129,7 +128,7 @@ impl RowComment {
   }
 
   /// Creates a new reply comment
-  pub fn new_reply(content: String, author_id: i64, parent_comment_id: String) -> Self {
+  pub fn new_reply(content: String, author_id: String, parent_comment_id: String) -> Self {
     let now = timestamp();
     Self {
       id: Uuid::new_v4().to_string(),
@@ -153,7 +152,9 @@ impl RowComment {
     let content: String = map_ref
       .get_with_txn(txn, COMMENT_CONTENT)
       .unwrap_or_default();
-    let author_id: i64 = map_ref.get_with_txn(txn, COMMENT_AUTHOR_ID).unwrap_or(0);
+    let author_id: String = map_ref
+      .get_with_txn(txn, COMMENT_AUTHOR_ID)
+      .unwrap_or_default();
     let created_at: i64 = map_ref.get_with_txn(txn, COMMENT_CREATED_AT).unwrap_or(0);
     let updated_at: i64 = map_ref.get_with_txn(txn, COMMENT_UPDATED_AT).unwrap_or(0);
     let is_resolved: bool = map_ref
@@ -196,7 +197,7 @@ impl RowComment {
       map_ref.insert(txn, COMMENT_PARENT_ID, parent_id);
     }
     map_ref.insert(txn, COMMENT_CONTENT, self.content);
-    map_ref.insert(txn, COMMENT_AUTHOR_ID, Any::BigInt(self.author_id));
+    map_ref.insert(txn, COMMENT_AUTHOR_ID, self.author_id);
     map_ref.insert(txn, COMMENT_CREATED_AT, Any::BigInt(self.created_at));
     map_ref.insert(txn, COMMENT_UPDATED_AT, Any::BigInt(self.updated_at));
     map_ref.insert(txn, COMMENT_IS_RESOLVED, self.is_resolved);
