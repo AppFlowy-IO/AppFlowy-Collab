@@ -18,7 +18,7 @@ use crate::database_test::helper::{
   TEST_VIEW_ID_V1, create_database, create_database_with_default_data,
   default_field_settings_by_layout,
 };
-use crate::helper::TestFilter;
+use crate::helper::{SortCondition, TestFieldSetting, TestFieldType, TestFilter, TestSort};
 
 #[tokio::test]
 async fn create_initial_database_test() {
@@ -247,6 +247,129 @@ async fn duplicate_database_view_test() {
   assert_eq!(duplicated_view.name, format!("{}-copy", view.name));
   assert_ne!(view.id, duplicated_view.id);
   assert_eq!(view.database_id, duplicated_view.database_id);
+}
+
+#[tokio::test]
+async fn duplicate_database_view_with_custom_id_copies_settings_and_isolated_test() {
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
+
+  database_test.insert_filter(
+    TEST_VIEW_ID_V1,
+    TestFilter {
+      id: "filter-1".to_string(),
+      field_id: "f1".to_string(),
+      field_type: TestFieldType::RichText,
+      condition: 0,
+      content: "contains 1".to_string(),
+    },
+  );
+  database_test.insert_sort(
+    TEST_VIEW_ID_V1,
+    TestSort {
+      id: "sort-1".to_string(),
+      field_id: "f1".to_string(),
+      field_type: i64::from(TestFieldType::RichText),
+      condition: SortCondition::Descending,
+    },
+  );
+  database_test.update_field_settings(
+    TEST_VIEW_ID_V1,
+    Some(vec!["f1".to_string()]),
+    TestFieldSetting {
+      width: 320,
+      visibility: 1,
+    },
+  );
+  database_test.update_database_view(TEST_VIEW_ID_V1, |view| {
+    view.move_field_order("f3", "f1");
+  });
+
+  let source_view_before = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
+  let source_order_before: Vec<String> = source_view_before
+    .field_orders
+    .iter()
+    .map(|field| field.id.clone())
+    .collect();
+  let source_filters_before: Vec<TestFilter> = database_test.get_all_filters(TEST_VIEW_ID_V1);
+  let source_sorts_before: Vec<TestSort> = database_test.get_all_sorts(TEST_VIEW_ID_V1);
+  let source_field_settings_before =
+    database_test.get_field_settings::<TestFieldSetting>(TEST_VIEW_ID_V1, None);
+
+  let duplicated_view_id = Uuid::new_v4();
+  let duplicated_view_name = "Duplicated linked view".to_string();
+  let duplicated_view = database_test
+    .duplicate_linked_view_with_id(
+      TEST_VIEW_ID_V1,
+      duplicated_view_id,
+      Some(duplicated_view_name.clone()),
+    )
+    .unwrap();
+  let duplicated_view_id_str = duplicated_view_id.to_string();
+
+  assert_eq!(duplicated_view.id, duplicated_view_id);
+  assert_eq!(duplicated_view.name, duplicated_view_name);
+  assert_eq!(duplicated_view.database_id, source_view_before.database_id);
+
+  let duplicated_view_from_db = database_test.get_view(&duplicated_view_id_str).unwrap();
+  let duplicated_order: Vec<String> = duplicated_view_from_db
+    .field_orders
+    .iter()
+    .map(|field| field.id.clone())
+    .collect();
+  let duplicated_filters: Vec<TestFilter> = database_test.get_all_filters(&duplicated_view_id_str);
+  let duplicated_sorts: Vec<TestSort> = database_test.get_all_sorts(&duplicated_view_id_str);
+  let duplicated_field_settings =
+    database_test.get_field_settings::<TestFieldSetting>(&duplicated_view_id_str, None);
+
+  assert_eq!(duplicated_order, source_order_before);
+  assert_eq!(duplicated_filters.len(), source_filters_before.len());
+  assert_eq!(duplicated_sorts.len(), source_sorts_before.len());
+  assert_eq!(
+    duplicated_field_settings.get("f1").unwrap().width,
+    source_field_settings_before.get("f1").unwrap().width
+  );
+  assert_eq!(
+    duplicated_field_settings.get("f1").unwrap().visibility,
+    source_field_settings_before.get("f1").unwrap().visibility
+  );
+
+  database_test.remove_all_filters(&duplicated_view_id_str);
+  database_test.remove_all_sorts(&duplicated_view_id_str);
+  database_test.update_field_settings(
+    &duplicated_view_id_str,
+    Some(vec!["f1".to_string()]),
+    TestFieldSetting {
+      width: 120,
+      visibility: 0,
+    },
+  );
+  database_test.update_database_view(&duplicated_view_id_str, |view| {
+    view.move_field_order("f1", "f2");
+  });
+
+  let source_view_after = database_test.get_view(TEST_VIEW_ID_V1).unwrap();
+  let source_order_after: Vec<String> = source_view_after
+    .field_orders
+    .iter()
+    .map(|field| field.id.clone())
+    .collect();
+  let source_filters_after: Vec<TestFilter> = database_test.get_all_filters(TEST_VIEW_ID_V1);
+  let source_sorts_after: Vec<TestSort> = database_test.get_all_sorts(TEST_VIEW_ID_V1);
+  let source_field_settings_after =
+    database_test.get_field_settings::<TestFieldSetting>(TEST_VIEW_ID_V1, None);
+
+  assert_eq!(source_order_after, source_order_before);
+  assert_eq!(source_filters_after.len(), source_filters_before.len());
+  assert_eq!(source_sorts_after.len(), source_sorts_before.len());
+  assert_eq!(
+    source_field_settings_after.get("f1").unwrap().width,
+    source_field_settings_before.get("f1").unwrap().width
+  );
+  assert_eq!(
+    source_field_settings_after.get("f1").unwrap().visibility,
+    source_field_settings_before.get("f1").unwrap().visibility
+  );
 }
 
 #[tokio::test]
