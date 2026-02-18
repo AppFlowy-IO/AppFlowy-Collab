@@ -1190,6 +1190,20 @@ impl Database {
     }
   }
 
+  pub fn remove_all_filters(&mut self, view_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    if let Ok(view_id) = self.body.parse_view_id(view_id) {
+      self
+        .body
+        .views
+        .update_database_view(&mut txn, &view_id, |update| {
+          update.update_filters(|txn, filter_update| {
+            filter_update.clear(txn);
+          });
+        });
+    }
+  }
+
   /// Add a filter to the view. If the setting already exists, it will be replaced.
   pub fn insert_filter(&mut self, view_id: &str, filter: impl Into<FilterMap>) {
     let mut txn = self.collab.transact_mut();
