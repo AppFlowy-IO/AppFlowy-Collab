@@ -1410,13 +1410,26 @@ impl Database {
   /// Create a linked view that duplicate the target view's setting including filter, sort,
   /// group, field setting, etc.
   pub fn duplicate_linked_view(&mut self, view_id: &str) -> Option<DatabaseView> {
+    self.duplicate_linked_view_with_id(view_id, gen_database_view_id(), None)
+  }
+
+  /// Create a linked view by duplicating an existing view into a specific view id.
+  /// This is used by higher-level folder logic where folder view id and database view id
+  /// must remain aligned.
+  pub fn duplicate_linked_view_with_id(
+    &mut self,
+    view_id: &str,
+    duplicated_view_id: DatabaseViewId,
+    duplicated_name: Option<String>,
+  ) -> Option<DatabaseView> {
     let mut txn = self.collab.transact_mut();
     let view_id = self.body.parse_view_id(view_id).ok()?;
     let view = self.body.views.get_view(&txn, &view_id)?;
     let timestamp = timestamp();
+    let duplicated_name = duplicated_name.unwrap_or_else(|| format!("{}-copy", view.name));
     let duplicated_view = DatabaseView {
-      id: gen_database_view_id(),
-      name: format!("{}-copy", view.name),
+      id: duplicated_view_id,
+      name: duplicated_name,
       created_at: timestamp,
       modified_at: timestamp,
       ..view
