@@ -190,22 +190,24 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     position: &OrderObjectPosition,
   ) -> Self {
     let object = object.into();
-    if let Some(array) = self
-      .map_ref
-      .get_with_txn::<_, ArrayRef>(self.txn, DATABASE_VIEW_ROW_ORDERS)
-      .map(RowOrderArray::new)
-    {
-      match position {
-        OrderObjectPosition::Start => array.push_front_with_txn(self.txn, object),
-        OrderObjectPosition::Before(next_object_id) => {
-          array.insert_before_with_txn(self.txn, object, next_object_id)
-        },
-        OrderObjectPosition::After(prev_object_id) => {
-          array.insert_after_with_txn(self.txn, object, prev_object_id)
-        },
-        OrderObjectPosition::End => array.push_back_with_txn(self.txn, object),
-      };
-    }
+    // Use get_or_init so that a row insertion applied via CRDT merge before the
+    // view's row-order array has been initialised locally still takes effect.
+    // Previously, get_with_txn returned None for an absent array and the insert
+    // was silently dropped — causing calendar (and other linked) views to show
+    // no rows when rows were created offline and synced in a different order
+    // from the view-creation op.
+    let array =
+      RowOrderArray::new(self.map_ref.get_or_init(self.txn, DATABASE_VIEW_ROW_ORDERS));
+    match position {
+      OrderObjectPosition::Start => array.push_front_with_txn(self.txn, object),
+      OrderObjectPosition::Before(next_object_id) => {
+        array.insert_before_with_txn(self.txn, object, next_object_id)
+      },
+      OrderObjectPosition::After(prev_object_id) => {
+        array.insert_after_with_txn(self.txn, object, prev_object_id)
+      },
+      OrderObjectPosition::End => array.push_back_with_txn(self.txn, object),
+    };
     self
   }
 

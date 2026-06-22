@@ -9,13 +9,13 @@ use collab::database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab::database::fields::Field;
 use collab::database::rows::{CreateRowParams, Row};
 use collab::database::views::{DatabaseLayout, LayoutSetting, OrderObjectPosition};
-use collab::preclude::{Any, Collab};
-use collab::util::AnyMapExt;
+use collab::preclude::{Any, Collab, Map, MapRef};
+use collab::util::{AnyMapExt, MapExt};
 use futures::StreamExt;
 use nanoid::nanoid;
 
 use crate::database_test::helper::{
-  TEST_VIEW_ID_V1, create_database, create_database_with_default_data,
+  TEST_VIEW_ID_V1, TEST_VIEW_ID_V2, create_database, create_database_with_default_data,
   default_field_settings_by_layout,
 };
 use crate::helper::{SortCondition, TestFieldSetting, TestFieldType, TestFilter, TestSort};
@@ -452,3 +452,109 @@ async fn validate_database_test() {
   let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   assert!(database_test.database.validate().is_ok())
 }
+
+/// Regression test for the `insert_row_order` silent-no-op bug.
+///
+/// Background: `update_all_views` calls `insert_row_order` for every view when a row
+/// is created. `insert_row_order` previously used `get_with_txn` to locate the view's
+/// `row_orders` YArray, which returns `None` when the key is absent — causing the
+/// insert to be silently dropped.
+///
+/// The `row_orders` key can be absent from an existing view map in two situations:
+///
+/// 1. **Legacy data** — databases created by old client versions that did not yet
+///    write the `row_orders` key for linked (non-inline) views.
+///
+/// 2. **CRDT merge ordering** — if a peer applies a `create_row` update *before* a
+///    `create_linked_view` update (because they arrived out of order), then when the
+///    view-creation update later lands it stamps `row_orders = []` and subsequent
+///    inserts work. But if the `create_row` update is applied *after* the view exists
+///    but *before* the initial `set_row_orders` Yjs op is processed, the key is
+///    momentarily absent.
+///
+/// The fix (use `get_or_init` instead of `get_with_txn`) ensures the array is created
+/// on demand so the insert always lands, regardless of prior initialisation.
+#[tokio::test]
+async fn insert_row_order_into_view_without_row_orders_key_test() {
+  let database_id = Uuid::new_v4();
+  let calendar_view_id = Uuid::parse_str(TEST_VIEW_ID_V2).unwrap();
+
+  // ── Set up: database with grid + calendar, both empty ────────────────────
+  let mut db = create_database(1, &database_id.to_string());
+
+  db.create_linked_view(CreateViewParams {
+    database_id,
+    view_id: calendar_view_id,
+    name: "Calendar".to_string(),
+    layout: DatabaseLayout::Calendar,
+    ..Default::default()
+  })
+  .unwrap();
+
+  // Verify the calendar starts with an empty but present row_orders array.
+  {
+    let orders_before = db.get_row_orders_for_view(&calendar_view_id.to_string());
+    assert!(
+      orders_before.is_empty(),
+      "calendar should start empty, got {:?}",
+      orders_before
+    );
+  }
+
+  // ── Simulate a legacy / partially-applied state: remove row_orders key ───
+  // This mimics either (a) an old database version that never wrote this key,
+  // or (b) a CRDT merge state where the view map exists but row_orders hasn't
+  // been initialised yet.
+  {
+    let calendar_map: MapRef = {
+      let txn = db.collab.transact();
+      db.body
+        .views
+        .get_with_txn::<_, MapRef>(&txn, &calendar_view_id.to_string())
+        .expect("calendar view map should exist")
+    };
+    let mut txn_mut = db.collab.transact_mut();
+    calendar_map.remove(&mut txn_mut, "row_orders");
+  }
+
+  // Confirm the key is gone: get_row_orders_for_view should return empty (not panic).
+  {
+    let orders = db.get_row_orders_for_view(&calendar_view_id.to_string());
+    assert!(
+      orders.is_empty(),
+      "expected empty row_orders after removing key, got {:?}",
+      orders
+    );
+  }
+
+  // ── Create a row — this calls update_all_views → insert_row_order ─────────
+  // Without the fix, insert_row_order's get_with_txn returns None for the
+  // calendar view and the insert is silently dropped.
+  // With the fix, get_or_init creates the array and the insert lands.
+  let (_, row_order) = db
+    .create_row_in_view(
+      TEST_VIEW_ID_V1,
+      CreateRowParams::new(Uuid::new_v4(), database_id),
+    )
+    .await
+    .unwrap();
+
+  // ── Assert: the calendar must contain the new row ─────────────────────────
+  let calendar_row_orders = db.get_row_orders_for_view(&calendar_view_id.to_string());
+  assert_eq!(
+    calendar_row_orders.len(),
+    1,
+    "calendar view should contain the new row after insert_row_order; \
+     got {} row_orders: {:?}",
+    calendar_row_orders.len(),
+    calendar_row_orders
+      .iter()
+      .map(|r| r.id.to_string())
+      .collect::<Vec<_>>(),
+  );
+  assert_eq!(
+    calendar_row_orders[0].id, row_order.id,
+    "calendar row_orders[0] should be the newly created row"
+  );
+}
+
